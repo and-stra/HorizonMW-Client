@@ -103,10 +103,26 @@ namespace stock_weapons
 				!game::DB_IsXAssetDefault(game::ASSET_TYPE_WEAPON, name.data());
 		}
 
+		bool id_exists(const game::StringTable* table, const char* id)
+		{
+			for (auto r = 0; r < table->rowCount; ++r)
+			{
+				const auto text = table->values[static_cast<size_t>(r) * table->columnCount].string;
+				if (text && std::strcmp(text, id) == 0)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
 		game::StringTable* build(game::StringTable* original, const std::string& name)
 		{
 			const auto is_stats = name == "mp/statstable.csv";
-			if (is_stats && original->columnCount != column_count)
+			// MWX: HMW's current statstable has 67 columns; the stock rows carry one extra empty
+			// trailing column, which is simply cut off (everything before it lines up).
+			constexpr int table_columns = 67;
+			if (is_stats && original->columnCount != table_columns)
 			{
 				// MWX: dump the real table once so the missing column can be identified
 				static bool dumped = false;
@@ -129,7 +145,7 @@ namespace stock_weapons
 					}
 				}
 				console::warn("stock weapons: %s has %i columns (need %i), not adding\n",
-					name.data(), original->columnCount, column_count);
+					name.data(), original->columnCount, table_columns);
 				return nullptr;
 			}
 			if (!is_stats && original->columnCount < 1)
@@ -149,6 +165,11 @@ namespace stock_weapons
 			for (auto i = 0; i < row_count; ++i)
 			{
 				const std::string ref = rows[i][4];
+				if (is_stats && id_exists(original, rows[i][0]))
+				{
+					missing.push_back(ref); // the weapon id is already used by an HMW weapon
+					continue;
+				}
 				if (weapon_loaded(ref))
 				{
 					add.push_back(i);
