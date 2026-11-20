@@ -712,14 +712,21 @@ namespace stats
 
 				dvars::register_bool("cg_xpbar", true, game::DVAR_FLAG_SAVED, "Show experience bar in ranked matches");
 
-			#ifdef DEBUG
 				cg_unlock_all_items = dvars::register_bool("cg_unlockall_items", false, game::DVAR_FLAG_SAVED,
 					"Whether items should be locked based on the player's stats or always unlocked.");
 				dvars::register_bool("cg_unlockall_classes", false, game::DVAR_FLAG_SAVED,
 					"Whether classes should be locked based on the player's stats or always unlocked.");
 				cg_unlock_all_loot = dvars::register_bool("cg_unlockall_loot", false, game::DVAR_FLAG_SAVED,
 					"Whether loot should be locked based on the player's stats or always unlocked.");
-			#endif
+
+				// MWX: `unlockall` turns on all three unlock dvars (saved, so it sticks)
+				command::add("unlockall", []()
+				{
+					command::execute("set cg_unlockall_items 1", false);
+					command::execute("set cg_unlockall_classes 1", false);
+					command::execute("set cg_unlockall_loot 1", false);
+					console::info("unlockall: all items, classes and loot unlocked\n");
+				});
 			}
 		
 		
