@@ -3,6 +3,7 @@
 
 #include "console.hpp"
 #include "lan.hpp"
+#include "scheduler.hpp"
 
 #include "game/game.hpp"
 #include "game/dvars.hpp"
@@ -393,12 +394,17 @@ namespace lan
 				return;
 			}
 
-			mwx_servers = dvars::register_string("mwx_servers", "", game::DVAR_FLAG_SAVED,
-				"Extra server addresses for the server browser, separated by spaces (\"ip\" or \"ip:port\"), e.g. friends behind a VPN");
-			mwx_lan_port_min = dvars::register_int("mwx_lan_port_min", default_port_min, 1, 65535, game::DVAR_FLAG_SAVED,
-				"Lowest port the server browser searches on the LAN");
-			mwx_lan_port_max = dvars::register_int("mwx_lan_port_max", default_port_max, 1, 65535, game::DVAR_FLAG_SAVED,
-				"Highest port the server browser searches on the LAN");
+			// String dvars keep their value as a script string, so they can only be registered
+			// once the game is up (registering in post_unpack fails with MT_AllocIndex).
+			scheduler::once([]()
+			{
+				mwx_servers = dvars::register_string("mwx_servers", "", game::DVAR_FLAG_SAVED,
+					"Extra server addresses for the server browser, separated by spaces (\"ip\" or \"ip:port\"), e.g. friends behind a VPN");
+				mwx_lan_port_min = dvars::register_int("mwx_lan_port_min", default_port_min, 1, 65535, game::DVAR_FLAG_SAVED,
+					"Lowest port the server browser searches on the LAN");
+				mwx_lan_port_max = dvars::register_int("mwx_lan_port_max", default_port_max, 1, 65535, game::DVAR_FLAG_SAVED,
+					"Highest port the server browser searches on the LAN");
+			}, scheduler::pipeline::main);
 		}
 	};
 }
