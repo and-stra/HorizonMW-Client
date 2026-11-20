@@ -8,6 +8,7 @@
 #include "imagefiles.hpp"
 #include "weapon.hpp"
 #include "stock_weapons.hpp"
+#include "load_timing.hpp"
 
 #include "game/dvars.hpp"
 
@@ -36,6 +37,7 @@ namespace fastfiles
 		void db_init_load_x_file_stub(game::DBFile* file, std::uint64_t offset)
 		{
 			console::info("Loading fastfile %s\n", file->name);
+			load_timing::zone_start(file->name);
 			return db_init_load_x_file_hook.invoke<void>(file, offset);
 		}
 
