@@ -80,6 +80,7 @@
 #include <regex>
 #include <chrono>
 #include <thread>
+#include <future>
 #include <fstream>
 #include <iostream>
 #include <utility>
