@@ -216,12 +216,22 @@ void limit_parallel_dll_loading()
 	RegCloseKey(key);
 }
 
+// MWX: the tool modes (-mcp, -repack) finish all their work and then die in the CRT static
+// teardown (0xC0000409) of the game components, so leave without running static destructors.
+[[noreturn]] static void fast_exit(const int code)
+{
+	fflush(stdout);
+	fflush(stderr);
+	TerminateProcess(GetCurrentProcess(), static_cast<UINT>(code));
+	for (;;) Sleep(1000);
+}
+
 int main()
 {
 	// MWX: `mwx.exe -mcp` runs only the MCP bridge (stdio), no game
 	if (utils::flags::has_flag("mcp"))
 	{
-		return mcp::run();
+		fast_exit(mcp::run());
 	}
 
 	// MWX: `mwx.exe -repack <all|zones>` / `-repack-restore <all|zones>`, no game
@@ -230,7 +240,7 @@ int main()
 		ShowWindow(GetConsoleWindow(), SW_SHOW); // the console component hides it at startup
 		const auto restore = utils::flags::has_flag("repack-restore");
 		const auto what = utils::flags::get_flag(restore ? "repack-restore" : "repack");
-		return repack::run(what.value_or("all"), restore);
+		fast_exit(repack::run(what.value_or("all"), restore));
 	}
 
 	ShowWindow(GetConsoleWindow(), SW_HIDE);

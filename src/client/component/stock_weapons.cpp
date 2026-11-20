@@ -108,6 +108,26 @@ namespace stock_weapons
 			const auto is_stats = name == "mp/statstable.csv";
 			if (is_stats && original->columnCount != column_count)
 			{
+				// MWX: dump the real table once so the missing column can be identified
+				static bool dumped = false;
+				if (!dumped)
+				{
+					dumped = true;
+					CreateDirectoryA("mwx-logs", nullptr);
+					if (FILE* f = fopen("mwx-logs/statstable_dump.csv", "w"))
+					{
+						for (auto r = 0; r < original->rowCount; ++r)
+						{
+							for (auto c = 0; c < original->columnCount; ++c)
+							{
+								const auto& cell = original->values[static_cast<size_t>(r) * original->columnCount + c];
+								fprintf(f, "%s\"%s\"", c ? "," : "", cell.string ? cell.string : "");
+							}
+							fputc('\n', f);
+						}
+						fclose(f);
+					}
+				}
 				console::warn("stock weapons: %s has %i columns (need %i), not adding\n",
 					name.data(), original->columnCount, column_count);
 				return nullptr;
