@@ -189,7 +189,7 @@ namespace hmw_tcp_utils {
 			static const auto fs_game = game::Dvar_FindVar("fs_game");
 			const auto client_fs_game = utils::string::to_lower(fs_game->current.string);
 			auto t = infoJson.dump();
-			std::string res_fs_game = infoJson["fs_game"];
+			std::string res_fs_game = infoJson.value("fs_game", "");
 			const auto server_fs_game = utils::string::to_lower(res_fs_game);
 
 			if (server_fs_game.empty() && client_fs_game.empty())

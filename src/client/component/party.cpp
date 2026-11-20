@@ -725,7 +725,7 @@ namespace party
 					return;
 				}
 
-				server_connection_state.base_url = jsonObject["sv_wwwBaseUrl"];
+				server_connection_state.base_url = jsonObject.value("sv_wwwBaseUrl", "");
 
 				// @Aphrodite Causes halt on main thread when connecting and throws warnings in build console...
 				if (hmw_tcp_utils::GameServer::download_files_tcp(target, jsonObject, false)) {
@@ -734,13 +734,13 @@ namespace party
 					return;
 				}
 
-				server_connection_state.motd = jsonObject["sv_motd"];
-				std::string maxclients = jsonObject["sv_maxclients"];
+				server_connection_state.motd = jsonObject.value("sv_motd", "");
+				std::string maxclients = jsonObject.value("sv_maxclients", "0");
 				server_connection_state.max_clients = std::stoi(maxclients);
 
 				discord_information discord_info{};
-				discord_info.image = jsonObject["sv_discordImageUrl"];
-				discord_info.image_text = jsonObject["sv_discordImageText"];
+				discord_info.image = jsonObject.value("sv_discordImageUrl", "");
+				discord_info.image_text = jsonObject.value("sv_discordImageText", "");
 				if (!discord_info.image.empty() || !discord_info.image_text.empty())
 				{
 					server_discord_info.emplace(discord_info);

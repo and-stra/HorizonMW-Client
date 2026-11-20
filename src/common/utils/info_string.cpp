@@ -31,18 +31,28 @@ namespace utils
 
 	void info_string::parse(std::string buffer)
 	{
+		if (buffer.empty())
+		{
+			return;
+		}
+
 		if (buffer[0] == '\\')
 		{
 			buffer = buffer.substr(1);
 		}
 
+		// string::split() drops the empty field after a trailing delimiter, so an empty
+		// last value would otherwise vanish and its key would be lost. Append a sentinel
+		// delimiter and ignore the extra empty token.
+		buffer.push_back('\\');
+
 		const auto key_values = string::split(buffer, '\\');
-		for (size_t i = 0; !key_values.empty() && i < (key_values.size() - 1); i += 2)
+		for (size_t i = 0; i + 1 < key_values.size(); i += 2)
 		{
 			const auto& key = key_values[i];
 			const auto& value = key_values[i + 1];
 
-			if (!this->key_value_pairs_.contains(key))
+			if (!key.empty() && !this->key_value_pairs_.contains(key))
 			{
 				this->key_value_pairs_[key] = value;
 			}
