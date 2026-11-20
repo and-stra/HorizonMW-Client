@@ -24,6 +24,7 @@ namespace load_timing
 		const auto process_start = clock::now();
 
 		std::mutex mutex;
+		std::atomic_bool console_ready{false};
 		std::string last_zone;
 		clock::time_point last_zone_start{};
 
@@ -34,7 +35,10 @@ namespace load_timing
 
 		void write_line(const std::string& line)
 		{
-			console::info("[load_timing] %s\n", line.data());
+			if (console_ready)
+			{
+				console::info("[load_timing] %s\n", line.data());
+			}
 			utils::io::write_file("mwx-logs/load_times.log", line + "\n", true);
 		}
 
@@ -65,6 +69,12 @@ namespace load_timing
 		write_line(utils::string::va("%10.0f ms  start  %s", since_start_ms(now), last_zone.data()));
 	}
 
+	void begin(const bool dedicated)
+	{
+		utils::io::write_file("mwx-logs/load_times.log",
+			utils::string::va("\n==== MWX start (%s) ====\n", dedicated ? "dedicated" : "client"), true);
+	}
+
 	void mark(const std::string& event)
 	{
 		const auto now = clock::now();
@@ -79,8 +89,7 @@ namespace load_timing
 	public:
 		void post_unpack() override
 		{
-			utils::io::write_file("mwx-logs/load_times.log",
-				utils::string::va("\n==== MWX start (%s) ====\n", game::environment::is_dedi() ? "dedicated" : "client"), true);
+			console_ready = true;
 			mark("client hooks installed");
 
 			// first frame of the game's main thread

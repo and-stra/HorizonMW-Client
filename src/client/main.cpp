@@ -3,6 +3,8 @@
 #include "loader/component_loader.hpp"
 #include "game/game.hpp"
 #include "mcp.hpp"
+#include "repack.hpp"
+#include "component/load_timing.hpp"
 
 #include <utils/flags.hpp>
 #include <utils/io.hpp>
@@ -222,7 +224,19 @@ int main()
 		return mcp::run();
 	}
 
+	// MWX: `mwx.exe -repack <all|zones>` / `-repack-restore <all|zones>`, no game
+	if (utils::flags::has_flag("repack") || utils::flags::has_flag("repack-restore"))
+	{
+		ShowWindow(GetConsoleWindow(), SW_SHOW); // the console component hides it at startup
+		const auto restore = utils::flags::has_flag("repack-restore");
+		const auto what = utils::flags::get_flag(restore ? "repack-restore" : "repack");
+		return repack::run(what.value_or("all"), restore);
+	}
+
 	ShowWindow(GetConsoleWindow(), SW_HIDE);
+
+	load_timing::begin(utils::flags::has_flag("dedicated"));
+	load_timing::mark("main() entered");
 
 	FARPROC entry_point;
 
@@ -257,13 +271,16 @@ int main()
 
 			game::environment::set_mode(mode);
 
+			load_timing::mark("components started (post_start)");
 			entry_point = load_binary(mode, &game::base_address);
+			load_timing::mark("game binary loaded");
 			if (!entry_point)
 			{
 				throw std::runtime_error("Unable to load binary into memory");
 			}
 
 			if (!component_loader::post_load()) return 0;
+			load_timing::mark("post_load done");
 
 			premature_shutdown = false;
 		}
