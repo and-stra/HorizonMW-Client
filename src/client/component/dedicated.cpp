@@ -72,20 +72,6 @@ namespace dedicated
 			utils::hook::invoke<void>(0x686310_b);
 		}
 
-		void send_heartbeat()
-		{
-			if (sv_is_lanOnly())
-			{
-				return;
-			}
-
-			// send heartbeat asynchronously to master so we don't freeze the main game thread
-			scheduler::once([]()
-			{
-				hmw_tcp_utils::MasterServer::send_heartbeat();
-			}, scheduler::pipeline::async);
-		}
-
 		std::vector<std::string>& get_startup_command_queue()
 		{
 			static std::vector<std::string> startup_command_queue;
@@ -390,22 +376,8 @@ namespace dedicated
 				execute_startup_command_queue();
 				execute_console_command_queue();
 
-				bool dedicated = game::environment::is_dedi();
-				std::cout << "Dedicated: " << std::to_string(dedicated) << std::endl;
-
-				if (dedicated) {
-					std::string port = utils::string::va("%i", get_dvar_int("net_port"));
-
-					std::string net_ip = get_dvar_netip();
-					const std::string url = "http://"+ net_ip +":" + port;
-
-					hmw_tcp_utils::GameServer::start_server(url);
-				}
-
-				// Send heartbeat to master
-				scheduler::once(send_heartbeat, scheduler::pipeline::network);
-				scheduler::loop(send_heartbeat, scheduler::pipeline::network, 2min);
-				command::add("heartbeat", send_heartbeat);
+				// MWX: LAN only. No HTTP info server and no master server heartbeat;
+				// clients find the server with a UDP getInfo broadcast (lan component).
 			}, scheduler::pipeline::main, 1s);
 
 			command::add("killserver", kill_server);

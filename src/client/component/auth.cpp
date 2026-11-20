@@ -204,67 +204,7 @@ namespace auth
 				return;
 			}
 
-			auto clantag = info_string.get(utils::string::va("0x%lX", 0x4D60A94B));
-			if (!clantag.empty())
-			{
-				game::StringTable* gamertags_pc{};
-				game::StringTable_GetAsset(OBF("mp/activisiongamertags_pc.csv"), &gamertags_pc);
-
-				for (auto& tag_s : clantags::tags)
-				{
-					auto name_modified = utils::string::va("^%c%c%c%c%s", 1, tag_s.second.width, tag_s.second.height, 2, tag_s.second.short_name.data());
-					if (tag_s.first == clantag || !strcmp(clantag.data(), name_modified))
-					{
-						if (!gamertags_pc || !gamertags_pc->rowCount)
-						{
-							CALL(&network::send, *from, OBF("error"), OBF("Failed to authenticate tag"), '\n');
-							return;
-						}
-
-						if (!strcmp(clantag.data(), name_modified))
-						{
-							clantag = tag_s.first;
-						}
-
-						clantag = utils::string::to_upper(clantag);
-
-						auto discord_id = info_string.get(hash_string("discord_id"));
-
-						auto gamertags_row_count = game::StringTable_GetRowCount(gamertags_pc);
-						for (auto row_i = 0; row_i < gamertags_row_count; ++row_i)
-						{
-							auto tag = game::StringTable_GetColumnValueForRow(gamertags_pc, row_i, 0);
-							auto id = game::StringTable_GetColumnValueForRow(gamertags_pc, row_i, 1);
-
-							if (!strcmp(discord_id.c_str(), id))
-							{
-								if (!strcmp(tag, "HMW"))
-								{
-									game::SV_DirectConnect(from);
-									return;
-								}
-								if (!strcmp(tag, "H2M"))
-								{
-									
-									if (strcmp(clantag.c_str(), "HMW") != 0)
-									{
-										game::SV_DirectConnect(from);
-										return;
-									}
-								}
-								if (!strcmp(tag, clantag.c_str()))
-								{
-									game::SV_DirectConnect(from);
-									return;
-								}
-							}
-						}
-
-						CALL(&network::send, *from, OBF("error"), OBF("Invalid clantag"), '\n');
-						return;
-					}
-				}
-			}
+			// MWX: no clan tag verification (HMW reserved tags were checked against its online list)
 
 			game::SV_DirectConnect(from);
 

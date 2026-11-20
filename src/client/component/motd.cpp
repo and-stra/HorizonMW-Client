@@ -110,7 +110,10 @@ namespace motd
 				return result;
 			};
 
-			const auto result = try_url("https://price.horizonmw.org/");
+			// MWX: no online MOTD/marketing. Startup used to wait for this HTTP request
+			// (post_unpack joins the thread), which costs time or hangs when the site is down.
+			(void)try_url;
+			const std::optional<std::string> result{};
 
 			if (result.has_value())
 			{
