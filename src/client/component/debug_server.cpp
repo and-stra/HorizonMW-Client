@@ -97,16 +97,22 @@ namespace debug_server
 			result["sv_running"] = sv_running && sv_running->current.enabled;
 
 			const auto vlobby = game::VirtualLobby_Loaded();
-			// The offline/LAN frontend shows the main menu without loading the virtual lobby
-			// (virtualLobbyActive stays 0), so "main menu" is either.
+			// HMW's offline/LAN menu is the LUI frontend: it is shown without loading the
+			// virtual lobby (virtualLobbyActive stays 0) and Com_InFrontend() stays false.
+			// The LUI Lua state + a ready database mean the menu is up and the game is usable.
 			const auto frontend = game::Com_InFrontend();
+			const auto lui = *game::hks::lua_state != nullptr;
+			const auto db_ready = game::Sys_IsDatabaseReady2();
+			const auto in_game = !game::environment::is_dedi() && game::CL_IsCgameInitialized() && !vlobby;
 			result["virtual_lobby"] = vlobby;
 			result["frontend"] = frontend;
-			result["main_menu"] = vlobby || frontend;
+			result["lui"] = lui;
+			result["db_ready"] = db_ready;
+			result["main_menu"] = !in_game && (vlobby || frontend || (lui && db_ready));
 
 			if (!game::environment::is_dedi())
 			{
-				result["in_game"] = game::CL_IsCgameInitialized() && !vlobby;
+				result["in_game"] = in_game;
 				const auto state = party::get_server_connection_state();
 				if (state.hostDefined)
 				{
