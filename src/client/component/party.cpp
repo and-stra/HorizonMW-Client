@@ -2,6 +2,7 @@
 #include "loader/component_loader.hpp"
 
 #include "party.hpp"
+#include "lan.hpp"
 #include "console.hpp"
 #include "command.hpp"
 #include "network.hpp"
@@ -658,7 +659,16 @@ namespace party
 		scheduler::once([=]()
 			{
 				nlohmann::json jsonObject = nlohmann::json::parse(infoJson);
-				const utils::info_string info(infoJson);
+
+				// MWX: the info now comes from the UDP getInfo answer (lan::to_json); keep it as an info string too
+				utils::info_string info{};
+				for (const auto& [key, value] : jsonObject.items())
+				{
+					if (value.is_string())
+					{
+						info.set(key, value.get<std::string>());
+					}
+				}
 
 				if (server_connection_state.host != target)
 				{
@@ -719,6 +729,8 @@ namespace party
 
 				// @Aphrodite Causes halt on main thread when connecting and throws warnings in build console...
 				if (hmw_tcp_utils::GameServer::download_files_tcp(target, jsonObject, false)) {
+					// MWX: map/mod files differ from the server's (no downloads on LAN) or a restart reconnects
+					connecting_to_server = false;
 					return;
 				}
 
@@ -817,20 +829,22 @@ namespace party
 		server_connection_state.challenge = utils::cryptography::random::get_challenge();
 		server_connection_state.hostDefined = true;
 
-		// New TCP code
-		auto ip = target.ip;
-		unsigned short port = htons(target.port);
+		// MWX: ask the server for its info over UDP (getInfo), off the main thread
+		scheduler::once([target]()
+		{
+			const auto response = lan::query(target);
+			if (!response.has_value())
+			{
+				scheduler::once([]()
+				{
+					menu_error("Connection failed: Failed to get response from server.");
+					connecting_to_server = false;
+				}, scheduler::pipeline::main);
+				return;
+			}
 
-		std::string ipStr = std::to_string(ip[0]) + "." + std::to_string(ip[1]) + "." + std::to_string(ip[2]) + "." + std::to_string(ip[3]);
-		std::string url = "http://" + ipStr + ":" + std::to_string(port) + "/getInfo";
-		std::string infoJson = hmw_tcp_utils::GET_url(url.c_str(), {}, false, 1500L, true, 3);
-
-		if (infoJson.empty()) {
-			menu_error("Connection failed: Failed to get response from server.");
-			connecting_to_server = false;
-			return;
-		}
-		connect_to_server_tcp(infoJson, target);
+			connect_to_server_tcp(lan::to_json(*response).dump(), target);
+		}, scheduler::pipeline::network);
 	}
 
 	void start_map(const std::string& mapname, bool dev)
@@ -1176,6 +1190,7 @@ namespace party
 					utils::info_string info;
 					info.set("challenge", data);
 					info.set("gamename", "HMW");
+					info.set("gameversion", hmw_tcp_utils::get_version());
 					info.set("hostname", get_dvar_string("sv_hostname"));
 					info.set("gametype", get_dvar_string("g_gametype"));
 					info.set("sv_motd", get_dvar_string("sv_motd"));

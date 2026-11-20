@@ -9,6 +9,7 @@
 #include "party.hpp"
 #include "scheduler.hpp"
 #include "server_list.hpp"
+#include "lan.hpp"
 
 #include "game/game.hpp"
 #include "game/dvars.hpp"
@@ -421,8 +422,16 @@ namespace server_list
 		// @CB: This try catches isn't really needed. But since this is multithreaded, it's better to be safe then sorry
 
 		try {
-			std::string game_server_info = connect_address + "/getInfo";
-			std::string game_server_response = hmw_tcp_utils::GET_url(game_server_info.c_str(), {}, true, 1500L, true, 3);
+			// MWX: UDP getInfo instead of HTTP
+			std::string game_server_response{};
+			game::netadr_s address{};
+			if (game::NET_StringToAdr(connect_address.data(), &address))
+			{
+				if (const auto response = lan::query(address, 1000ms))
+				{
+					game_server_response = lan::to_json(*response).dump();
+				}
+			}
 
 			if (!game_server_response.empty()) {
 				{
@@ -599,7 +608,8 @@ namespace server_list
 		notification_message = "Refreshing server list...";
 		ui_scripting::notify("showRefreshingNotification", {});
 
-		std::string master_server_list = hmw_tcp_utils::GET_url(hmw_tcp_utils::MasterServer::get_master_server(), {}, false, 10000L, true, 3);
+		// MWX: no master server. Find servers on the LAN (broadcast) and in mwx_servers.
+		const auto responses = lan::discover(1000ms);
 
 		// Clear error message if any
 		if (error_is_displayed) {
@@ -607,72 +617,25 @@ namespace server_list
 			error_is_displayed = false;
 		}
 
+		console::info("LAN: %zu server(s) found\n", responses.size());
+
 		auto server_index = std::make_shared<std::atomic<int>>(0);
+		for (const auto& response : responses)
+		{
+			{
+				std::lock_guard<std::mutex> lock(interrupt_mutex);
+				if (interrupt_server_list) {
+					break;
+				}
+			}
 
-		console::info("Checking if localhost server is running on default port (27017)");
-		std::string port = "27017";
-		bool localhost = hmw_tcp_utils::GameServer::is_localhost(port);
-
-		if (localhost) {
-			std::string local_res = hmw_tcp_utils::GET_url("localhost:27017/getInfo", {}, true, 1500L, false, 1);
-			if (!local_res.empty()) {
-				add_server_to_list(local_res, "localhost:27017", server_index->fetch_add(1));
+			try {
+				std::lock_guard<std::mutex> lock(server_list_mutex);
+				add_server_to_list(lan::to_json(response).dump(), response.connect_address, server_index->fetch_add(1));
 				ui_scripting::notify("updateGameList", {});
 			}
-		}
-
-		if (master_server_list.empty()) {
-			console::info("Failed to get response from master server!");
-			getting_server_list = false;
-			ui_scripting::notify("updateGameList", {});
-			ui_scripting::notify("hideRefreshingNotification", {});
-			ui_scripting::notify("updateRefreshTimer", {});
-			display_error("MASTER SERVER ERROR!", "No response!");
-			return;
-		}
-
-		std::vector<std::thread> threads;
-
-		try {
-			nlohmann::json master_server_response_json = nlohmann::json::parse(master_server_list);
-
-			for (const auto& element : master_server_response_json) {
-				std::string connect_address = element.get<std::string>();
-
-				{
-					std::lock_guard<std::mutex> lock(interrupt_mutex);
-					if (interrupt_server_list) {
-						break; // If interrupted, break out of the loop
-					}
-				}
-
-				// Launch threads for fetching server info
-				threads.emplace_back([connect_address, server_index]() {
-					try {
-						fetch_game_server_info(connect_address, server_index);
-					}
-					catch (std::exception e) {
-						console::error("Error fetching server info: %s", std::string(e.what()).data());
-					}
-				});
-			}
-		}
-
-		catch (const std::exception& e) {
-			getting_server_list = false;
-			ui_scripting::notify("updateGameList", {});
-			ui_scripting::notify("hideRefreshingNotification", {});
-			ui_scripting::notify("updateRefreshTimer", {});
-
-			console::error("Error parsing master server JSON response: %s", std::string(e.what()));
-			display_error("MASTER SERVER ERROR!", "Failed to parse response!");
-			return;
-		}
-
-		// Join all the threads to ensure they complete
-		for (auto& t : threads) {
-			if (t.joinable()) {
-				t.join();
+			catch (const std::exception& e) {
+				console::error("Bad server info from %s: %s\n", response.connect_address.data(), e.what());
 			}
 		}
 
@@ -886,11 +849,16 @@ namespace server_list
 			return false;
 		}
 
-		std::string game_server_info = std::string(connect_address) + "/getInfo";
-
-		const char* server_address = game_server_info.data();
-
-		std::string game_server_response = hmw_tcp_utils::GET_url(server_address, {}, true, 1500L, true, 3);
+		// MWX: UDP getInfo instead of HTTP
+		std::string game_server_response{};
+		game::netadr_s address{};
+		if (game::NET_StringToAdr(connect_address, &address))
+		{
+			if (const auto response = lan::query(address, 1000ms))
+			{
+				game_server_response = lan::to_json(*response).dump();
+			}
+		}
 
 		if (game_server_response.empty())
 		{
@@ -988,14 +956,6 @@ namespace server_list
 		std::string server_protocol = game_server_response_json["protocol"];
 		const auto protocol = std::atoi(server_protocol.c_str());
 		if (protocol != PROTOCOL)
-		{
-			return;
-		}
-
-		// Don't show servers that aren't dedicated!
-		std::string server_dedicated = game_server_response_json["dedicated"];
-		const auto dedicated = std::atoi(server_dedicated.c_str());
-		if (!dedicated)
 		{
 			return;
 		}
