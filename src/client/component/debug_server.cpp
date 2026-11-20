@@ -108,7 +108,9 @@ namespace debug_server
 			result["frontend"] = frontend;
 			result["lui"] = lui;
 			result["db_ready"] = db_ready;
-			result["main_menu"] = !in_game && (vlobby || frontend || (lui && db_ready));
+			// A dedicated server always runs a map; its LUI state must not count as a menu.
+			result["main_menu"] = !game::environment::is_dedi() && !in_game
+				&& (vlobby || frontend || (lui && db_ready));
 
 			if (!game::environment::is_dedi())
 			{
