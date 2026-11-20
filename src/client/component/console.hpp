@@ -12,6 +12,9 @@ namespace console
 
 	void print(int type, const char* fmt, ...);
 
+	// MWX: the last `count` lines printed to the console (newest last)
+	std::vector<std::string> get_recent_lines(std::size_t count);
+
 	template <typename... Args>
 	void error(const char* fmt, Args&&... args)
 	{

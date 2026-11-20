@@ -2,6 +2,7 @@
 #include "loader/loader.hpp"
 #include "loader/component_loader.hpp"
 #include "game/game.hpp"
+#include "mcp.hpp"
 
 #include <utils/flags.hpp>
 #include <utils/io.hpp>
@@ -215,6 +216,12 @@ void limit_parallel_dll_loading()
 
 int main()
 {
+	// MWX: `mwx.exe -mcp` runs only the MCP bridge (stdio), no game
+	if (utils::flags::has_flag("mcp"))
+	{
+		return mcp::run();
+	}
+
 	ShowWindow(GetConsoleWindow(), SW_HIDE);
 
 	FARPROC entry_point;

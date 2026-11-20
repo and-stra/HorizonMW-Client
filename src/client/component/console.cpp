@@ -115,8 +115,25 @@ namespace console
 			show_cursor(true);
 		}
 
+		// MWX: the last console lines, for the debug server (debug_server.cpp)
+		std::mutex recent_mutex;
+		std::deque<std::string> recent_lines;
+		constexpr std::size_t recent_max = 1000;
+
+		void remember_line(const std::string& message)
+		{
+			std::lock_guard _(recent_mutex);
+			recent_lines.emplace_back(message);
+			while (recent_lines.size() > recent_max)
+			{
+				recent_lines.pop_front();
+			}
+		}
+
 		int dispatch_message(const int type, const std::string& message)
 		{
+			remember_line(message);
+
 			if (rcon::message_redirect(message))
 			{
 				return 0;
@@ -332,6 +349,13 @@ namespace console
 
 			return dispatch_message(con_type_info, result);
 		}
+	}
+
+	std::vector<std::string> get_recent_lines(const std::size_t count)
+	{
+		std::lock_guard _(recent_mutex);
+		const auto first = recent_lines.size() > count ? recent_lines.size() - count : 0;
+		return {recent_lines.begin() + static_cast<std::ptrdiff_t>(first), recent_lines.end()};
 	}
 
 	void print(const int type, const char* fmt, ...)
