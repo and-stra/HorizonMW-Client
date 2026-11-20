@@ -35,7 +35,7 @@ friends on LAN, short loading times. No master server, accounts or anti-cheat.
 | `component/load_timing.cpp` | `mwx-logs\load_times.log`: every fastfile + milestones |
 | `component/debug_server.cpp` | local debug HTTP interface (127.0.0.1:27099 / 27098) |
 | `mcp.cpp` | `mwx.exe -mcp`: MCP server, see [docs/mcp.md](docs/mcp.md) |
-| `repack.cpp` | `mwx.exe -repack <all|zones>`: zlib zones → LZ4 blocks |
+| `repack.cpp` | `mwx.exe -repack all` (or zone names): zlib zones → LZ4 blocks |
 
 ## Testing
 
