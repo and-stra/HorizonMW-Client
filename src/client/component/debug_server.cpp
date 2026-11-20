@@ -97,7 +97,12 @@ namespace debug_server
 			result["sv_running"] = sv_running && sv_running->current.enabled;
 
 			const auto vlobby = game::VirtualLobby_Loaded();
-			result["main_menu"] = vlobby;
+			// The offline/LAN frontend shows the main menu without loading the virtual lobby
+			// (virtualLobbyActive stays 0), so "main menu" is either.
+			const auto frontend = game::Com_InFrontend();
+			result["virtual_lobby"] = vlobby;
+			result["frontend"] = frontend;
+			result["main_menu"] = vlobby || frontend;
 
 			if (!game::environment::is_dedi())
 			{
