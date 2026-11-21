@@ -549,8 +549,18 @@ namespace repack
 		std::filesystem::create_directories("mwx-logs");
 		log_file.open("mwx-logs/repack.log", std::ios::app);
 
+		// MWX scopes: "all" = hmw-mod/zone only (the custom HMW zones), "usermaps" = hmw-usermaps only,
+		// "everything" = both. -repack-restore all also restores whatever is in the backup folder.
+		const auto what_lower = utils::string::to_lower(what);
+		const auto only_usermaps = what_lower == "usermaps";
+		const auto with_usermaps = only_usermaps || what_lower == "everything" || (restore && (what_lower.empty() || what_lower == "all"));
+		const auto is_usermap = [](const std::filesystem::path& zone)
+		{
+			return zone.generic_string().starts_with("hmw-usermaps/");
+		};
+
 		std::vector<std::string> names;
-		if (!what.empty() && utils::string::to_lower(what) != "all")
+		if (!what.empty() && what_lower != "all" && !only_usermaps && what_lower != "everything")
 		{
 			for (auto& name : utils::string::split(utils::string::to_lower(what), ','))
 			{
@@ -583,6 +593,11 @@ namespace repack
 		for (const auto& zone : zones)
 		{
 			if (!selected(zone, names))
+			{
+				continue;
+			}
+
+			if (names.empty() && (is_usermap(zone) ? !with_usermaps : only_usermaps))
 			{
 				continue;
 			}
