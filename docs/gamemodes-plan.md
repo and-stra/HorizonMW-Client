@@ -37,15 +37,35 @@ Ground War / Cage Match / Team Tactical / Old School FFA) in the private match g
 - H1 dvar names are hashed in compiled scripts; setting `scr_game_hodgepodgeMode` from the
   client must resolve to the same dvar (verify first).
 
+## Phase 0 results (refs in C:\Games\cod-hwm\refs)
+
+- `refs\key\lua_decompiled\`: decompiled final retail menus (HMW's mp_menus are byte-identical
+  to retail). `refs\h1_dump\` has the full older H1 dump (Lua + csv).
+- Mode list = Lua table `Cac.GameModes.Data[group].List` (defined in `s1cacutils`). The final
+  `mpgamesetupmodemenu` already loops over the groups `Standard` and `Party`; `Party` is just not
+  defined. -> A ui_script that adds `Cac.GameModes.Group.Party` + `Data.Party` gives a second
+  "PARTY" mode list without touching any menu code.
+- Selecting a mode does `MatchRules.SetData("gametype", ref)` and labels come from
+  `mp/gameTypesTable.csv` (ref, name, desc, image, flags..., presence). The retail table already
+  has rows for `infect` (MPUI_INFECT / MENU_INFECT_DESC / icon_pl_exo_infected), `sr`, `ball`,
+  `twar`, `mugger` (AW leftovers); localized strings for infect exist
+  (`MENU_INFECT_DESC`, `LUA_MENU_RULES_NUM_INIT_INFECTED`, scoreboard strings).
+- `GetOptionClassForGameType` is only used for gametype-specific options (dom/sd/...), so
+  war-based modes do not hit its assert.
+- No matchrules DDL found; HMW's gameTypesTable and HMW English strings were not in the dumped
+  zones (zonetool does not write string tables with -dumpzone).
+- Dvar names are hashed with the same function in GSC and in the client (`dvars.cpp`), so
+  `set scr_game_hodgepodgeMode N` from the console should reach the scripts (verify in phase 1).
+
 ## Design
 
 **Virtual game modes** in a new client component `gamemodes.cpp`:
 `ref -> { base gametype, dvars, name, desc, image }`, e.g.
 `ph -> war + scr_game_hodgepodgeMode 9`, `mprops -> war + 9 + scr_game_madprops 1`,
 `slasher -> war + 2`, `snipers -> war + 4`, `rpg -> war + 6`, `infect -> infect` (real script).
-- UI: add rows for the virtual refs to `mp/gameTypesTable.csv` (string table patch at load) and
-  map them to an existing option class in `GetOptionClassForGameType` (TDM class; Lua override),
-  names via localized strings.
+- UI: a ui_script defines the `Party` group (ph, mprops, slasher, snipers, rpg, infect); rows for
+  the virtual refs are appended to `mp/gameTypesTable.csv` (string table patch at load, like
+  stock_weapons), names/descriptions via localized strings (reuse MP_SLASHER*, MPUI_INFECT...).
 - Start: when the host starts a map with `ui_gametype`/`g_gametype` = virtual ref, the client
   sets `g_gametype` to the base and the mode dvars (and resets them for normal modes), so all
   hodgepodge code runs exactly as shipped (it assumes level.gametype == "war").
