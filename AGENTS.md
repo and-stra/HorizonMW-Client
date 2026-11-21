@@ -44,22 +44,16 @@ friends on LAN, short loading times. No master server, accounts or anti-cheat.
 - Logs in the game folder: `mwx-logs\load_times.log`, `mwx-logs\repack.log`,
   `hmw-mod\logs\games_mp.log`, crash dumps in `minidumps\`.
 
-## Workflow: Claude drives, opencode executes (no exceptions)
+## Workflow: Claude drives, opencode executes
 
-- **Claude** does planning, architecture, troubleshooting, orchestration and review.
-- **opencode + DeepSeek V4.1 Flash** executes every other task: builds, test runs, code changes
-  from Claude's spec, file operations, measurements.
-- Every execution task goes through the opencode MCP server (`opencode_task`). Claude reviews each report and either
-  **approves** it or sends a **revision task** (new task referencing the old id). Nothing counts
-  as done until Claude has approved it.
-- When you are opencode running such a task: you are the executor. Follow the
-  executor rules at the top of the task file, do only that task, and write the report it asks for.
-
-opencode MCP server (`tools/opencode-mcp/opencode-mcp.mjs`, Node, no dependencies):
-
-- Tools: `opencode_task(task, title?, wait_seconds?)` starts a task and returns the report if it
-  finishes within the wait; `opencode_wait(id)`, `opencode_list()`, `opencode_cancel(id)`.
-- One task at a time. Executor rules are prepended automatically. Each task keeps
-  `task.md`, `report.md`, `opencode.log` and `result.json` in `C:\Games\cod-hwm\mwx-opencode\<id>\`.
-- Settings via env: `OPENCODE_MODEL`, `OPENCODE_EXE`, `MWX_WORKDIR`, `MWX_TASKDIR`,
-  `OPENCODE_TIMEOUT_MINUTES` (default 60). Setup: `docs/opencode-mcp.md`.
+- **Claude** (claude.ai, runs in a Linux VM) does planning, architecture, troubleshooting,
+  orchestration and review. It cannot build with MSVC or run the game.
+- **opencode + DeepSeek** on Windows does everything Claude can't: builds, running the game and
+  tests, measurements, anything that needs Windows.
+- For each such step Claude writes a **short, self-contained prompt for opencode** in a code block.
+  The user copies it into opencode and pastes the result back. Claude reviews it and approves it
+  or writes a follow-up prompt.
+- A prompt for opencode states: the goal, exact steps/commands, what to check, what to report
+  (exit codes, key log lines, numbers), and when to stop. Keep it small: one task per prompt.
+- When you are opencode running such a prompt: do only that task, make no design decisions,
+  stop and report if something fails or is unclear, never touch game files by hand.
