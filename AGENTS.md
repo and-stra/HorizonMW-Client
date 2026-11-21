@@ -43,3 +43,24 @@ friends on LAN, short loading times. No master server, accounts or anti-cheat.
   see [docs/mcp.md](docs/mcp.md).
 - Logs in the game folder: `mwx-logs\load_times.log`, `mwx-logs\repack.log`,
   `hmw-mod\logs\games_mp.log`, crash dumps in `minidumps\`.
+
+## Workflow: Claude drives, opencode executes (no exceptions)
+
+- **Claude** does planning, architecture, troubleshooting, orchestration and review.
+- **opencode + DeepSeek V4.1 Flash** executes every other task: builds, test runs, code changes
+  from Claude's spec, file operations, measurements.
+- Every execution task goes through the bridge. Claude reviews each report and either
+  **approves** it or sends a **revision task** (new task referencing the old id). Nothing counts
+  as done until Claude has approved it.
+- When you are opencode running a bridge task: you are the executor. Follow
+  `mwx-bridge\executor-rules.md`, do only that task, and write the report it asks for.
+
+Bridge (`C:\Games\cod-hwm\mwx-bridge`, source in `tools/opencode-bridge/`):
+
+- Start once per session: `mwx-bridge\start-bridge.bat` (keep the window open).
+  Model, timeout and workdir are in `bridge.json`.
+- Claude writes `inbox\<id>.task.md` (id = `YYYYMMDD-HHMM-short-name`; write to a `.tmp` and
+  rename so it is never read half-written).
+- The bridge runs `opencode run` with the task (rules prepended), one at a time, and writes
+  `outbox\<id>.report.md`, `outbox\<id>.log` (opencode output) and `outbox\<id>.done.json`
+  (exit code, timeout, seconds). `status.json` shows idle/running and a heartbeat time.
