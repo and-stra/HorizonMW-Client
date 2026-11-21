@@ -57,3 +57,6 @@ friends on LAN, short loading times. No master server, accounts or anti-cheat.
   (exit codes, key log lines, numbers), and when to stop. Keep it small: one task per prompt.
 - When you are opencode running such a prompt: do only that task, make no design decisions,
   stop and report if something fails or is unclear, never touch game files by hand.
+- Git: Claude pushes to `claude/mwx` (always rebased onto the current `mwx`); `build-mwx.bat`
+  fast-forwards `mwx` to it. opencode commits only on `mwx` and never merges or rebases itself:
+  if the script says the branches diverged, stop and report it to Claude.
