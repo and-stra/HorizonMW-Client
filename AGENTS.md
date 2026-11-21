@@ -49,18 +49,17 @@ friends on LAN, short loading times. No master server, accounts or anti-cheat.
 - **Claude** does planning, architecture, troubleshooting, orchestration and review.
 - **opencode + DeepSeek V4.1 Flash** executes every other task: builds, test runs, code changes
   from Claude's spec, file operations, measurements.
-- Every execution task goes through the bridge. Claude reviews each report and either
+- Every execution task goes through the opencode MCP server (`opencode_task`). Claude reviews each report and either
   **approves** it or sends a **revision task** (new task referencing the old id). Nothing counts
   as done until Claude has approved it.
-- When you are opencode running a bridge task: you are the executor. Follow
-  `mwx-bridge\executor-rules.md`, do only that task, and write the report it asks for.
+- When you are opencode running such a task: you are the executor. Follow the
+  executor rules at the top of the task file, do only that task, and write the report it asks for.
 
-Bridge (`C:\Games\cod-hwm\mwx-bridge`, source in `tools/opencode-bridge/`):
+opencode MCP server (`tools/opencode-mcp/opencode-mcp.mjs`, Node, no dependencies):
 
-- Start once per session: `mwx-bridge\start-bridge.bat` (keep the window open).
-  Model, timeout and workdir are in `bridge.json`.
-- Claude writes `inbox\<id>.task.md` (id = `YYYYMMDD-HHMM-short-name`; write to a `.tmp` and
-  rename so it is never read half-written).
-- The bridge runs `opencode run` with the task (rules prepended), one at a time, and writes
-  `outbox\<id>.report.md`, `outbox\<id>.log` (opencode output) and `outbox\<id>.done.json`
-  (exit code, timeout, seconds). `status.json` shows idle/running and a heartbeat time.
+- Tools: `opencode_task(task, title?, wait_seconds?)` starts a task and returns the report if it
+  finishes within the wait; `opencode_wait(id)`, `opencode_list()`, `opencode_cancel(id)`.
+- One task at a time. Executor rules are prepended automatically. Each task keeps
+  `task.md`, `report.md`, `opencode.log` and `result.json` in `C:\Games\cod-hwm\mwx-opencode\<id>\`.
+- Settings via env: `OPENCODE_MODEL`, `OPENCODE_EXE`, `MWX_WORKDIR`, `MWX_TASKDIR`,
+  `OPENCODE_TIMEOUT_MINUTES` (default 60). Setup: `docs/opencode-mcp.md`.
