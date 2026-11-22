@@ -171,13 +171,19 @@ oicspawnfinished()
     // _playerlogic notifies spawned_player right after _class::applyloadout
     self waittill("spawned_player");
 
-    // one revolver, one round in the clip, no stock, nothing else
+    // one revolver, one round in the clip, no stock, nothing else. The loadout gave the full weapon name
+    // (h2_coltanaconda_mp...); the bare ref is not a weapon.
+    weapon = self.primaryweapon;
+    if (!isdefined(weapon) || weapon == "none")
+        weapon = maps\mp\gametypes\_class::buildweaponname(OIC_WEAPON, "none", "none", "none", []);
+    self.oic_weapon = weapon;
+
     self takeallweapons();
-    maps\mp\_utility::_giveweapon(OIC_WEAPON);
-    self switchtoweapon(OIC_WEAPON);
-    self setspawnweapon(OIC_WEAPON);
-    self setweaponammoclip(OIC_WEAPON, 1);
-    self setweaponammostock(OIC_WEAPON, 0);
+    self giveweapon(weapon);
+    self switchtoweapon(weapon);
+    self setspawnweapon(weapon);
+    self setweaponammoclip(weapon, 1);
+    self setweaponammostock(weapon, 0);
 
     self thread oicliveshud();
 }
@@ -193,16 +199,18 @@ onplayerkilled(einflictor, attacker, idamage, smeansofdeath, sweapon, vdir, shit
 
 oicgiveammo()
 {
-    if (!isdefined(self) || !self hasweapon(OIC_WEAPON))
+    if (!isdefined(self) || !isdefined(self.oic_weapon) || !self hasweapon(self.oic_weapon))
         return;
+
+    weapon = self.oic_weapon;
 
     level endon("game_ended");
     self endon("death");
     self endon("disconnect");
 
-    clip = self getweaponammoclip(OIC_WEAPON);
-    stock = self getweaponammostock(OIC_WEAPON);
-    maxclip = weaponclipsize(OIC_WEAPON);
+    clip = self getweaponammoclip(weapon);
+    stock = self getweaponammostock(weapon);
+    maxclip = weaponclipsize(weapon);
 
     // IW5 oic.gsc giveammo(): clip first, the rest to the stock
     total = clip + stock + 1;
@@ -218,8 +226,8 @@ oicgiveammo()
         stock = 0;
     }
 
-    self setweaponammoclip(OIC_WEAPON, clip);
-    self setweaponammostock(OIC_WEAPON, stock);
+    self setweaponammoclip(weapon, clip);
+    self setweaponammostock(weapon, stock);
 
     self playlocalsound("wpn_ammo_pickup_plr");
 }

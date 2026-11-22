@@ -171,10 +171,12 @@ aonspawnfinished()
     self waittill("spawned_player");
 
     // empty pistol, the throwing knife is the only way to get the first kill
-    if (self hasweapon(AON_WEAPON))
+    // the loadout gave the full weapon name (h2_usp_mp...); the bare ref is not a weapon
+    weapon = self.primaryweapon;
+    if (isdefined(weapon) && weapon != "none" && self hasweapon(weapon))
     {
-        self setweaponammoclip(AON_WEAPON, 0);
-        self setweaponammostock(AON_WEAPON, 0);
+        self setweaponammoclip(weapon, 0);
+        self setweaponammostock(weapon, 0);
     }
 }
 
@@ -220,7 +222,8 @@ aononekillsplash(player)
     if (level.gameended)
         return;
 
-    level thread splashtoplayers(&"MWX_AON_ONE_KILL");
+    // only for the player himself ("1 KILL LEFT" for everyone would read as their own count)
+    player thread maps\mp\gametypes\_hud_message::hintmessage(&"MWX_AON_ONE_KILL");
 }
 
 // the winner that never died gets the "ALL OR NOTHING!" bonus and splash before the end

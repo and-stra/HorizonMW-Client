@@ -9,8 +9,6 @@
 
 #define CRANKED_TIME 30
 #define CRANKED_MOVE_SCALAR 1.1
-#define CRANKED_EXPLOSION_RADIUS 200
-#define CRANKED_EXPLOSION_DAMAGE 300
 
 main()
 {
@@ -18,6 +16,7 @@ main()
         return;
 
     maps\mp\gametypes\_globallogic::init();
+    level.cranked_explodefx = loadfx("fx/explosions/aerial_explosion_large");
     maps\mp\gametypes\_callbacksetup::setupcallbacks();
     maps\mp\gametypes\_globallogic::setupcallbacks();
 
@@ -263,6 +262,11 @@ crankedhud()
         wait 0.1;
     }
 
+    // deaths without an attacker (falling, world) don't reach onnormaldeath/onsuicidedeath: clear the
+    // state here too, or the next life would keep a cranked flag without timer
+    if (!isalive(self))
+        self cleanupcranked();
+
     if (isdefined(self.crankedhud))
     {
         self.crankedhud maps\mp\gametypes\_hud_util::destroyelem();
@@ -275,11 +279,14 @@ crankedexplode()
     if (!isalive(self))
         return;
 
-    playfx(level.mine_explode, self.origin + (0, 0, 32));
-    radiusdamage(self.origin + (0, 0, 32), CRANKED_EXPLOSION_RADIUS, CRANKED_EXPLOSION_DAMAGE, CRANKED_EXPLOSION_DAMAGE, self, "MOD_EXPLOSIVE");
-
-    if (isalive(self))
-        self maps\mp\_utility::_suicide();
+    // only the cranked player dies (as in Ghosts): an area blast would credit kills and team score to
+    // the exploding player
+    // level.mine_explode is never set in H1; this effect is loaded in main (used by _hardpoints too)
+    if (isdefined(level.cranked_explodefx))
+        playfx(level.cranked_explodefx, self.origin + (0, 0, 32));
+    self playsound("detpack_explo_default");
+    earthquake(0.4, 0.6, self.origin, 300);
+    self maps\mp\_utility::_suicide();
 }
 
 cleanupcranked()
