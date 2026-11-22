@@ -100,3 +100,65 @@ Ground War / Cage Match / Team Tactical / Old School FFA) in the private match g
    with forced settings. Optional later: Search & Rescue (port `sr.gsc` from IW6/S1).
 6. **Test per mode** (debug server + bots): starts from the menu, rounds/end conditions work,
    no script errors, a second PC can join via the LAN browser.
+
+## Phase 1 results (2026-11-22)
+
+- `set scr_game_hodgepodgeMode N` + `map` works: **Slasher ran** (axis bot became slasher, kills
+  with `h1_meleeshovel_mp`), **Prop Hunt ran** (4 rounds, round logic, "ALLIES ELIMINATED"), but
+  without props because `mp/ph_props_<map>.csv` is missing. The earlier "nothing happens" was the
+  human stuck in the pregame/team menu (console `map` does not auto-assign).
+- Release clients do not scan `scripts/mp/` on disk (only dedicated servers; `load_scripts` in
+  `gsc/script_loading.cpp` has `#ifndef DEBUG if (is_dedi())`).
+- The engine whitelists gametypes in the rawfile `maps/mp/gametypes/_gametypes.txt`
+  (dm dom sd war conf vlobby koth sab ctf dd hp gun). New refs must be added there.
+
+## Phase 2 spec (menu + start of the hodgepodge modes)
+
+Virtual modes (ref -> base gametype + dvars):
+| ref | base | scr_game_hodgepodgeMode | scr_game_madprops | name key | desc key |
+|---|---|---|---|---|---|
+| ph | war | 9 | 0 | MWX_GAMETYPE_PH | MWX_GAMETYPE_PH_DESC |
+| mprops | war | 9 | 1 | MWX_GAMETYPE_MPROPS | MWX_GAMETYPE_MPROPS_DESC |
+| slasher | war | 2 | 0 | MP_SLASHER (exists) | MP_SLASHER_DESC (exists) |
+| snipers | war | 4 | 0 | MWX_GAMETYPE_SNIPERS | MWX_GAMETYPE_SNIPERS_DESC |
+| rpg | war | 6 | 0 | MWX_GAMETYPE_RPG | MWX_GAMETYPE_RPG_DESC |
+
+New component `src/client/component/gamemodes.cpp/.hpp` (registered like the others):
+1. Mode table above in one place (`gamemodes::find(ref)`).
+2. Strings via `localized_strings::override` in post_unpack:
+   MWX_GAMETYPE_PH "Prop Hunt" / "One team hides as props, the other hunts them. Survive the round as a prop or find them all.";
+   MWX_GAMETYPE_MPROPS "Mad Props" / "Props hunt the soldiers. Props win by eliminating every soldier.";
+   MWX_GAMETYPE_SNIPERS "Snipers Only" / "Team Deathmatch with sniper rifles only.";
+   MWX_GAMETYPE_RPG "RPGs Only" / "Team Deathmatch with RPGs only.";
+   MWX_PARTY_CAPS "PARTY GAMES".
+3. Rawfile patch (hook in `fastfiles.cpp` db_find_xasset_header, RAWFILE branch, next to the
+   override logic): for `maps/mp/gametypes/_gametypes.txt` return a copy with the virtual refs
+   appended, one per line (allocate once, keep alive; keep `len`, set `compressedLen = 0` so
+   `db_get_raw_buffer_stub` copies the plain buffer).
+4. String table patch (STRINGTABLE branch, like `stock_weapons::patch`): for
+   `mp/gameTypesTable.csv` append one row per virtual ref, copying the `war` row and replacing
+   col 0 (ref), 1 (name key), 2 (desc key); keep the war image/flags/presence. Cell hashes like
+   stock_weapons does (reuse its hash detection). Do it once and cache.
+5. Start translation in `load_gametype_script_stub` (gsc/script_loading.cpp), BEFORE the original
+   call: read `g_gametype`; if it is a virtual ref -> set `g_gametype` to the base, set
+   `scr_game_hodgepodgeMode` / `scr_game_madprops`, set string dvar `mwx_gamemode` to the ref,
+   log "[gamemodes] <ref> -> <base> (hodgepodge N, madprops M)". Otherwise, if it is any other
+   gametype -> set both hodgepodge dvars to 0 and `mwx_gamemode` "" (so a later normal match is
+   normal again). Use the same dvar setter the code base already uses for string/int dvars.
+   Register `mwx_gamemode` like lan.cpp registers its dvars.
+6. Release disk scripts from GAME\mwx: in `load_scripts`, also scan the disk folder in release when
+   `root_dir` is the `mwx` search path (`is_dedi() || root_dir.filename() == "mwx"`).
+   (Needed for phases 3/4; harmless now.)
+
+UI (`data/mwx/ui_scripts/gamemodes/__init__.lua`, frontend + multiplayer only, use
+`Engine.IsMultiplayer()`, never `game:issingleplayer()`):
+```lua
+if not Engine.InFrontend() or not Engine.IsMultiplayer() then return end
+Cac.GameModes.Group.Party = "Party"
+Cac.GameModes.Data.Party = {
+    Label = Engine.Localize("@MWX_PARTY_CAPS"),
+    Image = "h1_ui_icon_playlist_standard",
+    List = { "ph", "mprops", "slasher", "snipers", "rpg" }
+}
+```
+(Standard list stays as HMW sets it. Infected is added in phase 4 when its script exists.)
