@@ -9,16 +9,47 @@ if not LUI.MapSetup or not LUI.IW5Maps or not package or not package.loaded then
 local iw5_maps = package.loaded["data.iw5_maps"]
 if type(iw5_maps) ~= "table" then return end
 
--- only maps that are actually ported (GAME\hmw-usermaps\<loadName>\)
-local aw_maps = {
-    {
-        loadName = "mp_greenband",
-        name = "Greenband",
-        description = "An Atlas hydroponics research facility in the Pacific Northwest.",
-        image = "loadscreen_mp_greenband",
-        game = "Advanced Warfare"
-    }
+-- Advanced Warfare maps (community H1 ports in GAME\hmw-usermaps\<loadName>\); only installed ones are listed
+local aw_all = {
+    { loadName = "mp_refraction", name = "Ascend", description = "Advanced Warfare", image = "loadscreen_mp_refraction", game = "Advanced Warfare" },
+    { loadName = "mp_dam", name = "Atlas Gorge", description = "Advanced Warfare", image = "loadscreen_mp_dam", game = "Advanced Warfare" },
+    { loadName = "mp_lab2", name = "Bio Lab", description = "Advanced Warfare", image = "loadscreen_mp_lab2", game = "Advanced Warfare" },
+    { loadName = "mp_spark", name = "Chop Shop", description = "Advanced Warfare", image = "loadscreen_mp_spark", game = "Advanced Warfare" },
+    { loadName = "mp_climate_3", name = "Climate", description = "Advanced Warfare", image = "loadscreen_mp_climate_3", game = "Advanced Warfare" },
+    { loadName = "mp_comeback", name = "Comeback", description = "Advanced Warfare", image = "loadscreen_mp_comeback", game = "Advanced Warfare" },
+    { loadName = "mp_sector17", name = "Compound", description = "Advanced Warfare", image = "loadscreen_mp_sector17", game = "Advanced Warfare" },
+    { loadName = "mp_lost", name = "Core", description = "Advanced Warfare", image = "loadscreen_mp_lost", game = "Advanced Warfare" },
+    { loadName = "mp_laser2", name = "Defender", description = "Advanced Warfare", image = "loadscreen_mp_laser2", game = "Advanced Warfare" },
+    { loadName = "mp_detroit", name = "Detroit", description = "Advanced Warfare", image = "loadscreen_mp_detroit", game = "Advanced Warfare" },
+    { loadName = "mp_torqued", name = "Drift", description = "Advanced Warfare", image = "loadscreen_mp_torqued", game = "Advanced Warfare" },
+    { loadName = "mp_fracture", name = "Fracture", description = "Advanced Warfare", image = "loadscreen_mp_fracture", game = "Advanced Warfare" },
+    { loadName = "mp_greenband", name = "Greenband", description = "Advanced Warfare", image = "loadscreen_mp_greenband", game = "Advanced Warfare" },
+    { loadName = "mp_levity", name = "Horizon", description = "Advanced Warfare", image = "loadscreen_mp_levity", game = "Advanced Warfare" },
+    { loadName = "mp_instinct", name = "Instinct", description = "Advanced Warfare", image = "loadscreen_mp_instinct", game = "Advanced Warfare" },
+    { loadName = "mp_kremlin", name = "Kremlin", description = "Advanced Warfare", image = "loadscreen_mp_kremlin", game = "Advanced Warfare" },
+    { loadName = "mp_lair", name = "Overload", description = "Advanced Warfare", image = "loadscreen_mp_lair", game = "Advanced Warfare" },
+    { loadName = "mp_bigben2", name = "Parliament", description = "Advanced Warfare", image = "loadscreen_mp_bigben2", game = "Advanced Warfare" },
+    { loadName = "mp_perplex_1", name = "Perplex", description = "Advanced Warfare", image = "loadscreen_mp_perplex_1", game = "Advanced Warfare" },
+    { loadName = "mp_liberty", name = "Quarantine", description = "Advanced Warfare", image = "loadscreen_mp_liberty", game = "Advanced Warfare" },
+    { loadName = "mp_recovery", name = "Recovery", description = "Advanced Warfare", image = "loadscreen_mp_recovery", game = "Advanced Warfare" },
+    { loadName = "mp_venus", name = "Retreat", description = "Advanced Warfare", image = "loadscreen_mp_venus", game = "Advanced Warfare" },
+    { loadName = "mp_prison", name = "Riot", description = "Advanced Warfare", image = "loadscreen_mp_prison", game = "Advanced Warfare" },
+    { loadName = "mp_clowntown3", name = "Sideshow", description = "Advanced Warfare", image = "loadscreen_mp_clowntown3", game = "Advanced Warfare" },
+    { loadName = "mp_blackbox", name = "Site 244", description = "Advanced Warfare", image = "loadscreen_mp_blackbox", game = "Advanced Warfare" },
+    { loadName = "mp_highrise2", name = "Skyrise", description = "Advanced Warfare", image = "loadscreen_mp_highrise2", game = "Advanced Warfare" },
+    { loadName = "mp_solar", name = "Solar", description = "Advanced Warfare", image = "loadscreen_mp_solar", game = "Advanced Warfare" },
+    { loadName = "mp_seoul2", name = "Swarm", description = "Advanced Warfare", image = "loadscreen_mp_seoul2", game = "Advanced Warfare" },
+    { loadName = "mp_terrace", name = "Terrace", description = "Advanced Warfare", image = "loadscreen_mp_terrace", game = "Advanced Warfare" },
+    { loadName = "mp_urban", name = "Urban", description = "Advanced Warfare", image = "loadscreen_mp_urban", game = "Advanced Warfare" },
 }
+
+local aw_maps = {}
+for _, map in ipairs(aw_all) do
+    if Engine.ControllerHasMap(0, map.loadName) then
+        table.insert(aw_maps, map)
+    end
+end
+if #aw_maps == 0 then return end
 
 local aw_first = #iw5_maps + 1
 for _, map in ipairs(aw_maps) do
