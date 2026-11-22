@@ -64,6 +64,8 @@ namespace filesystem
 			filesystem::register_path(L"raw_shared");
 			filesystem::register_path(L"raw");
 			filesystem::register_path(L"main");
+			// MWX: our own data (images, scripts, ui_scripts) from GAME\mwx, highest priority
+			filesystem::register_path(L"mwx");
 
 			/*
 			const auto mod_path = utils::flags::get_flag("mod");
