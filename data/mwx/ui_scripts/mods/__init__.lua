@@ -81,10 +81,15 @@ LUI.MenuBuilder.registerType("mwx_mods_menu", function(root)
     return menu
 end)
 
-LUI.addmenubutton("mp_main_menu", {
-    text = "@MWX_MENU_MODS",
-    description = Engine.Localize("@MWX_MENU_MODS_DESC"),
-    callback = function()
-        LUI.FlowManager.RequestAddMenu(nil, "mwx_mods_menu")
+-- HMW has no LUI.addmenubutton (calling it threw at frontend load and crashed the
+-- client in the engine's error path); wrap the registered mp_main_menu builder instead.
+local build_main_menu = LUI.MenuBuilder.m_types_build["mp_main_menu"]
+if type(build_main_menu) == "function" then
+    LUI.MenuBuilder.m_types_build["mp_main_menu"] = function(menu, event)
+        local result = build_main_menu(menu, event)
+        result:AddButton("@MWX_MENU_MODS", function()
+            LUI.FlowManager.RequestAddMenu(nil, "mwx_mods_menu")
+        end)
+        return result
     end
-})
+end
