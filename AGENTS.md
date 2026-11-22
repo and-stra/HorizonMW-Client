@@ -63,3 +63,5 @@ friends on LAN, short loading times. No master server, accounts or anti-cheat.
 - Git: Claude pushes to `claude/mwx` (always rebased onto the current `mwx`); `build-mwx.bat`
   fast-forwards `mwx` to it. opencode commits only on `mwx` and never merges or rebases itself:
   if the script says the branches diverged, stop and report it to Claude.
+
+- GSC check without the game (Linux): `tools/gsc-check/build.sh`, then `tools/gsc-check/gsct <file.gsc> <COD-GSC-Source/H1-GSC>`; compiles with the repo's gsc-tool for H1 and resolves unqualified calls.

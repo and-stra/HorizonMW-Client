@@ -386,3 +386,31 @@ scoreboard, load screens) should see the party mode again.
    `report() { wait 5; print("[gamemodes] level.gametype=" + level.gametype + " g_gametype=" + getdvar("g_gametype") + " hodgepodge=" + level.hodgepodgemode); }`
    (Checks that the scripts kept `war` while the dvar shows the ref. Compile it with
    `tools/gsc-check` if you can, else rely on the console.)
+## Phase 4 spec (Infected) — branch claude/infect
+
+The script is done: `data/mwx/maps/mp/gametypes/infect.gsc`, ported from the S1 infect.gsc (exo,
+adrenaline, extra health, battery, hazmat models removed; the six S1 `_events` functions implemented
+locally with H1 functions; HMW weapons: survivors h2_spas12 + h2_usp + frag + flash, first infected
+h2_usp + iw9_throwknife_mp, infected iw5_combatknife + iw9_throwknife_mp, infected get the perk
+specialty_tacticalinsertion (HMW hands out flare_mp), move speed 1.2). It compiles with gsc-tool for
+H1 (`tools/gsc-check`, all unqualified calls resolve against the H1 scripts). Countdown uses
+`ui_match_countdown*` with title index 7 (S1's; H1's Slasher uses 4).
+
+Remaining work (C++/Lua, after the gamemodes phases are merged):
+1. Whitelist: append `infect` to `_gametypes.txt` in the existing rawfile patch (it is a real
+   gametype, not a party mode: no translation).
+2. Menu: add `infect` to the Weekend Warfare list (Lua), before the party modes.
+3. gametypesTable already has an `infect` row (MPUI_INFECT, MENU_INFECT_DESC, icon_pl_exo_infected).
+   Check in game: if `MPUI_INFECT` / `MPUI_INFECT_CAPS` / `INFECT` (loadscreen) / `OBJECTIVES_INFECT`,
+   `OBJECTIVES_INFECT_SCORE`, `OBJECTIVES_INFECT_HINT` are raw keys, add overrides:
+   "Infected" / "INFECTED" / "INFECTED" / "Infect everyone, or survive the game to win." (score) /
+   "Survivors: stay alive. Infected: infect the survivors." (hint). If the icon does not exist, use
+   `h1_ui_icon_gamemode_tdm` in the row.
+4. Test with 5 bots on mp_rust: countdown, first infected chosen, loadouts (report every weapon name
+   that fails), infection on death, last survivor UAV, end of match (time limit -> survivors win,
+   all infected -> infected win), console script errors. Report the countdown title text (index 7).
+
+**Implemented (Claude, together with hmw-features A-D):** `infect` and `dz` are real extra gametypes in
+gamemodes.cpp (whitelist entry and gametypesTable row only if missing; infect row copied from war,
+dz row from koth), strings for both, `infect` first in the Weekend Warfare list, Standard list set
+explicitly without `gtnw` (with `dz`). Only testing is left.

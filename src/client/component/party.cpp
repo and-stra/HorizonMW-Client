@@ -696,6 +696,23 @@ namespace party
 					return;
 				}
 
+				// MWX: both PCs must run the same client build (different builds = different
+				// game modes, scripts and patches -> crashes or broken matches)
+				const std::string server_version = jsonObject.value("gameversion", "");
+				const auto our_version = hmw_tcp_utils::get_version();
+				if (!server_version.empty() && server_version != our_version) {
+					const auto* ignore_version = game::Dvar_FindVar("mwx_ignore_version");
+					if (!ignore_version || !ignore_version->current.enabled) {
+						connecting_to_server = false;
+						menu_error(utils::string::va("Version mismatch! Server: %s | Yours: %s\n"
+							"Update MWX on both PCs (or set mwx_ignore_version 1).",
+							server_version.data(), our_version.data()));
+						return;
+					}
+					console::warn("Joining a server with a different MWX version (%s, yours %s)\n",
+						server_version.data(), our_version.data());
+				}
+
 				std::string playmode = jsonObject["playmode"];
 				if (game::CodPlayMode(std::atoi(playmode.c_str())) != game::Com_GetCurrentCoDPlayMode()) {
 					connecting_to_server = false;
@@ -921,6 +938,12 @@ namespace party
 	public:
 		void post_unpack() override
 		{
+			scheduler::once([]()
+			{
+				dvars::register_bool("mwx_ignore_version", false, game::DVAR_FLAG_NONE,
+					"Allow joining a LAN server that runs a different MWX version");
+			}, scheduler::pipeline::main);
+
 			// clear motd & usermap
 			cl_disconnect_hook.create(0x12F080_b, cl_disconnect_stub);
 

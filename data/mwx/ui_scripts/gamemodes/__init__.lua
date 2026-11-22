@@ -3,8 +3,14 @@ Cac.GameModes.Group.Party = "Party"
 Cac.GameModes.Data.Party = {
     Label = Engine.Localize("@MWX_PARTY_CAPS"),
     Image = "h1_ui_icon_playlist_weekend",
-    List = { "ph", "mprops", "slasher", "snipers", "rpg" }
+    List = { "infect", "ph", "mprops", "slasher", "snipers", "rpg" }
 }
+
+-- Standard list: HMW's own script (liam_tests) sets it with "gtnw", which has no script in any zone.
+-- dz = HMW's Drop Zone (dz.gsc in hmw_files.ff).
+if Cac.GameModes.Data.Standard then
+    Cac.GameModes.Data.Standard.List = { "dm", "war", "sd", "dom", "conf", "sab", "koth", "hp", "gun", "dz" }
+end
 
 local party_base = { ph = "war", mprops = "war", slasher = "war", snipers = "war", rpg = "war" }
 

@@ -22,6 +22,7 @@
 #include <cctype>
 #include <mutex>
 #include <string>
+#include <vector>
 
 namespace gamemodes
 {
@@ -34,6 +35,21 @@ namespace gamemodes
 			{"slasher", "war", 2, 0, "MWX_GAMETYPE_SLASHER", "MWX_GAMETYPE_SLASHER_DESC"},
 			{"snipers", "war", 4, 0, "MWX_GAMETYPE_SNIPERS", "MWX_GAMETYPE_SNIPERS_DESC"},
 			{"rpg", "war", 6, 0, "MWX_GAMETYPE_RPG", "MWX_GAMETYPE_RPG_DESC"},
+		};
+
+		// Real extra gametypes (own GSC script, no translation): whitelist + table row if missing.
+		struct extra_gametype
+		{
+			const char* ref;
+			const char* template_ref; // gametypesTable row to copy image/flags from
+			const char* name;
+			const char* desc;
+		};
+
+		constexpr extra_gametype extra_gametypes[] =
+		{
+			{"infect", "war", "MPUI_INFECT", "MENU_INFECT_DESC"},
+			{"dz", "koth", "MPUI_DZ", "MWX_GAMETYPE_DZ_DESC"},
 		};
 
 		struct objective_string
@@ -107,10 +123,42 @@ namespace gamemodes
 				data.push_back('\n');
 			}
 
+			std::vector<std::string> listed;
+			{
+				std::string line;
+				for (const auto c : data)
+				{
+					if (c == '\n' || c == '\r')
+					{
+						if (!line.empty()) listed.push_back(line);
+						line.clear();
+					}
+					else
+					{
+						line.push_back(c);
+					}
+				}
+				if (!line.empty()) listed.push_back(line);
+			}
+
+			const auto append = [&](const char* ref)
+			{
+				if (std::find(listed.begin(), listed.end(), ref) == listed.end())
+				{
+					data += ref;
+					data.push_back('\n');
+					listed.emplace_back(ref);
+				}
+			};
+
 			for (const auto& m : modes)
 			{
-				data += m.ref;
-				data.push_back('\n');
+				append(m.ref);
+			}
+
+			for (const auto& g : extra_gametypes)
+			{
+				append(g.ref);
 			}
 
 			auto* result = allocator.allocate<game::RawFile>();
@@ -148,26 +196,60 @@ namespace gamemodes
 				return nullptr;
 			}
 
-			auto war_row = -1;
-			for (auto r = 0; r < original->rowCount; ++r)
-			{
-				const auto* id = original->values[static_cast<size_t>(r) * original->columnCount].string;
-				if (id && std::strcmp(id, "war") == 0)
-				{
-					war_row = r;
-					break;
-				}
-			}
+			const auto cols = original->columnCount;
+			const auto old_rows = original->rowCount;
 
+			const auto row_of = [&](const char* ref) -> int
+			{
+				for (auto r = 0; r < old_rows; ++r)
+				{
+					const auto* id = original->values[static_cast<size_t>(r) * cols].string;
+					if (id && std::strcmp(id, ref) == 0)
+					{
+						return r;
+					}
+				}
+				return -1;
+			};
+
+			struct new_row
+			{
+				const char* ref;
+				int template_row;
+				const char* name;
+				const char* desc;
+			};
+
+			std::vector<new_row> rows;
+			const auto war_row = row_of("war");
 			if (war_row < 0)
 			{
 				return nullptr;
 			}
 
-			const auto cols = original->columnCount;
-			const auto old_rows = original->rowCount;
-			constexpr auto count = static_cast<int>(sizeof(modes) / sizeof(modes[0]));
-			const auto new_rows = old_rows + count;
+			for (const auto& m : modes)
+			{
+				if (row_of(m.ref) < 0)
+				{
+					rows.push_back({m.ref, war_row, m.name, m.desc});
+				}
+			}
+
+			for (const auto& g : extra_gametypes)
+			{
+				if (row_of(g.ref) < 0)
+				{
+					const auto template_row = row_of(g.template_ref);
+					rows.push_back({g.ref, template_row >= 0 ? template_row : war_row, g.name, g.desc});
+				}
+			}
+
+			if (rows.empty())
+			{
+				return nullptr;
+			}
+
+			const auto new_rows = old_rows + static_cast<int>(rows.size());
 
 			auto* result = allocator.allocate<game::StringTable>();
 			*result = *original;
@@ -175,27 +257,27 @@ namespace gamemodes
 			result->values = allocator.allocate_array<game::StringTableCell>(static_cast<size_t>(cols) * new_rows);
 			std::memcpy(result->values, original->values, sizeof(game::StringTableCell) * cols * old_rows);
 
-			for (auto n = 0; n < count; ++n)
+			for (size_t n = 0; n < rows.size(); ++n)
 			{
-				const auto& m = modes[n];
+				const auto& row = rows[n];
 				for (auto c = 0; c < cols; ++c)
 				{
-					const auto& src = original->values[static_cast<size_t>(war_row) * cols + c];
+					const auto& src = original->values[static_cast<size_t>(row.template_row) * cols + c];
 					const char* text = src.string ? src.string : "";
 					if (c == 0)
 					{
-						text = m.ref;
+						text = row.ref;
 					}
 					else if (c == 1)
 					{
-						text = m.name;
+						text = row.name;
 					}
 					else if (c == 2)
 					{
-						text = m.desc;
+						text = row.desc;
 					}
 
-					auto& cell = result->values[static_cast<size_t>(old_rows + n) * cols + c];
+					auto& cell = result->values[static_cast<size_t>(old_rows + static_cast<int>(n)) * cols + c];
 					cell.string = allocator.duplicate_string(text);
 					cell.hash = static_cast<int>(hash(text));
 				}
@@ -355,15 +437,10 @@ namespace gamemodes
 			return cached_table.result ? cached_table.result : original;
 		}
 
-		auto* result = build_stringtable(original);
-		if (result)
-		{
-			cached_table.result = result;
-			cached_table.done = true;
-			return cached_table.result;
-		}
-
-		return original;
+		// built once per table (nullptr = nothing to add or not possible)
+		cached_table.result = build_stringtable(original);
+		cached_table.done = true;
+		return cached_table.result ? cached_table.result : original;
 	}
 
 	void on_level_load()
@@ -408,6 +485,18 @@ namespace gamemodes
 			localized_strings::override("MWX_GAMETYPE_RPG", "RPGs Only");
 			localized_strings::override("MWX_GAMETYPE_RPG_DESC", "Team Deathmatch with RPGs only.");
 			localized_strings::override("MWX_PARTY_CAPS", "WEEKEND WARFARE");
+
+			// real extra gametypes: Infected (our port), Drop Zone (HMW's dz.gsc)
+			localized_strings::override("MPUI_INFECT", "Infected");
+			localized_strings::override("MPUI_INFECT_CAPS", "INFECTED");
+			localized_strings::override("INFECT", "INFECTED");
+			localized_strings::override("OBJECTIVES_INFECT", "Survivors: stay alive. Infected: infect the survivors.");
+			localized_strings::override("OBJECTIVES_INFECT_SCORE", "Infect everyone, or survive the game to win.");
+			localized_strings::override("OBJECTIVES_INFECT_HINT", "Survivors: stay alive. Infected: infect the survivors.");
+			localized_strings::override("MPUI_DZ", "Drop Zone");
+			localized_strings::override("MPUI_DZ_CAPS", "DROP ZONE");
+			localized_strings::override("DZ", "DROP ZONE");
+			localized_strings::override("MWX_GAMETYPE_DZ_DESC", "Capture the drop zone to earn points and care packages.");
 
 			// caps names in the setup/pre-match menus
 			localized_strings::override("MWX_GAMETYPE_PH_CAPS", "PROP HUNT");

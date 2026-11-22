@@ -1,6 +1,6 @@
 # Spec: features taken over from hmw-mod.exe v1.6.7 (see hmw-diff.md)
 
-Behaviour only, our own implementation. Do the parts in order; each part is tested and committed
+Behaviour only, our own implementation. **Implemented by Claude (code written, not built/tested):** A (Standard list, dz row/strings, together with Infected), B (`ads_sensitivity.cpp`), C (version check in `party.cpp`, dvar `mwx_ignore_version`), D (`configstrings.cpp`, detour of base+0x8B530; uses the returned index as usage). Do the parts in order; each part is tested and committed
 separately. Do not touch anything listed under "Not now".
 
 ## Part A: Standard mode list and Drop Zone
