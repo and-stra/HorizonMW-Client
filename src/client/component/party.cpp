@@ -1192,7 +1192,8 @@ namespace party
 					info.set("gamename", "HMW");
 					info.set("gameversion", hmw_tcp_utils::get_version());
 					info.set("hostname", get_dvar_string("sv_hostname"));
-					info.set("gametype", get_dvar_string("g_gametype"));
+					const auto mwx_gamemode = get_dvar_string("mwx_gamemode");
+				info.set("gametype", mwx_gamemode.empty() ? get_dvar_string("g_gametype") : mwx_gamemode);
 					info.set("sv_motd", get_dvar_string("sv_motd"));
 					info.set("xuid", utils::string::va("%llX", steam::SteamUser()->GetSteamID().bits));
 					info.set("mapname", mapname);

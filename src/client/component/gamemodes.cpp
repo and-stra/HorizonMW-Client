@@ -15,6 +15,7 @@
 #include <utils/memory.hpp>
 #include <utils/compression.hpp>
 
+#include <algorithm>
 #include <cstring>
 #include <cctype>
 #include <mutex>
@@ -31,6 +32,21 @@ namespace gamemodes
 			{"slasher", "war", 2, 0, "MWX_GAMETYPE_SLASHER", "MWX_GAMETYPE_SLASHER_DESC"},
 			{"snipers", "war", 4, 0, "MWX_GAMETYPE_SNIPERS", "MWX_GAMETYPE_SNIPERS_DESC"},
 			{"rpg", "war", 6, 0, "MWX_GAMETYPE_RPG", "MWX_GAMETYPE_RPG_DESC"},
+		};
+
+		struct objective_string
+		{
+			const char* ref;
+			const char* text;
+		};
+
+		constexpr objective_string objectives[] =
+		{
+			{"ph", "Props hide, hunters seek. Survive the round or find every prop."},
+			{"mprops", "Props hunt the soldiers. Eliminate every soldier to win."},
+			{"slasher", "Survive the Slasher, or take the Slasher down."},
+			{"snipers", "Gain points by eliminating enemy players. Sniper rifles only."},
+			{"rpg", "Gain points by eliminating enemy players. RPGs only."},
 		};
 
 		constexpr auto gametype_list = "maps/mp/gametypes/_gametypes.txt";
@@ -308,7 +324,36 @@ namespace gamemodes
 			localized_strings::override("MWX_GAMETYPE_SNIPERS_DESC", "Team Deathmatch with sniper rifles only.");
 			localized_strings::override("MWX_GAMETYPE_RPG", "RPGs Only");
 			localized_strings::override("MWX_GAMETYPE_RPG_DESC", "Team Deathmatch with RPGs only.");
-			localized_strings::override("MWX_PARTY_CAPS", "PARTY GAMES");
+			localized_strings::override("MWX_PARTY_CAPS", "WEEKEND WARFARE");
+
+			// caps names in the setup/pre-match menus
+			localized_strings::override("MWX_GAMETYPE_PH_CAPS", "PROP HUNT");
+			localized_strings::override("MWX_GAMETYPE_MPROPS_CAPS", "MAD PROPS");
+			localized_strings::override("MWX_GAMETYPE_SLASHER_CAPS", "SLASHER");
+			localized_strings::override("MWX_GAMETYPE_SNIPERS_CAPS", "SNIPERS ONLY");
+			localized_strings::override("MWX_GAMETYPE_RPG_CAPS", "RPGS ONLY");
+
+			// loadscreen names ("@" .. upper(ui_gametype))
+			localized_strings::override("PH", "PROP HUNT");
+			localized_strings::override("MPROPS", "MAD PROPS");
+			localized_strings::override("SLASHER", "SLASHER");
+			localized_strings::override("SNIPERS", "SNIPERS ONLY");
+			localized_strings::override("RPG", "RPGS ONLY");
+
+			// objective strings: the UI builds OBJECTIVES_<ref>(_SCORE|_HINT) with the ref as it is
+			for (const auto& objective : objectives)
+			{
+				std::string upper = objective.ref;
+				std::transform(upper.begin(), upper.end(), upper.begin(),
+					[](const unsigned char c) { return static_cast<char>(std::toupper(c)); });
+
+				for (const auto& ref : {std::string(objective.ref), upper})
+				{
+					localized_strings::override("OBJECTIVES_" + ref + "_SCORE", objective.text);
+					localized_strings::override("OBJECTIVES_" + ref, objective.text);
+					localized_strings::override("OBJECTIVES_" + ref + "_HINT", objective.text);
+				}
+			}
 
 			if (!game::environment::is_dedi())
 			{

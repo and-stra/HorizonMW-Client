@@ -146,6 +146,7 @@ namespace gsc
 		}
 
 		bool force_load = false;
+		bool translated = false;
 
 		game::ScriptFile* load_custom_script(const char* file_name, const std::string& real_name)
 		{
@@ -388,55 +389,61 @@ namespace gsc
 		void load_gametype_script_stub(void* a1, void* a2)
 		{
 			// MWX: translate a virtual party mode into its base gametype and mode dvars
-			const auto* gametype_dvar = game::Dvar_FindVar("g_gametype");
-			if (gametype_dvar && gametype_dvar->current.string)
+			// (the gametype script loader runs twice per map load; translate once)
+			if (!translated)
 			{
-				const std::string gametype = gametype_dvar->current.string;
-				const auto* mode = gamemodes::find(gametype);
-				auto party_mode = false;
+				const auto* gametype_dvar = game::Dvar_FindVar("g_gametype");
+				if (gametype_dvar && gametype_dvar->current.string)
+				{
+					const std::string gametype = gametype_dvar->current.string;
+					const auto* mode = gamemodes::find(gametype);
+					auto party_mode = false;
 
-				if (mode)
-				{
-					game::Dvar_SetFromStringByNameFromSource("g_gametype", mode->base, game::DVAR_SOURCE_INTERNAL);
-				}
-				else if (!game::environment::is_dedi())
-				{
-					const auto* party_dvar = game::Dvar_FindVar("mwx_party_mode");
-					if (party_dvar && party_dvar->current.string && *party_dvar->current.string)
+					if (mode)
 					{
-						const auto* party = gamemodes::find(party_dvar->current.string);
-						if (party && gametype == party->base)
+						game::Dvar_SetFromStringByNameFromSource("g_gametype", mode->base, game::DVAR_SOURCE_INTERNAL);
+					}
+					else if (!game::environment::is_dedi())
+					{
+						const auto* party_dvar = game::Dvar_FindVar("mwx_party_mode");
+						if (party_dvar && party_dvar->current.string && *party_dvar->current.string)
 						{
-							mode = party;
-							party_mode = true;
+							const auto* party = gamemodes::find(party_dvar->current.string);
+							if (party && gametype == party->base)
+							{
+								mode = party;
+								party_mode = true;
+							}
 						}
 					}
-				}
 
-				if (mode)
-				{
-					game::Dvar_SetFromStringByNameFromSource("scr_game_hodgepodgeMode",
-						std::to_string(mode->hodgepodge).data(), game::DVAR_SOURCE_INTERNAL);
-					game::Dvar_SetFromStringByNameFromSource("scr_game_madprops",
-						std::to_string(mode->madprops).data(), game::DVAR_SOURCE_INTERNAL);
-					game::Dvar_SetFromStringByNameFromSource("mwx_gamemode", mode->ref, game::DVAR_SOURCE_INTERNAL);
-
-					if (party_mode)
+					if (mode)
 					{
-						console::info("[gamemodes] %s -> %s (party mode) (hodgepodge %i, madprops %i)\n",
-							mode->ref, mode->base, mode->hodgepodge, mode->madprops);
+						game::Dvar_SetFromStringByNameFromSource("scr_game_hodgepodgeMode",
+							std::to_string(mode->hodgepodge).data(), game::DVAR_SOURCE_INTERNAL);
+						game::Dvar_SetFromStringByNameFromSource("scr_game_madprops",
+							std::to_string(mode->madprops).data(), game::DVAR_SOURCE_INTERNAL);
+						game::Dvar_SetFromStringByNameFromSource("mwx_gamemode", mode->ref, game::DVAR_SOURCE_INTERNAL);
+
+						if (party_mode)
+						{
+							console::info("[gamemodes] %s -> %s (party mode) (hodgepodge %i, madprops %i)\n",
+								mode->ref, mode->base, mode->hodgepodge, mode->madprops);
+						}
+						else
+						{
+							console::info("[gamemodes] %s -> %s (hodgepodge %i, madprops %i)\n",
+								mode->ref, mode->base, mode->hodgepodge, mode->madprops);
+						}
 					}
 					else
 					{
-						console::info("[gamemodes] %s -> %s (hodgepodge %i, madprops %i)\n",
-							mode->ref, mode->base, mode->hodgepodge, mode->madprops);
+						game::Dvar_SetFromStringByNameFromSource("scr_game_hodgepodgeMode", "0", game::DVAR_SOURCE_INTERNAL);
+						game::Dvar_SetFromStringByNameFromSource("scr_game_madprops", "0", game::DVAR_SOURCE_INTERNAL);
+						game::Dvar_SetFromStringByNameFromSource("mwx_gamemode", "", game::DVAR_SOURCE_INTERNAL);
 					}
-				}
-				else
-				{
-					game::Dvar_SetFromStringByNameFromSource("scr_game_hodgepodgeMode", "0", game::DVAR_SOURCE_INTERNAL);
-					game::Dvar_SetFromStringByNameFromSource("scr_game_madprops", "0", game::DVAR_SOURCE_INTERNAL);
-					game::Dvar_SetFromStringByNameFromSource("mwx_gamemode", "", game::DVAR_SOURCE_INTERNAL);
+
+					translated = true;
 				}
 			}
 
@@ -610,6 +617,7 @@ namespace gsc
 
 			scripting::on_shutdown([](bool free_scripts, bool post_shutdown)
 			{
+				translated = false;
 				logfile::clear_callbacks();
 				if (free_scripts && post_shutdown)
 				{
