@@ -310,7 +310,10 @@ onspawnfinished()
     self endon("death");
     self endon("disconnect");
 
-    self waittill("applyLoadout");
+    // HMW's applyloadout notifies "applyloadout" (lower case), H1's "applyLoadout"; a normal spawn also
+    // ends with "spawned_player". Waiting for only "applyLoadout" never fired, so infected never got the
+    // tactical insertion and survivors never got scavenger.
+    self common_scripts\utility::waittill_any("applyloadout", "applyLoadout", "spawned_player");
     self updateloadouts();
 }
 
