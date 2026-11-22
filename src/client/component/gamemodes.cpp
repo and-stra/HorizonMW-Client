@@ -449,10 +449,11 @@ namespace gamemodes
 
 			scheduler::once([]()
 			{
-				dvars::register_string("mwx_gamemode", "", game::DVAR_FLAG_SAVED,
+				dvars::register_string("mwx_gamemode", "", game::DVAR_FLAG_NONE,
 					"Current MWX party game mode (empty for normal modes)");
 				dvars::register_string("mwx_party_mode", "", game::DVAR_FLAG_NONE,
 					"Selected MWX party game mode (base gametype stays unchanged)");
+				dvars::register_bool("mwx_gsc_print", false, game::DVAR_FLAG_NONE, "Print GSC print()/println() output to the console (release builds)");
 				dvars::register_bool("mwx_debug_gamemodes", false, game::DVAR_FLAG_NONE,
 					"Log gamemode dvar writes and the loading screen menu");
 			}, scheduler::pipeline::main);

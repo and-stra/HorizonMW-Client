@@ -421,17 +421,29 @@ namespace gsc
 
 			function::add("print", []([[maybe_unused]] const function_args& args)
 			{
-#ifdef DEBUG
-				print(args);
+				// MWX: also in release when mwx_gsc_print is 1 (off by default: HMW scripts print a lot)
+#ifndef DEBUG
+				const auto* gsc_print = game::Dvar_FindVar("mwx_gsc_print");
+				if (!gsc_print || !gsc_print->current.enabled)
+				{
+					return scripting::script_value{};
+				}
 #endif
+				print(args);
 				return scripting::script_value{};
 			});
 
 			function::add("println", []([[maybe_unused]] const function_args& args)
 			{
-#ifdef DEBUG
-				print(args);
+				// MWX: also in release when mwx_gsc_print is 1 (off by default: HMW scripts print a lot)
+#ifndef DEBUG
+				const auto* gsc_print = game::Dvar_FindVar("mwx_gsc_print");
+				if (!gsc_print || !gsc_print->current.enabled)
+				{
+					return scripting::script_value{};
+				}
 #endif
+				print(args);
 				return scripting::script_value{};
 			});
 
