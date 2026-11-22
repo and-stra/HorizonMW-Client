@@ -18,6 +18,9 @@ namespace gamemodes
 	// The virtual party game modes in one place.
 	const mode* find(const std::string& ref);
 
+	// Puts the party mode ref back into g_gametype after the gametype script read it.
+	void on_level_load();
+
 	// Appends the virtual refs to maps/mp/gametypes/_gametypes.txt.
 	game::RawFile* patch_rawfile(game::RawFile* original);
 

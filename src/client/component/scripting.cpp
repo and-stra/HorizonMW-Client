@@ -5,6 +5,7 @@
 #include "component/gsc/script_loading.hpp"
 #include "component/scheduler.hpp"
 #include "component/scripting.hpp"
+#include "component/gamemodes.hpp"
 
 #include "command.hpp"
 #include "console.hpp"
@@ -92,6 +93,7 @@ namespace scripting
 
 		void scr_load_level_stub()
 		{
+			gamemodes::on_level_load();
 			gsc::load_init_handles();
 			scr_load_level_hook.invoke<void>();
 		}

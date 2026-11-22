@@ -6,6 +6,7 @@
 #include "localized_strings.hpp"
 #include "scheduler.hpp"
 #include "stock_weapons.hpp"
+#include "component/gsc/script_loading.hpp"
 
 #include "game/game.hpp"
 #include "game/dvars.hpp"
@@ -229,9 +230,8 @@ namespace gamemodes
 
 		const mode* active_mode_for(const char* base)
 		{
-			// the running match wins over a lobby selection, which wins over the joining
-			// client's ui_gametype (set from the server info)
-			for (const auto* dvar_name : {"mwx_gamemode", "mwx_party_mode", "ui_gametype"})
+			// the running match wins over a lobby selection
+			for (const auto* dvar_name : {"mwx_gamemode", "mwx_party_mode"})
 			{
 				const auto* dvar = game::Dvar_FindVar(dvar_name);
 				const auto* value = dvar && dvar->current.string ? dvar->current.string : nullptr;
@@ -364,6 +364,29 @@ namespace gamemodes
 		}
 
 		return original;
+	}
+
+	void on_level_load()
+	{
+		if (!gsc::translated_this_load())
+		{
+			return;
+		}
+
+		const auto* gamemode_dvar = game::Dvar_FindVar("mwx_gamemode");
+		if (!gamemode_dvar || !gamemode_dvar->current.string || !*gamemode_dvar->current.string)
+		{
+			return;
+		}
+
+		const auto* mode = find(gamemode_dvar->current.string);
+		if (!mode)
+		{
+			return;
+		}
+
+		game::Dvar_SetFromStringByNameFromSource("g_gametype", mode->ref, game::DVAR_SOURCE_INTERNAL);
+		console::info("[gamemodes] g_gametype restored to %s\n", mode->ref);
 	}
 
 	class component final : public component_interface
