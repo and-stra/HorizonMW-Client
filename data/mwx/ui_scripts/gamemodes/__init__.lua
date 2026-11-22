@@ -21,16 +21,3 @@ MatchRules.SetData = function(key, value, ...)
     end
     return set_data(key, value, ...)
 end
-
--- show the party mode wherever the UI reads ui_gametype (lobby label/icon, list highlight, loadscreen)
-local get_dvar_string = Engine.GetDvarString
-Engine.GetDvarString = function(name, ...)
-    local value = get_dvar_string(name, ...)
-    if name == "ui_gametype" then
-        local mode = get_dvar_string("mwx_party_mode")
-        if mode ~= "" and party_base[mode] == value then
-            return mode
-        end
-    end
-    return value
-end

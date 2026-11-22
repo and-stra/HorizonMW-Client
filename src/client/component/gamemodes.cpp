@@ -2,6 +2,7 @@
 #include "loader/component_loader.hpp"
 
 #include "console.hpp"
+#include "dvars.hpp"
 #include "localized_strings.hpp"
 #include "scheduler.hpp"
 #include "stock_weapons.hpp"
@@ -199,6 +200,50 @@ namespace gamemodes
 		return nullptr;
 	}
 
+	namespace
+	{
+		void on_ui_gametype(game::dvar_value* value)
+		{
+			if (!value || !value->string)
+			{
+				return;
+			}
+
+			const auto* party_dvar = game::Dvar_FindVar("mwx_party_mode");
+			if (!party_dvar || !party_dvar->current.string || !*party_dvar->current.string)
+			{
+				return;
+			}
+
+			const auto* mode = find(party_dvar->current.string);
+			if (mode && std::strcmp(value->string, mode->base) == 0)
+			{
+				game::Dvar_SetFromStringByNameFromSource("ui_gametype", mode->ref, game::DVAR_SOURCE_INTERNAL);
+			}
+		}
+
+		void on_party_mode(game::dvar_value* value)
+		{
+			if (!value || !value->string)
+			{
+				return;
+			}
+
+			const auto* mode = find(value->string);
+			if (!mode)
+			{
+				return;
+			}
+
+			const auto* gametype_dvar = game::Dvar_FindVar("ui_gametype");
+			if (gametype_dvar && gametype_dvar->current.string &&
+				std::strcmp(gametype_dvar->current.string, mode->base) == 0)
+			{
+				game::Dvar_SetFromStringByNameFromSource("ui_gametype", mode->ref, game::DVAR_SOURCE_INTERNAL);
+			}
+		}
+	}
+
 	game::RawFile* patch_rawfile(game::RawFile* original)
 	{
 		if (!original || !original->name || std::strcmp(original->name, gametype_list) != 0)
@@ -264,6 +309,12 @@ namespace gamemodes
 			localized_strings::override("MWX_GAMETYPE_RPG", "RPGs Only");
 			localized_strings::override("MWX_GAMETYPE_RPG_DESC", "Team Deathmatch with RPGs only.");
 			localized_strings::override("MWX_PARTY_CAPS", "PARTY GAMES");
+
+			if (!game::environment::is_dedi())
+			{
+				dvars::callback::on_new_value("ui_gametype", on_ui_gametype);
+				dvars::callback::on_new_value("mwx_party_mode", on_party_mode);
+			}
 
 			scheduler::once([]()
 			{
