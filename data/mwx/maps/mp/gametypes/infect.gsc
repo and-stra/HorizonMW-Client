@@ -16,7 +16,7 @@
 #define SURVIVOR_LETHAL "h1_fraggrenade_mp"
 #define SURVIVOR_TACTICAL "h1_flashgrenade_mp"
 #define INFECTED_INITIAL_PRIMARY "h2_usp"
-#define INFECTED_MELEE "h2_karambit"
+#define INFECTED_MELEE "h2_hatchet"
 #define INFECTED_LETHAL "iw9_throwknife_mp"
 
 main()
@@ -328,17 +328,6 @@ updateloadouts()
         // bots: native AI only throws offhands when encouraged
         if (isbot(self))
             self botsetflag("encourage_grenade_use", 1);
-
-        // infected (not the first one): knife + throwing knife only, like MW3. HMW has no knife-only
-        // primary weapon (iw5_combatknife does not exist), so the pistol is kept without ammo.
-        if (!isdefined(self.isinitialinfected))
-        {
-            foreach (weapon in self getweaponslistprimaries())
-            {
-                self setweaponammoclip(weapon, 0);
-                self setweaponammostock(weapon, 0);
-            }
-        }
     }
     else if (self.pers["team"] == "allies")
     {
@@ -767,12 +756,13 @@ setspecialloadouts()
     level.infect_loadouts["axis_initial"] = maps\mp\gametypes\_class::getemptyloadout();
     level.infect_loadouts["axis_initial"]["loadoutPrimary"] = INFECTED_INITIAL_PRIMARY;
     level.infect_loadouts["axis_initial"]["loadoutEquipment"] = INFECTED_LETHAL;
-    level.infect_loadouts["axis_initial"]["loadoutMelee"] = INFECTED_MELEE;
+    // HMW melee weapons (hatchet, karambit, ...) are real weapons in the secondary slot; gamemode
+    // loadouts skip HMW's class validation, so they can also be the only weapon
+    level.infect_loadouts["axis_initial"]["loadoutSecondary"] = INFECTED_MELEE;
 
     level.infect_loadouts["axis"] = maps\mp\gametypes\_class::getemptyloadout();
-    level.infect_loadouts["axis"]["loadoutPrimary"] = INFECTED_INITIAL_PRIMARY;
+    level.infect_loadouts["axis"]["loadoutPrimary"] = INFECTED_MELEE;
     level.infect_loadouts["axis"]["loadoutEquipment"] = INFECTED_LETHAL;
-    level.infect_loadouts["axis"]["loadoutMelee"] = INFECTED_MELEE;
 }
 
 monitorsurvivaltime()
