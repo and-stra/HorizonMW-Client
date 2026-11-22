@@ -355,3 +355,34 @@ Detour `game::UI_GetGameTypeDisplayName` (0x4DD8C0, `const char*(const char*)`) 
    `mwx_gamemode` (running match, host/server), `mwx_party_mode` (host in the lobby),
    `ui_gametype` (joining client, set from the server info).
 4. Else -> original function.
+
+## Phase 2f results (commit c6a816d3)
+
+The display-name hook fixes the browser Type column (Slasher). Neither load screen calls it: the host
+load screen and everyone's pregame overlay ("WAITING FOR OTHER PLAYERS") show TEAM DEATHMATCH because
+they follow the server's `g_gametype`, which the translation set to `war`. Side effect found: after
+switching Slasher -> TDM in the lobby, the label stayed SLASHER (rule 3 used a transient
+`ui_gametype=slasher`).
+
+## Phase 2g spec (keep the party mode in g_gametype after the gametype script read it)
+
+The gametype script reads `g_gametype` once, in `_globallogic::init()` inside its `main()`
+(`level.gametype = tolower(getdvar("g_gametype"))`). After that, everyone (server info, clients, HUD,
+scoreboard, load screens) should see the party mode again.
+
+1. `scripting.cpp`: `scr_load_level_stub` runs after the gametype `main()` and before the map script.
+   Call a new `gamemodes::on_level_load()` there, before invoking the original.
+2. `gamemodes::on_level_load()`: if a translation happened for this load and `mwx_gamemode` is a
+   known ref, set `g_gametype` back to that ref (same setter as the translation) and log
+   `[gamemodes] g_gametype restored to <ref>`. Nothing else.
+   (Later reads of `g_gametype` in init scripts then see the ref: `_events` stat ids, battlechatter
+   style, `constraingametype` (whitelist has the refs). Acceptable.)
+3. Round restarts / map rotation: the next load sees the ref in `g_gametype` and translates again
+   (path a). Keep it that way.
+4. Display-name rule 3 (`active_mode_for`): remove the `ui_gametype` fallback (only `mwx_gamemode`
+   and `mwx_party_mode`). Joining clients now get the ref directly in `g_gametype`.
+5. Debug check script `data/mwx/scripts/mp/mwx_gamemode_debug.gsc`:
+   `init() { if (getdvarint("mwx_debug_gamemodes")) level thread report(); }`
+   `report() { wait 5; print("[gamemodes] level.gametype=" + level.gametype + " g_gametype=" + getdvar("g_gametype") + " hodgepodge=" + level.hodgepodgemode); }`
+   (Checks that the scripts kept `war` while the dvar shows the ref. Compile it with
+   `tools/gsc-check` if you can, else rely on the console.)
