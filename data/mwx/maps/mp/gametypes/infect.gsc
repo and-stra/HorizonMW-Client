@@ -319,9 +319,15 @@ updateloadouts()
     if (self.pers["team"] == "axis")
     {
         self thread setinfectedmsg();
-        // HMW gives the tactical insertion (flare_mp) through this perk
+        // HMW gives the tactical insertion (flare_mp) through this perk. HMW puts it in the lethal slot,
+        // which holds the throwing knife here, so it goes into the tactical slot (like MW3/AW Infected).
         self giveperk("specialty_tacticalinsertion", 0);
+        self settacticalweapon("flare_mp");
         self setmovespeedscale(INFECTED_MOVE_SCALAR);
+
+        // bots: native AI only throws offhands when encouraged
+        if (isbot(self))
+            self botsetflag("encourage_grenade_use", 1);
 
         // infected (not the first one): knife + throwing knife only, like MW3. HMW has no knife-only
         // primary weapon (iw5_combatknife does not exist), so the pistol is kept without ammo.
@@ -333,6 +339,11 @@ updateloadouts()
                 self setweaponammostock(weapon, 0);
             }
         }
+    }
+    else if (self.pers["team"] == "allies")
+    {
+        // survivors have scavenger, like AW/MW3 Infected
+        self giveperk("specialty_scavenger", 0);
     }
 }
 
