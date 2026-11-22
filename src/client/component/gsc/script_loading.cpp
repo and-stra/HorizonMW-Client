@@ -7,6 +7,7 @@
 #include "component/logfile.hpp"
 #include "component/scripting.hpp"
 #include "component/memory.hpp"
+#include "component/gamemodes.hpp"
 
 #include "game/dvars.hpp"
 
@@ -349,7 +350,7 @@ namespace gsc
 			}
 
 #ifndef DEBUG
-			if (game::environment::is_dedi())
+			if (game::environment::is_dedi() || root_dir.filename() == "mwx")
 			{
 #endif
 				if (utils::io::directory_exists(script_dir.generic_string()))
@@ -386,6 +387,30 @@ namespace gsc
 
 		void load_gametype_script_stub(void* a1, void* a2)
 		{
+			// MWX: translate a virtual party mode into its base gametype and mode dvars
+			const auto* gametype_dvar = game::Dvar_FindVar("g_gametype");
+			if (gametype_dvar && gametype_dvar->current.string)
+			{
+				const std::string ref = gametype_dvar->current.string;
+				if (const auto* mode = gamemodes::find(ref))
+				{
+					game::Dvar_SetFromStringByNameFromSource("g_gametype", mode->base, game::DVAR_SOURCE_INTERNAL);
+					game::Dvar_SetFromStringByNameFromSource("scr_game_hodgepodgeMode",
+						std::to_string(mode->hodgepodge).data(), game::DVAR_SOURCE_INTERNAL);
+					game::Dvar_SetFromStringByNameFromSource("scr_game_madprops",
+						std::to_string(mode->madprops).data(), game::DVAR_SOURCE_INTERNAL);
+					game::Dvar_SetFromStringByNameFromSource("mwx_gamemode", ref.data(), game::DVAR_SOURCE_INTERNAL);
+					console::info("[gamemodes] %s -> %s (hodgepodge %i, madprops %i)\n",
+						ref.data(), mode->base, mode->hodgepodge, mode->madprops);
+				}
+				else
+				{
+					game::Dvar_SetFromStringByNameFromSource("scr_game_hodgepodgeMode", "0", game::DVAR_SOURCE_INTERNAL);
+					game::Dvar_SetFromStringByNameFromSource("scr_game_madprops", "0", game::DVAR_SOURCE_INTERNAL);
+					game::Dvar_SetFromStringByNameFromSource("mwx_gamemode", "", game::DVAR_SOURCE_INTERNAL);
+				}
+			}
+
 			utils::hook::invoke<void>(0x18BC00_b, a1, a2);
 
 			force_load = true;

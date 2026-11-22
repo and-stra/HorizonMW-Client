@@ -34,8 +34,6 @@ namespace stock_weapons
 		std::unordered_map<std::string, cached> tables;
 		utils::memory::allocator allocator;
 
-		using hash_fn = unsigned int(*)(const char*);
-
 		unsigned int hash_djb2(const char* s)
 		{
 			unsigned int h = 5381;
@@ -66,7 +64,7 @@ namespace stock_weapons
 
 		// The cell hash the engine uses is found by checking candidates against
 		// the table's own cells; nothing is added when none of them matches.
-		hash_fn find_hash(const game::StringTable* table)
+		hash_fn find_hash_internal(const game::StringTable* table)
 		{
 			const hash_fn candidates[] = { hash_djb2, hash_fnv1a, hash_sdbm, hash_31 };
 			const auto cells = table->columnCount * table->rowCount;
@@ -153,7 +151,7 @@ namespace stock_weapons
 				return nullptr;
 			}
 
-			const auto hash = find_hash(original);
+			const auto hash = find_hash_internal(original);
 			if (!hash)
 			{
 				console::warn("stock weapons: cannot work out the cell hash of %s, not adding\n", name.data());
@@ -223,6 +221,11 @@ namespace stock_weapons
 				name.data(), static_cast<int>(add.size()), static_cast<int>(missing.size()));
 			return result;
 		}
+	}
+
+	hash_fn find_hash(const game::StringTable* table)
+	{
+		return find_hash_internal(table);
 	}
 
 	game::StringTable* patch(game::StringTable* original)

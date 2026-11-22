@@ -8,6 +8,7 @@
 #include "imagefiles.hpp"
 #include "weapon.hpp"
 #include "stock_weapons.hpp"
+#include "gamemodes.hpp"
 #include "load_timing.hpp"
 
 #include "game/dvars.hpp"
@@ -141,6 +142,8 @@ namespace fastfiles
 				{
 					if (result.rawfile)
 					{
+						result.rawfile = gamemodes::patch_rawfile(result.rawfile);
+
 						const auto override_rawfile = db_find_xasset_header_hook.invoke<game::XAssetHeader>(type, override_asset_name.data(), 0);
 						if (override_rawfile.rawfile)
 						{
@@ -155,6 +158,7 @@ namespace fastfiles
 					if (result.stringTable)
 					{
 						result.stringTable = stock_weapons::patch(result.stringTable);
+						result.stringTable = gamemodes::patch_stringtable(result.stringTable);
 
 						const auto override_stringtable = db_find_xasset_header_hook.invoke<game::XAssetHeader>(type, override_asset_name.data(), 0);
 						if (override_stringtable.stringTable)
