@@ -14,6 +14,7 @@
 
 #include <utils/memory.hpp>
 #include <utils/compression.hpp>
+#include <utils/hook.hpp>
 
 #include <algorithm>
 #include <cstring>
@@ -224,6 +225,54 @@ namespace gamemodes
 			return dvar && dvar->current.enabled;
 		}
 
+		utils::hook::detour ui_get_game_type_display_name_hook;
+
+		const mode* active_mode_for(const char* base)
+		{
+			// the running match wins over a lobby selection, which wins over the joining
+			// client's ui_gametype (set from the server info)
+			for (const auto* dvar_name : {"mwx_gamemode", "mwx_party_mode", "ui_gametype"})
+			{
+				const auto* dvar = game::Dvar_FindVar(dvar_name);
+				const auto* value = dvar && dvar->current.string ? dvar->current.string : nullptr;
+				if (!value || !*value)
+				{
+					continue;
+				}
+
+				const auto* mode = find(value);
+				if (mode && std::strcmp(mode->base, base) == 0)
+				{
+					return mode;
+				}
+			}
+
+			return nullptr;
+		}
+
+		const char* ui_get_game_type_display_name_stub(const char* gametype)
+		{
+			if (debug_enabled())
+			{
+				console::info("[gamemodes] display name for '%s'\n", gametype ? gametype : "");
+			}
+
+			if (gametype)
+			{
+				if (const auto* mode = find(gametype))
+				{
+					return game::UI_SafeTranslateString(mode->name);
+				}
+
+				if (const auto* mode = active_mode_for(gametype))
+				{
+					return game::UI_SafeTranslateString(mode->name);
+				}
+			}
+
+			return ui_get_game_type_display_name_hook.invoke<const char*>(gametype);
+		}
+
 		void on_ui_gametype(game::dvar_value* value)
 		{
 			if (!value || !value->string)
@@ -371,6 +420,9 @@ namespace gamemodes
 				dvars::callback::on_new_value("ui_gametype", on_ui_gametype);
 				dvars::callback::on_new_value("mwx_party_mode", on_party_mode);
 			}
+
+			ui_get_game_type_display_name_hook.create(game::UI_GetGameTypeDisplayName,
+				ui_get_game_type_display_name_stub);
 
 			scheduler::once([]()
 			{
