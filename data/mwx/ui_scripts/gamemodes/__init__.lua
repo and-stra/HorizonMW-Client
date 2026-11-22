@@ -62,11 +62,36 @@ Lobby.GameTypeNameAbbreviated = function(...)
     return game_type_name_abbreviated(...)
 end
 
--- loading screen diagnosis (mwx_debug_gamemodes 1)
-local connect_build = LUI.MenuBuilder.m_types_build["connect"]
-LUI.MenuBuilder.m_types_build["connect"] = function(...)
-    if Engine.GetDvarBool("mwx_debug_gamemodes") then
-        print("[gamemodes] connect menu built, ui_gametype=" .. Engine.GetDvarString("ui_gametype"))
+-- Loading screen title (mplobbywidgets.lua lobby_game_type_title): it sets its text once on
+-- lobby_transition_to_game from the gametypes table row of ui_gametype. While the host's own server
+-- loads, the engine still runs the base gametype, so the title read "Team Deathmatch". With a party
+-- mode selected, the party name is used instead (the engine and g_gametype stay untouched).
+local function party_display_name()
+    local name = party_name[Engine.GetDvarString("mwx_party_mode")]
+    if name then
+        return Engine.Localize("@" .. name)
     end
-    return connect_build(...)
+    return nil
+end
+
+local title_build = LUI.MenuBuilder.m_types_build["lobby_game_type_title"]
+if title_build then
+    LUI.MenuBuilder.m_types_build["lobby_game_type_title"] = function(...)
+        local def = title_build(...)
+        if type(def) == "table" and def.handlers and def.handlers.lobby_transition_to_game then
+            local transition = def.handlers.lobby_transition_to_game
+            def.handlers.lobby_transition_to_game = function(element, event)
+                transition(element, event)
+                local name = party_display_name()
+                if Engine.GetDvarBool("mwx_debug_gamemodes") then
+                    print("[gamemodes] loading title, ui_gametype=" .. Engine.GetDvarString("ui_gametype") ..
+                        " party=" .. tostring(name))
+                end
+                if name and not Engine.IsAliensMode() then
+                    element:setText(name)
+                end
+            end
+        end
+        return def
+    end
 end
