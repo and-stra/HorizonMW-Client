@@ -113,6 +113,16 @@ namespace fastfiles
 
 		game::XAssetHeader db_find_xasset_header_stub(game::XAssetType type, const char* name, int allow_create_default)
 		{
+			// MWX: the zones still draw the MW2 loading icon; use HMW's own animated logo
+			// (material "hmw_loading_animation" in hmw_patch_code_post_gfx_mp) like the official client.
+			if (type == game::ASSET_TYPE_MATERIAL && name &&
+				(std::strcmp(name, "loading_animation") == 0 || std::strcmp(name, "h2_loading_animation") == 0) &&
+				game::DB_XAssetExists(game::ASSET_TYPE_MATERIAL, "hmw_loading_animation") &&
+				!game::DB_IsXAssetDefault(game::ASSET_TYPE_MATERIAL, "hmw_loading_animation"))
+			{
+				name = "hmw_loading_animation";
+			}
+
 			const auto start = game::Sys_Milliseconds();
 			auto result = db_find_xasset_header_hook.invoke<game::XAssetHeader>(type, name, allow_create_default);
 			const auto diff = game::Sys_Milliseconds() - start;
