@@ -247,6 +247,48 @@ highlight); HMW's lobby scripts most likely keep their own local reference to th
    translation path (a) (virtual ref), which is already tested.
 3. Choosing a standard mode clears `mwx_party_mode` (already), so the loop stops and the engine's
    own value stays.
+
+## Phase 2c results (commit cdff38bb)
+
+ui_gametype mirror works (`ui_gametype=slasher`, start via path a). Still: lobby label TEAM DEATHMATCH,
+no highlight in the list, pre-match screen shows raw keys `MWX_GAMETYPE_PH_CAPS` and
+`OBJECTIVES_ph_SCORE`. The gametype script loader runs twice per map start. Stability: 5 start/quit
+cycles (menu and debug quit), 0 crashes, no new minidumps (anti-cheat scan removed).
+
+## Phase 2d spec
+
+1. Lobby label + list highlight: both read `MatchRules.GetData("gametype")`. Add to
+   `data/mwx/ui_scripts/gamemodes/__init__.lua`, below the SetData wrapper:
+```lua
+local get_data = MatchRules.GetData
+MatchRules.GetData = function(key, ...)
+    local value = get_data(key, ...)
+    if key == "gametype" and select("#", ...) == 0 then
+        local mode = Engine.GetDvarString("mwx_party_mode")
+        if mode ~= "" and party_base[mode] == value then
+            return mode
+        end
+    end
+    return value
+end
+```
+   (Only the plain `GetData("gametype")` call is changed; calls with more arguments are untouched.)
+2. Missing strings (localized_strings::override in gamemodes.cpp), for every mode ref:
+   - `<name key>_CAPS`: the name in upper case (e.g. `MWX_GAMETYPE_PH_CAPS` "PROP HUNT",
+     `MWX_GAMETYPE_SLASHER_CAPS` "SLASHER", ...).
+   - `OBJECTIVES_<ref>_SCORE` and `OBJECTIVES_<ref>` and `OBJECTIVES_<ref>_HINT`, registered with
+     the ref in lower case (as the UI builds it, e.g. `OBJECTIVES_ph_SCORE`) and in upper case:
+     ph "Props hide, hunters seek. Survive the round or find every prop."
+     mprops "Props hunt the soldiers. Eliminate every soldier to win."
+     slasher "Survive the Slasher, or take the Slasher down."
+     snipers "Gain points by eliminating enemy players. Sniper rifles only."
+     rpg "Gain points by eliminating enemy players. RPGs only."
+   If the localized_strings lookup is case-insensitive, one registration per key is enough; say which.
+3. Run the translation once per map load: the gametype script loader runs twice. Keep a flag
+   "translated for this load" that is set when a translation or reset happened and cleared on
+   script shutdown (`scripting::on_shutdown`, like script_loading does). If the flag is set, the
+   second call does nothing (no second log line, no reset).
+
 4. Vanilla look: rename the group to the original MWR playlist "Weekend Warfare":
    `MWX_PARTY_CAPS` -> "WEEKEND WARFARE", group `Image = "h1_ui_icon_playlist_weekend"` (exists in
    retail patch_ui_mp; the vanilla icon of that playlist). The group id stays "Party".
