@@ -13,6 +13,15 @@ int main(int argc, char** argv){
     auto n=name; for(auto& c:n) if(c=='\\') c='/';
     return {{}, readf(root + "/" + n + ".gsc")};
   });
+  // MWX/HMW client GSC extensions (src/client/component/gsc), unknown to the stock H1 tables
+  static const char* ext_funcs[] = { "array", "assert", "assertex", "copyfolder", "createdirectory", "directoryexists",
+    "directoryisempty", "executecommand", "fileexists", "filesize", "getfunction", "isusingmatchrulesdata", "jsonparse",
+    "jsonprint", "jsonserialize", "listfiles", "logprint", "map", "onplayersay", "print", "println", "readfile",
+    "removefile", "replacefunc", "say", "setslowmotion", "toupper", "type", "typeof", "va", "writefile" };
+  static const char* ext_meths[] = { "force_play_weap_anim", "tell" };
+  std::uint16_t id = 0x7000;
+  for (auto f : ext_funcs) if (!ctx.func_exists(f)) ctx.func_add(f, id++);
+  for (auto m : ext_meths) if (!ctx.meth_exists(m)) ctx.meth_add(m, id++);
   try {
     auto data=readf(argv[1]);
     auto assembly=ctx.compiler().compile(argv[1], data);
