@@ -178,6 +178,10 @@ aonspawnfinished()
         self setweaponammoclip(weapon, 0);
         self setweaponammostock(weapon, 0);
     }
+
+    // bots only throw offhands (the knife) when encouraged
+    if (isbot(self))
+        self botsetflag("encourage_grenade_use", 1);
 }
 
 onnormaldeath(victim, attacker, inflictor)
