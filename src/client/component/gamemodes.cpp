@@ -50,6 +50,9 @@ namespace gamemodes
 		{
 			{"infect", "war", "MPUI_INFECT", "MENU_INFECT_DESC"},
 			{"dz", "koth", "MPUI_DZ", "MWX_GAMETYPE_DZ_DESC"},
+			{"oic", "dm", "MWX_GAMETYPE_OIC", "MWX_GAMETYPE_OIC_DESC"},
+			{"aon", "dm", "MWX_GAMETYPE_AON", "MWX_GAMETYPE_AON_DESC"},
+			{"cranked", "war", "MWX_GAMETYPE_CRANKED", "MWX_GAMETYPE_CRANKED_DESC"},
 		};
 
 		struct objective_string
@@ -65,6 +68,9 @@ namespace gamemodes
 			{"slasher", "Survive the Slasher, or take the Slasher down."},
 			{"snipers", "Gain points by eliminating enemy players. Sniper rifles only."},
 			{"rpg", "Gain points by eliminating enemy players. RPGs only."},
+			{"oic", "Gain points by eliminating enemy players. Every kill gives one round. Three lives."},
+			{"aon", "Empty pistol and a throwing knife. Reach 20 kills without dying for the bonus."},
+			{"cranked", "Gain points by eliminating enemy players. Kills make you Cranked: keep killing to stay alive."},
 		};
 
 		constexpr auto gametype_list = "maps/mp/gametypes/_gametypes.txt";
@@ -514,6 +520,15 @@ namespace gamemodes
 			localized_strings::override("MWX_GAMETYPE_SNIPERS_DESC", "Team Deathmatch with sniper rifles only.");
 			localized_strings::override("MWX_GAMETYPE_RPG", "RPGs Only");
 			localized_strings::override("MWX_GAMETYPE_RPG_DESC", "Team Deathmatch with RPGs only.");
+			localized_strings::override("MWX_GAMETYPE_OIC", "One in the Chamber");
+			localized_strings::override("MWX_GAMETYPE_OIC_DESC",
+				"Free-for-all with a single revolver round. Every kill gives one more round. Three lives.");
+			localized_strings::override("MWX_GAMETYPE_AON", "All or Nothing");
+			localized_strings::override("MWX_GAMETYPE_AON_DESC",
+				"Free-for-all with an empty pistol, a throwing knife and Scavenger. 20 kills, 10 minutes.");
+			localized_strings::override("MWX_GAMETYPE_CRANKED", "Cranked");
+			localized_strings::override("MWX_GAMETYPE_CRANKED_DESC",
+				"Team Deathmatch. A kill starts a 30 second fuse; keep killing to reset it, or explode.");
 			localized_strings::override("MWX_PARTY_CAPS", "PARTY");
 
 			// real extra gametypes: Infected (our port), Drop Zone (HMW's dz.gsc)
@@ -534,6 +549,9 @@ namespace gamemodes
 			localized_strings::override("MWX_GAMETYPE_SLASHER_CAPS", "SLASHER");
 			localized_strings::override("MWX_GAMETYPE_SNIPERS_CAPS", "SNIPERS ONLY");
 			localized_strings::override("MWX_GAMETYPE_RPG_CAPS", "RPGS ONLY");
+			localized_strings::override("MWX_GAMETYPE_OIC_CAPS", "ONE IN THE CHAMBER");
+			localized_strings::override("MWX_GAMETYPE_AON_CAPS", "ALL OR NOTHING");
+			localized_strings::override("MWX_GAMETYPE_CRANKED_CAPS", "CRANKED");
 
 			// loadscreen names ("@" .. upper(ui_gametype))
 			localized_strings::override("PH", "PROP HUNT");
@@ -541,6 +559,18 @@ namespace gamemodes
 			localized_strings::override("SLASHER", "SLASHER");
 			localized_strings::override("SNIPERS", "SNIPERS ONLY");
 			localized_strings::override("RPG", "RPGS ONLY");
+			localized_strings::override("OIC", "ONE IN THE CHAMBER");
+			localized_strings::override("AON", "ALL OR NOTHING");
+			localized_strings::override("CRANKED", "CRANKED");
+
+			// HUD and splash strings of the One in the Chamber / All or Nothing / Cranked scripts
+			localized_strings::override("MWX_OIC_LIVES_3", "LIVES: 3");
+			localized_strings::override("MWX_OIC_LIVES_2", "LIVES: 2");
+			localized_strings::override("MWX_OIC_LIVES_1", "LIVES: 1");
+			localized_strings::override("MWX_OIC_LIVES_0", "LIVES: 0");
+			localized_strings::override("MWX_AON_ONE_KILL", "1 KILL LEFT");
+			localized_strings::override("MWX_AON_BONUS", "ALL OR NOTHING!");
+			localized_strings::override("MWX_CRANKED", "CRANKED!");
 
 			// objective strings: the UI builds OBJECTIVES_<ref>(_SCORE|_HINT) with the ref as it is
 			for (const auto& objective : objectives)

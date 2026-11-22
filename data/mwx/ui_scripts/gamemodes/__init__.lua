@@ -5,7 +5,7 @@ Cac.GameModes.Data.Party = {
     Image = "h1_ui_icon_playlist_weekend",
     -- ph/mprops hidden until the prop lists exist (props got the default weapon and kept the player model);
     -- snipers dropped: use preset classes in the game setup instead
-    List = { "infect", "gun", "slasher", "rpg" }
+    List = { "infect", "gun", "slasher", "rpg", "oic", "aon", "cranked" }
 }
 
 -- Standard list: HMW's own script (liam_tests) sets it with "gtnw", which has no script in any zone.
