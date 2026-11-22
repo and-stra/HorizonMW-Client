@@ -8,6 +8,15 @@ Cac.GameModes.Data.Party = {
 
 local party_base = { ph = "war", mprops = "war", slasher = "war", snipers = "war", rpg = "war" }
 
+-- name keys of the virtual modes (must match the C++ mode table in gamemodes.cpp)
+local party_name = {
+    ph = "MWX_GAMETYPE_PH",
+    mprops = "MWX_GAMETYPE_MPROPS",
+    slasher = "MWX_GAMETYPE_SLASHER",
+    snipers = "MWX_GAMETYPE_SNIPERS",
+    rpg = "MWX_GAMETYPE_RPG"
+}
+
 -- selecting a mode in game setup goes through MatchRules.SetData("gametype", ref)
 local set_data = MatchRules.SetData
 MatchRules.SetData = function(key, value, ...)
@@ -32,4 +41,23 @@ MatchRules.GetData = function(key, ...)
         end
     end
     return value
+end
+
+-- the private lobby label and the setup menu mode button read Lobby.GameTypeNameAbbreviated()
+local game_type_name_abbreviated = Lobby.GameTypeNameAbbreviated
+Lobby.GameTypeNameAbbreviated = function(...)
+    local name = party_name[Engine.GetDvarString("mwx_party_mode")]
+    if name then
+        return Engine.Localize("@" .. name .. "_CAPS")
+    end
+    return game_type_name_abbreviated(...)
+end
+
+-- loading screen diagnosis (mwx_debug_gamemodes 1)
+local connect_build = LUI.MenuBuilder.m_types_build["connect"]
+LUI.MenuBuilder.m_types_build["connect"] = function(...)
+    if Engine.GetDvarBool("mwx_debug_gamemodes") then
+        print("[gamemodes] connect menu built, ui_gametype=" .. Engine.GetDvarString("ui_gametype"))
+    end
+    return connect_build(...)
 end

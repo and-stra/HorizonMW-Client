@@ -218,11 +218,22 @@ namespace gamemodes
 
 	namespace
 	{
+		bool debug_enabled()
+		{
+			const auto* dvar = game::Dvar_FindVar("mwx_debug_gamemodes");
+			return dvar && dvar->current.enabled;
+		}
+
 		void on_ui_gametype(game::dvar_value* value)
 		{
 			if (!value || !value->string)
 			{
 				return;
+			}
+
+			if (debug_enabled())
+			{
+				console::info("[gamemodes] ui_gametype <- %s\n", value->string);
 			}
 
 			const auto* party_dvar = game::Dvar_FindVar("mwx_party_mode");
@@ -367,6 +378,8 @@ namespace gamemodes
 					"Current MWX party game mode (empty for normal modes)");
 				dvars::register_string("mwx_party_mode", "", game::DVAR_FLAG_NONE,
 					"Selected MWX party game mode (base gametype stays unchanged)");
+				dvars::register_bool("mwx_debug_gamemodes", false, game::DVAR_FLAG_NONE,
+					"Log gamemode dvar writes and the loading screen menu");
 			}, scheduler::pipeline::main);
 		}
 	};
