@@ -645,15 +645,10 @@ namespace arxan
 
 		void post_start() override
 		{
-#ifndef DEBUG
-			EnumWindows(enumWindowCallback, NULL);
-			CheckLoadedModules();
-			scheduler::loop([]
-				{
-					EnumWindows(enumWindowCallback, NULL);
-					CheckLoadedModules();
-				});
-#endif // !DEBUG
+			// MWX: no HMW anti-cheat scan. It enumerated all windows and modules in a 0 ms loop
+			// (CPU waste), quit silently via exit(0) on blocked window titles/DLL names, and crashed
+			// in ntdll when a DLL unloaded between EnumProcessModules and GetModuleFileNameEx
+			// (minidumps 2026-11-20 17:10 and 2026-11-22 01:20).
 		}
 
 		void post_load() override
