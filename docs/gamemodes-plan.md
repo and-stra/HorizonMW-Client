@@ -221,3 +221,23 @@ Engine.GetDvarString = function(name, ...)
 end
 ```
 The base table must match the C++ mode table (all "war" for now).
+
+## Phase 2b results (commit 3bc895d4)
+
+Selection via MatchRules.SetData + `mwx_party_mode` + start translation work (Slasher from the menu:
+`[gamemodes] slasher -> war (party mode)`, 4 shovel kills; TDM afterwards normal; Prop Hunt 9).
+The `Engine.GetDvarString` wrapper has no visible effect (lobby label still TEAM DEATHMATCH, no
+highlight); HMW's lobby scripts most likely keep their own local reference to the function.
+
+## Phase 2c spec (show the party mode in the UI)
+
+1. Remove the `Engine.GetDvarString` wrapper block from `data/mwx/ui_scripts/gamemodes/__init__.lua`
+   (keep `party_base` and the MatchRules.SetData wrapper).
+2. `gamemodes.cpp`, client only (`!is_dedi()`): `scheduler::loop` on the main pipeline every 250 ms:
+   if `mwx_party_mode` is a known ref and `ui_gametype` equals that ref's base, set `ui_gametype`
+   to the ref (same dvar setter as the translation code). Nothing else.
+   Effect: every UI element reading `ui_gametype` shows the party mode (label, icon, list highlight,
+   loadscreen), and because `g_gametype` is taken from `ui_gametype` at start, the start goes through
+   translation path (a) (virtual ref), which is already tested.
+3. Choosing a standard mode clears `mwx_party_mode` (already), so the loop stops and the engine's
+   own value stays.
