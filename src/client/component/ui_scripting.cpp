@@ -19,6 +19,7 @@
 #include "fastfiles.hpp"
 #include "scripting.hpp"
 #include "party.hpp"
+#include "mods.hpp"
 
 #include "game/ui_scripting/execution.hpp"
 #include "game/scripting/execution.hpp"
@@ -323,11 +324,26 @@ namespace ui_scripting
 
 			game_type["getloadedmod"] = [](const game&)
 			{
-				/*
 				const auto& path = mods::get_mod();
 				return path.value_or("");
-				*/
-				return "";
+			};
+
+			// MWX: "path\tname\tdescription" per mod, records separated by \x1f (MODS menu)
+			game_type["listmods"] = [](const game&)
+			{
+				return mods::list_mods();
+			};
+
+			// MWX: refs of the gametypes the loaded mod adds, space separated (PARTY list)
+			game_type["getmodgametypes"] = [](const game&)
+			{
+				std::string refs;
+				for (const auto& gametype : mods::get_gametypes())
+				{
+					if (!refs.empty()) refs += " ";
+					refs += gametype.ref;
+				}
+				return refs;
 			};
 
 			game_type["sendStats"] = [](const game&)

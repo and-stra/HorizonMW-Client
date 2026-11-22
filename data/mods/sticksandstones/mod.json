@@ -1,0 +1,20 @@
+{
+    "name": "Sticks and Stones",
+    "description": "Black Ops' Sticks and Stones as a mod: crossbow, knife and throwing knife. A throwing knife kill bankrupts the victim.",
+    "author": "MWX",
+    "version": "0.1",
+    "gametypes": [
+        {
+            "ref": "sas",
+            "template": "dm",
+            "name": "Sticks and Stones",
+            "description": "Free-for-all with the crossbow, a knife and a throwing knife. A throwing knife kill bankrupts the victim.",
+            "objective": "Get kills with the crossbow and the knife. A throwing knife kill or a suicide resets the score to 0.",
+            "class_choice": false,
+            "strings": {
+                "MWX_SAS_BANKRUPTED": "BANKRUPTED!",
+                "MWX_SAS_BANKRUPT_ENEMY": "BANKRUPTED AN ENEMY!"
+            }
+        }
+    ]
+}

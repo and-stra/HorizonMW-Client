@@ -5,7 +5,7 @@
 #include "console.hpp"
 #include "filesystem.hpp"
 #include "localized_strings.hpp"
-//#include "mods.hpp"
+#include "mods.hpp"
 
 #include "game/game.hpp"
 
@@ -67,13 +67,12 @@ namespace filesystem
 			// MWX: our own data (images, scripts, ui_scripts) from GAME\mwx, highest priority
 			filesystem::register_path(L"mwx");
 
-			/*
+			// MWX: mods are loaded by relaunching with -mod "mods/<name>" (see mods.cpp)
 			const auto mod_path = utils::flags::get_flag("mod");
 			if (mod_path.has_value())
 			{
 				mods::set_mod(mod_path.value());
 			}
-			*/
 
 			fs_startup_hook.invoke<void>(name);
 		}

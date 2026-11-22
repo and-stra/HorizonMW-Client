@@ -13,7 +13,9 @@
 
 // MWX: m_ads_sensitivity_scale, the behaviour of the current official HMW client (see docs/hmw-diff.md):
 // while aiming down sights, sensitivity = normal * lerp(1, scale, ads fraction). The normal value is
-// restored when cgame is not running and on exit, so the saved config never keeps an ADS value.
+// restored when cgame is not running, so the saved config never keeps an ADS value. Not on exit: at
+// pre_destroy the dvar system is already gone and writing the dvar crashed (17:19 dump,
+// ads_sensitivity.cpp restore -> Dvar_SetFromStringByNameFromSource).
 namespace ads_sensitivity
 {
 	namespace
@@ -107,11 +109,6 @@ namespace ads_sensitivity
 			}, scheduler::pipeline::main);
 
 			scheduler::loop(frame, scheduler::pipeline::main);
-		}
-
-		void pre_destroy() override
-		{
-			restore();
 		}
 	};
 }

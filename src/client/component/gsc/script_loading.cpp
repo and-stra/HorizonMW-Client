@@ -8,6 +8,7 @@
 #include "component/scripting.hpp"
 #include "component/memory.hpp"
 #include "component/gamemodes.hpp"
+#include "component/mods.hpp"
 
 #include "game/dvars.hpp"
 
@@ -351,7 +352,9 @@ namespace gsc
 			}
 
 #ifndef DEBUG
-			if (game::environment::is_dedi() || root_dir.filename() == "mwx")
+			const auto mod = mods::get_mod();
+			if (game::environment::is_dedi() || root_dir.filename() == "mwx" ||
+				(mod.has_value() && root_dir.generic_string() == mod.value()))
 			{
 #endif
 				if (utils::io::directory_exists(script_dir.generic_string()))

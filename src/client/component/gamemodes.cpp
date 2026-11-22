@@ -6,6 +6,7 @@
 #include "localized_strings.hpp"
 #include "scheduler.hpp"
 #include "stock_weapons.hpp"
+#include "mods.hpp"
 #include "component/gsc/script_loading.hpp"
 
 #include "game/game.hpp"
@@ -58,6 +59,18 @@ namespace gamemodes
 			{"aon", "dm", "MWX_GAMETYPE_AON", "MWX_GAMETYPE_AON_DESC", "0"},
 			{"cranked", "war", "MWX_GAMETYPE_CRANKED", "MWX_GAMETYPE_CRANKED_DESC"},
 		};
+
+		// built-in extra gametypes + the ones the loaded mod declares in its mod.json
+		std::vector<extra_gametype> all_extra_gametypes()
+		{
+			std::vector<extra_gametype> result(std::begin(extra_gametypes), std::end(extra_gametypes));
+			for (const auto& g : mods::get_gametypes())
+			{
+				result.push_back({g.ref.data(), g.template_ref.data(), g.name_key.data(), g.desc_key.data(),
+					g.class_choice ? nullptr : "0"});
+			}
+			return result;
+		}
 
 		struct objective_string
 		{
@@ -166,7 +179,7 @@ namespace gamemodes
 				append(m.ref);
 			}
 
-			for (const auto& g : extra_gametypes)
+			for (const auto& g : all_extra_gametypes())
 			{
 				append(g.ref);
 			}
@@ -246,7 +259,7 @@ namespace gamemodes
 				}
 			}
 
-			for (const auto& g : extra_gametypes)
+			for (const auto& g : all_extra_gametypes())
 			{
 				if (row_of(g.ref) < 0)
 				{

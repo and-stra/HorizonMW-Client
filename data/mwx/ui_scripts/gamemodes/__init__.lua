@@ -8,6 +8,13 @@ Cac.GameModes.Data.Party = {
     List = { "infect", "gun", "slasher", "rpg", "oic", "aon", "cranked" }
 }
 
+-- gametypes of the loaded mod (mod.json "gametypes", registered in C++ by mods.cpp / gamemodes.cpp)
+if game and game.getmodgametypes then
+    for ref in string.gmatch(game:getmodgametypes(), "%S+") do
+        table.insert(Cac.GameModes.Data.Party.List, ref)
+    end
+end
+
 -- Standard list: HMW's own script (liam_tests) sets it with "gtnw", which has no script in any zone.
 -- dz = HMW's Drop Zone (dz.gsc in hmw_files.ff).
 if Cac.GameModes.Data.Standard then
@@ -74,9 +81,11 @@ local function party_display_name()
     return nil
 end
 
-local title_build = LUI.MenuBuilder.m_types_build["lobby_game_type_title"]
-if title_build then
-    LUI.MenuBuilder.m_types_build["lobby_game_type_title"] = function(...)
+local function wrap_title(registry)
+    if type(registry) ~= "table" then return false end
+    local title_build = registry["lobby_game_type_title"]
+    if type(title_build) ~= "function" then return false end
+    registry["lobby_game_type_title"] = function(...)
         local def = title_build(...)
         if type(def) == "table" and def.handlers and def.handlers.lobby_transition_to_game then
             local transition = def.handlers.lobby_transition_to_game
@@ -94,4 +103,19 @@ if title_build then
         end
         return def
     end
+    return true
+end
+
+-- the registry name of registerDef isn't known from the dumps: wrap it in every MenuBuilder table holding it
+local wrapped = false
+for key, registry in pairs(LUI.MenuBuilder) do
+    if wrap_title(registry) then
+        wrapped = true
+        if Engine.GetDvarBool("mwx_debug_gamemodes") then
+            print("[gamemodes] loading title wrapped in LUI.MenuBuilder." .. tostring(key))
+        end
+    end
+end
+if Engine.GetDvarBool("mwx_debug_gamemodes") then
+    print("[gamemodes] loading title wrapper installed: " .. tostring(wrapped))
 end
