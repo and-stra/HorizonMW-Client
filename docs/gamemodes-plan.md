@@ -300,3 +300,35 @@ end
    report `mwx_gamemode` when it is not empty (the virtual ref), else `g_gametype`. Check the client
    connect path: the joining client must end up with `ui_gametype` = that reported value before its
    loadscreen opens (if it takes `ui_gametype` from somewhere else, report where; do not guess).
+
+## Phase 2d results (commit a8c392da)
+
+Weekend Warfare group, list highlight, pre-match names/objectives, one translation per load and the
+server info gametype work; the joining client gets `ui_gametype=slasher`. Still: the private lobby
+label says TEAM DEATHMATCH (it comes from `Lobby.GameTypeNameAbbreviated()`, an engine function that
+reads the party gametype, not ui_gametype/MatchRules). User report: the map loading screen first shows
+SLASHER, then switches to TEAM DEATHMATCH during the load.
+LAN server browser does not open: HMW's current zone script `ui_scripts/mp/server_list/serverlist.lua`
+builds `menu_systemlink_join` with `imgui:openServerBrowser()` (ImGui browser of the closed-source
+exe); our client has no `imgui` Lua object -> "attempt to index a nil value".
+
+## Phase 2e spec
+
+1. Lobby label: in `data/mwx/ui_scripts/gamemodes/__init__.lua` wrap `Lobby.GameTypeNameAbbreviated`
+   (global `Lobby`): if `mwx_party_mode` is a known ref, return
+   `Engine.Localize("@" .. <name key> .. "_CAPS")` for it, else the original result. Name keys as in
+   the C++ table (MWX_GAMETYPE_PH, MWX_GAMETYPE_MPROPS, MWX_GAMETYPE_SLASHER, MWX_GAMETYPE_SNIPERS,
+   MWX_GAMETYPE_RPG); keep them in one Lua table next to `party_base`.
+2. LAN server browser: restore our feeder-based browser (server_list.cpp feeds it). Copy
+   `data/cdata/ui_scripts/server_list/serverlist.lua` to `data/mwx/ui_scripts/server_list/serverlist.lua`
+   and add `data/mwx/ui_scripts/server_list/__init__.lua`:
+   `if not LUI.mp_menus then return end` + `require("serverlist")`. Do NOT copy lobby.lua or
+   confirm.lua. Our scripts load after HMW's, so our `menu_systemlink_join` wins.
+3. Loading screen diagnosis (temporary, behind dvar `mwx_debug_gamemodes`, default 0):
+   - C++: in the existing `on_new_value("ui_gametype")` callback, log
+     `[gamemodes] ui_gametype <- <value>` (before any correction) when the dvar is 1.
+   - Lua: wrap `LUI.MenuBuilder.m_types_build["connect"]` and log (print) `[gamemodes] connect menu
+     built, ui_gametype=<value>` each time it is built, when the dvar is 1.
+   With `mwx_debug_gamemodes 1`, start Slasher from the menu, watch the loading screen, and report the
+   ordered log lines plus screenshots every 1 s during the load. Do not try to fix the switch yet;
+   Claude decides the fix from the log.
