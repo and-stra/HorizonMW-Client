@@ -332,3 +332,26 @@ exe); our client has no `imgui` Lua object -> "attempt to index a nil value".
    With `mwx_debug_gamemodes 1`, start Slasher from the menu, watch the loading screen, and report the
    ordered log lines plus screenshots every 1 s during the load. Do not try to fix the switch yet;
    Claude decides the fix from the log.
+
+## Phase 2e results (commit 42bc90b6)
+
+Lobby label shows SLASHER (Lobby.GameTypeNameAbbreviated wrapper). LAN browser works again (needed
+`package.loaded["serverlist"] = nil` before `require`, because HMW's zone script had already loaded a
+module with that name); server listed with map Rust, join works, joining client gets
+`ui_gametype=slasher`. Open: the browser's Type column shows the raw ref `slasher`
+(`UI_GetGameTypeDisplayName` returns its input for unknown refs), and the map load screen shows TEAM
+DEATHMATCH from its first frame although `ui_gametype=slasher` at that time: it is not LUI
+(`connect` builder never called) and does not read `ui_gametype`.
+
+## Phase 2f spec (game type display name)
+
+Detour `game::UI_GetGameTypeDisplayName` (0x4DD8C0, `const char*(const char*)`) in `gamemodes.cpp`:
+1. If `mwx_debug_gamemodes` is 1, log `[gamemodes] display name for '<arg>'` (to see which callers
+   use it, e.g. the load screen).
+2. If the argument is a virtual ref -> return `game::UI_SafeTranslateString(<name key>)`
+   (e.g. MWX_GAMETYPE_SLASHER -> "Slasher").
+3. Else, if the argument equals a mode's base gametype and an active mode exists -> return that
+   mode's translated name. Active mode = the first of these that is a known ref with that base:
+   `mwx_gamemode` (running match, host/server), `mwx_party_mode` (host in the lobby),
+   `ui_gametype` (joining client, set from the server info).
+4. Else -> original function.
