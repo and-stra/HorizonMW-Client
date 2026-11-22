@@ -44,14 +44,18 @@ namespace gamemodes
 			const char* template_ref; // gametypesTable row to copy image/flags from
 			const char* name;
 			const char* desc;
+			// gametypesTable column 5 = class choice allowed (_utility::allowclasschoice). Fixed-loadout
+			// modes need "0" like Infected: otherwise players and bots pick a custom class and
+			// bypassclasschoicefunc (the gamemode loadout) never runs. nullptr = keep the template's value.
+			const char* class_choice = nullptr;
 		};
 
 		constexpr extra_gametype extra_gametypes[] =
 		{
 			{"infect", "war", "MPUI_INFECT", "MENU_INFECT_DESC"},
 			{"dz", "koth", "MPUI_DZ", "MWX_GAMETYPE_DZ_DESC"},
-			{"oic", "dm", "MWX_GAMETYPE_OIC", "MWX_GAMETYPE_OIC_DESC"},
-			{"aon", "dm", "MWX_GAMETYPE_AON", "MWX_GAMETYPE_AON_DESC"},
+			{"oic", "dm", "MWX_GAMETYPE_OIC", "MWX_GAMETYPE_OIC_DESC", "0"},
+			{"aon", "dm", "MWX_GAMETYPE_AON", "MWX_GAMETYPE_AON_DESC", "0"},
 			{"cranked", "war", "MWX_GAMETYPE_CRANKED", "MWX_GAMETYPE_CRANKED_DESC"},
 		};
 
@@ -224,6 +228,7 @@ namespace gamemodes
 				int template_row;
 				const char* name;
 				const char* desc;
+				const char* class_choice;
 			};
 
 			std::vector<new_row> rows;
@@ -237,7 +242,7 @@ namespace gamemodes
 			{
 				if (row_of(m.ref) < 0)
 				{
-					rows.push_back({m.ref, war_row, m.name, m.desc});
+					rows.push_back({m.ref, war_row, m.name, m.desc, nullptr});
 				}
 			}
 
@@ -246,7 +251,7 @@ namespace gamemodes
 				if (row_of(g.ref) < 0)
 				{
 					const auto template_row = row_of(g.template_ref);
-					rows.push_back({g.ref, template_row >= 0 ? template_row : war_row, g.name, g.desc});
+					rows.push_back({g.ref, template_row >= 0 ? template_row : war_row, g.name, g.desc, g.class_choice});
 				}
 			}
 
@@ -281,6 +286,10 @@ namespace gamemodes
 					else if (c == 2)
 					{
 						text = row.desc;
+					}
+					else if (c == 5 && row.class_choice)
+					{
+						text = row.class_choice;
 					}
 
 					auto& cell = result->values[static_cast<size_t>(old_rows + static_cast<int>(n)) * cols + c];

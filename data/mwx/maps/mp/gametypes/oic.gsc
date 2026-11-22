@@ -171,11 +171,9 @@ oicspawnfinished()
     // _playerlogic notifies spawned_player right after _class::applyloadout
     self waittill("spawned_player");
 
-    // one revolver, one round in the clip, no stock, nothing else. The loadout gave the full weapon name
-    // (h2_coltanaconda_mp...); the bare ref is not a weapon.
-    weapon = self.primaryweapon;
-    if (!isdefined(weapon) || weapon == "none")
-        weapon = maps\mp\gametypes\_class::buildweaponname(OIC_WEAPON, "none", "none", "none", []);
+    // one revolver, one round in the clip, no stock, nothing else (the bare ref is not a weapon name)
+    // always the revolver, whatever class the player came with
+    weapon = maps\mp\gametypes\_class::buildweaponname(OIC_WEAPON, "none", "none", "none", []);
     self.oic_weapon = weapon;
 
     self takeallweapons();
