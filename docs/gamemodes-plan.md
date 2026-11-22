@@ -233,9 +233,15 @@ highlight); HMW's lobby scripts most likely keep their own local reference to th
 
 1. Remove the `Engine.GetDvarString` wrapper block from `data/mwx/ui_scripts/gamemodes/__init__.lua`
    (keep `party_base` and the MatchRules.SetData wrapper).
-2. `gamemodes.cpp`, client only (`!is_dedi()`): `scheduler::loop` on the main pipeline every 250 ms:
-   if `mwx_party_mode` is a known ref and `ui_gametype` equals that ref's base, set `ui_gametype`
-   to the ref (same dvar setter as the translation code). Nothing else.
+2. `gamemodes.cpp`, client only (`!is_dedi()`), event-driven, no polling. Use the existing dvar-write
+   hook `dvars::callback::on_new_value(name, fn)` (fires after every write via Dvar_SetVariant;
+   one callback per dvar, nothing else uses these two):
+   - `on_new_value("ui_gametype")`: if `mwx_party_mode` is a known ref and the new value equals that
+     ref's base, set `ui_gametype` to the ref (same dvar setter as the translation code). The nested
+     write fires the callback again with the ref, which does nothing, so there is no loop.
+   - `on_new_value("mwx_party_mode")`: if the new value is a known ref and `ui_gametype` currently
+     equals its base, set `ui_gametype` to the ref (covers the case that the engine does not write
+     `ui_gametype` again after MatchRules changed).
    Effect: every UI element reading `ui_gametype` shows the party mode (label, icon, list highlight,
    loadscreen), and because `g_gametype` is taken from `ui_gametype` at start, the start goes through
    translation path (a) (virtual ref), which is already tested.
