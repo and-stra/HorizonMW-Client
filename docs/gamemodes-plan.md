@@ -247,3 +247,14 @@ highlight); HMW's lobby scripts most likely keep their own local reference to th
    translation path (a) (virtual ref), which is already tested.
 3. Choosing a standard mode clears `mwx_party_mode` (already), so the loop stops and the engine's
    own value stays.
+4. Vanilla look: rename the group to the original MWR playlist "Weekend Warfare":
+   `MWX_PARTY_CAPS` -> "WEEKEND WARFARE", group `Image = "h1_ui_icon_playlist_weekend"` (exists in
+   retail patch_ui_mp; the vanilla icon of that playlist). The group id stays "Party".
+5. Loadscreen name: HMW's loadscreen shows `Engine.Localize("@" .. upper(ui_gametype))` (e.g. `@WAR`).
+   Add localized strings with those keys, same text as the mode names, upper case like the other
+   loadscreen names: `PH` "PROP HUNT", `MPROPS` "MAD PROPS", `SLASHER` "SLASHER",
+   `SNIPERS` "SNIPERS ONLY", `RPG` "RPGS ONLY".
+6. Joining players: the server info answer (`party.cpp`, `info.set("gametype", g_gametype)`) must
+   report `mwx_gamemode` when it is not empty (the virtual ref), else `g_gametype`. Check the client
+   connect path: the joining client must end up with `ui_gametype` = that reported value before its
+   loadscreen opens (if it takes `ui_gametype` from somewhere else, report where; do not guess).
