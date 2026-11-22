@@ -162,3 +162,62 @@ Cac.GameModes.Data.Party = {
 }
 ```
 (Standard list stays as HMW sets it. Infected is added in phase 4 when its script exists.)
+
+## Phase 2 results (commit 52e10a41)
+
+- Works: whitelist patch (re-compressed with zlib, a plain buffer deadlocks), gametypesTable rows
+  (real asset name `mp/gametypesTable.csv`), translation (`[gamemodes] slasher -> war (hodgepodge 2,
+  madprops 0)`, normal modes reset to 0), PARTY GAMES group + list with names/descriptions.
+- Gaps: `MP_SLASHER` does not exist in HMW (raw key shown); choosing a party mode in the menu does
+  not change `ui_gametype`. The engine derives `ui_gametype` from `MatchRules "gametype"`, and
+  MatchRules evidently rejects unknown refs (Domination works). Starting with `ui_gametype=ph` works.
+
+## Phase 2b spec (menu selection of party modes)
+
+Idea: MatchRules keeps the base gametype ("war"); the chosen party mode is remembered in a host
+dvar `mwx_party_mode`, and the start translation uses it.
+
+C++ (`gamemodes.cpp`):
+1. Register string dvar `mwx_party_mode` (default "", not saved) like the other mwx dvars.
+2. Start translation (in `load_gametype_script_stub`), in this order:
+   a) `g_gametype` is a virtual ref -> as now.
+   b) else if not dedicated, `mwx_party_mode` is a known ref and `g_gametype` equals its base ->
+      apply that mode (set g_gametype stays base, hodgepodge/madprops dvars, `mwx_gamemode` = ref,
+      same log line with "(party mode)").
+   c) else -> reset as now.
+3. Slasher strings: add `MWX_GAMETYPE_SLASHER` "Slasher" / `MWX_GAMETYPE_SLASHER_DESC`
+   "One player is the Slasher with a shovel and a pistol. Survive until time runs out or take the
+   Slasher down." and use them for the slasher row instead of MP_SLASHER*.
+
+Lua (`data/mwx/ui_scripts/gamemodes/__init__.lua`, append below the group definition):
+```lua
+local party_base = { ph = "war", mprops = "war", slasher = "war", snipers = "war", rpg = "war" }
+
+-- selecting a mode in game setup goes through MatchRules.SetData("gametype", ref)
+local set_data = MatchRules.SetData
+MatchRules.SetData = function(key, value, ...)
+    if key == "gametype" then
+        local base = party_base[value]
+        if base then
+            Engine.SetDvarString("mwx_party_mode", value)
+            return set_data(key, base, ...)
+        end
+        Engine.SetDvarString("mwx_party_mode", "")
+    end
+    return set_data(key, value, ...)
+end
+
+-- show the party mode wherever the UI reads ui_gametype (lobby label/icon, list highlight, loadscreen)
+local get_dvar_string = Engine.GetDvarString
+Engine.GetDvarString = function(name, ...)
+    local value = get_dvar_string(name, ...)
+    if name == "ui_gametype" then
+        local mode = get_dvar_string("mwx_party_mode")
+        if mode ~= "" and party_base[mode] == value then
+            return mode
+        end
+    end
+    return value
+end
+```
+The base table must match the C++ mode table (all "war" for now).
