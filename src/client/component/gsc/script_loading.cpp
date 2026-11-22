@@ -575,6 +575,11 @@ namespace gsc
 		return was_translated;
 	}
 
+	bool translation_pending()
+	{
+		return translated;
+	}
+
 	game::ScriptFile* find_script(game::XAssetType type, const char* name, int allow_create_default)
 	{
 		std::string real_name = name;

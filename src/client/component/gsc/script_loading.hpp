@@ -17,6 +17,8 @@ namespace gsc
 	// true when the party mode translation ran for the current map load
 	// true once after a party mode translation (then cleared): used by gamemodes::on_level_load
 	bool consume_translation();
+	// true while a translation waits for that restore (g_gametype is the base gametype on purpose)
+	bool translation_pending();
 
 	game::ScriptFile* find_script(game::XAssetType type, const char* name, int allow_create_default);
 

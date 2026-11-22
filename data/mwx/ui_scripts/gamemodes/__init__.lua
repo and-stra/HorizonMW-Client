@@ -3,13 +3,15 @@ Cac.GameModes.Group.Party = "Party"
 Cac.GameModes.Data.Party = {
     Label = Engine.Localize("@MWX_PARTY_CAPS"),
     Image = "h1_ui_icon_playlist_weekend",
-    List = { "infect", "ph", "mprops", "slasher", "snipers", "rpg" }
+    -- ph/mprops hidden until the prop lists exist (props got the default weapon and kept the player model);
+    -- snipers dropped: use preset classes in the game setup instead
+    List = { "infect", "gun", "slasher", "rpg" }
 }
 
 -- Standard list: HMW's own script (liam_tests) sets it with "gtnw", which has no script in any zone.
 -- dz = HMW's Drop Zone (dz.gsc in hmw_files.ff).
 if Cac.GameModes.Data.Standard then
-    Cac.GameModes.Data.Standard.List = { "dm", "war", "sd", "dom", "conf", "sab", "koth", "hp", "gun", "dz" }
+    Cac.GameModes.Data.Standard.List = { "dm", "war", "sd", "dom", "conf", "sab", "koth", "hp", "dz" }
 end
 
 local party_base = { ph = "war", mprops = "war", slasher = "war", snipers = "war", rpg = "war" }
@@ -54,7 +56,8 @@ local game_type_name_abbreviated = Lobby.GameTypeNameAbbreviated
 Lobby.GameTypeNameAbbreviated = function(...)
     local name = party_name[Engine.GetDvarString("mwx_party_mode")]
     if name then
-        return Engine.Localize("@" .. name .. "_CAPS")
+        -- same case as the stock modes (the _CAPS name made party modes look different from Infected)
+        return Engine.Localize("@" .. name)
     end
     return game_type_name_abbreviated(...)
 end

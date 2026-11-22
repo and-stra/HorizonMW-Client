@@ -380,6 +380,36 @@ namespace gamemodes
 			}
 		}
 
+		// The private match starts the map with g_gametype = the base gametype (MatchRules only knows real
+		// gametypes), so the loading screen showed "Team Deathmatch" until on_level_load restored the party
+		// ref at the very end. Switching g_gametype to the party ref as soon as the engine writes the base
+		// makes the loading screen right from the start; the script loader translates it back to the base
+		// for the gametype scripts as for any virtual mode.
+		void on_g_gametype(game::dvar_value* value)
+		{
+			if (!value || !value->string || gsc::translation_pending())
+			{
+				return;
+			}
+
+			const auto* party_dvar = game::Dvar_FindVar("mwx_party_mode");
+			if (!party_dvar || !party_dvar->current.string || !*party_dvar->current.string)
+			{
+				return;
+			}
+
+			const auto* mode = find(party_dvar->current.string);
+			if (mode && std::strcmp(value->string, mode->base) == 0)
+			{
+				if (debug_enabled())
+				{
+					console::info("[gamemodes] g_gametype %s -> %s (party mode)\n", value->string, mode->ref);
+				}
+
+				game::Dvar_SetFromStringByNameFromSource("g_gametype", mode->ref, game::DVAR_SOURCE_INTERNAL);
+			}
+		}
+
 		void on_party_mode(game::dvar_value* value)
 		{
 			if (!value || !value->string)
@@ -484,7 +514,7 @@ namespace gamemodes
 			localized_strings::override("MWX_GAMETYPE_SNIPERS_DESC", "Team Deathmatch with sniper rifles only.");
 			localized_strings::override("MWX_GAMETYPE_RPG", "RPGs Only");
 			localized_strings::override("MWX_GAMETYPE_RPG_DESC", "Team Deathmatch with RPGs only.");
-			localized_strings::override("MWX_PARTY_CAPS", "WEEKEND WARFARE");
+			localized_strings::override("MWX_PARTY_CAPS", "PARTY");
 
 			// real extra gametypes: Infected (our port), Drop Zone (HMW's dz.gsc)
 			localized_strings::override("MPUI_INFECT", "Infected");
@@ -531,6 +561,7 @@ namespace gamemodes
 			{
 				dvars::callback::on_new_value("ui_gametype", on_ui_gametype);
 				dvars::callback::on_new_value("mwx_party_mode", on_party_mode);
+				dvars::callback::on_new_value("g_gametype", on_g_gametype);
 			}
 
 			ui_get_game_type_display_name_hook.create(game::UI_GetGameTypeDisplayName,
