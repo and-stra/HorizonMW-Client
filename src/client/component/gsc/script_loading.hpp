@@ -15,7 +15,8 @@ namespace gsc
 	void load_init_handles();
 
 	// true when the party mode translation ran for the current map load
-	bool translated_this_load();
+	// true once after a party mode translation (then cleared): used by gamemodes::on_level_load
+	bool consume_translation();
 
 	game::ScriptFile* find_script(game::XAssetType type, const char* name, int allow_create_default);
 

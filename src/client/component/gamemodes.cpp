@@ -445,7 +445,7 @@ namespace gamemodes
 
 	void on_level_load()
 	{
-		if (!gsc::translated_this_load())
+		if (!gsc::consume_translation())
 		{
 			return;
 		}

@@ -10,13 +10,13 @@
 #define FIRST_INFECTED_TIMER 15
 #define INFECTED_MOVE_SCALAR 1.2
 
-// HMW weapons (MW3-style Infected)
+// HMW weapons (MW3-style Infected); names from the HMW statstable (refs + _mp where the game adds it)
 #define SURVIVOR_PRIMARY "h2_spas12"
 #define SURVIVOR_SECONDARY "h2_usp"
 #define SURVIVOR_LETHAL "h1_fraggrenade_mp"
 #define SURVIVOR_TACTICAL "h1_flashgrenade_mp"
 #define INFECTED_INITIAL_PRIMARY "h2_usp"
-#define INFECTED_PRIMARY "iw5_combatknife"
+#define INFECTED_MELEE "h2_karambit"
 #define INFECTED_LETHAL "iw9_throwknife_mp"
 
 main()
@@ -43,6 +43,7 @@ main()
         registernumlivesdvar(level.gametype, 0);
         registerhalftimedvar(level.gametype, 0);
         level.matchrules_damagemultiplier = 0;
+        setdynamicdvar("scr_game_hardpoints", 0); // no killstreaks in Infected (also without match rules)
     }
 
     setspecialloadouts();
@@ -321,6 +322,17 @@ updateloadouts()
         // HMW gives the tactical insertion (flare_mp) through this perk
         self giveperk("specialty_tacticalinsertion", 0);
         self setmovespeedscale(INFECTED_MOVE_SCALAR);
+
+        // infected (not the first one): knife + throwing knife only, like MW3. HMW has no knife-only
+        // primary weapon (iw5_combatknife does not exist), so the pistol is kept without ammo.
+        if (!isdefined(self.isinitialinfected))
+        {
+            foreach (weapon in self getweaponslistprimaries())
+            {
+                self setweaponammoclip(weapon, 0);
+                self setweaponammostock(weapon, 0);
+            }
+        }
     }
 }
 
@@ -744,10 +756,12 @@ setspecialloadouts()
     level.infect_loadouts["axis_initial"] = maps\mp\gametypes\_class::getemptyloadout();
     level.infect_loadouts["axis_initial"]["loadoutPrimary"] = INFECTED_INITIAL_PRIMARY;
     level.infect_loadouts["axis_initial"]["loadoutEquipment"] = INFECTED_LETHAL;
+    level.infect_loadouts["axis_initial"]["loadoutMelee"] = INFECTED_MELEE;
 
     level.infect_loadouts["axis"] = maps\mp\gametypes\_class::getemptyloadout();
-    level.infect_loadouts["axis"]["loadoutPrimary"] = INFECTED_PRIMARY;
+    level.infect_loadouts["axis"]["loadoutPrimary"] = INFECTED_INITIAL_PRIMARY;
     level.infect_loadouts["axis"]["loadoutEquipment"] = INFECTED_LETHAL;
+    level.infect_loadouts["axis"]["loadoutMelee"] = INFECTED_MELEE;
 }
 
 monitorsurvivaltime()

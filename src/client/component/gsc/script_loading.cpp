@@ -388,8 +388,11 @@ namespace gsc
 
 		void load_gametype_script_stub(void* a1, void* a2)
 		{
-			// MWX: translate a virtual party mode into its base gametype and mode dvars
-			// (the gametype script loader runs twice per map load; translate once)
+			// MWX: translate a virtual party mode into its base gametype and mode dvars.
+			// `translated` means "translated, waiting for the restore in gamemodes::on_level_load":
+			// the loader runs twice per map load (the 2nd call must not touch anything), and a later
+			// reload of the scripts (e.g. when bots join) must translate again, so the flag is
+			// cleared by the restore, not only on shutdown.
 			if (!translated)
 			{
 				const auto* gametype_dvar = game::Dvar_FindVar("g_gametype");
@@ -443,7 +446,7 @@ namespace gsc
 						game::Dvar_SetFromStringByNameFromSource("mwx_gamemode", "", game::DVAR_SOURCE_INTERNAL);
 					}
 
-					translated = true;
+					translated = mode != nullptr;
 				}
 			}
 
@@ -565,9 +568,11 @@ namespace gsc
 		}
 	}
 
-	bool translated_this_load()
+	bool consume_translation()
 	{
-		return translated;
+		const auto was_translated = translated;
+		translated = false;
+		return was_translated;
 	}
 
 	game::ScriptFile* find_script(game::XAssetType type, const char* name, int allow_create_default)
