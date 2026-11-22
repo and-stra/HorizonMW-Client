@@ -27,7 +27,7 @@ namespace gamemodes
 		{
 			{"ph", "war", 9, 0, "MWX_GAMETYPE_PH", "MWX_GAMETYPE_PH_DESC"},
 			{"mprops", "war", 9, 1, "MWX_GAMETYPE_MPROPS", "MWX_GAMETYPE_MPROPS_DESC"},
-			{"slasher", "war", 2, 0, "MP_SLASHER", "MP_SLASHER_DESC"},
+			{"slasher", "war", 2, 0, "MWX_GAMETYPE_SLASHER", "MWX_GAMETYPE_SLASHER_DESC"},
 			{"snipers", "war", 4, 0, "MWX_GAMETYPE_SNIPERS", "MWX_GAMETYPE_SNIPERS_DESC"},
 			{"rpg", "war", 6, 0, "MWX_GAMETYPE_RPG", "MWX_GAMETYPE_RPG_DESC"},
 		};
@@ -256,6 +256,9 @@ namespace gamemodes
 			localized_strings::override("MWX_GAMETYPE_MPROPS", "Mad Props");
 			localized_strings::override("MWX_GAMETYPE_MPROPS_DESC",
 				"Props hunt the soldiers. Props win by eliminating every soldier.");
+			localized_strings::override("MWX_GAMETYPE_SLASHER", "Slasher");
+			localized_strings::override("MWX_GAMETYPE_SLASHER_DESC",
+				"One player is the Slasher with a shovel and a pistol. Survive until time runs out or take the Slasher down.");
 			localized_strings::override("MWX_GAMETYPE_SNIPERS", "Snipers Only");
 			localized_strings::override("MWX_GAMETYPE_SNIPERS_DESC", "Team Deathmatch with sniper rifles only.");
 			localized_strings::override("MWX_GAMETYPE_RPG", "RPGs Only");
@@ -266,6 +269,8 @@ namespace gamemodes
 			{
 				dvars::register_string("mwx_gamemode", "", game::DVAR_FLAG_SAVED,
 					"Current MWX party game mode (empty for normal modes)");
+				dvars::register_string("mwx_party_mode", "", game::DVAR_FLAG_NONE,
+					"Selected MWX party game mode (base gametype stays unchanged)");
 			}, scheduler::pipeline::main);
 		}
 	};

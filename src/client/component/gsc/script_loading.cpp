@@ -391,17 +391,46 @@ namespace gsc
 			const auto* gametype_dvar = game::Dvar_FindVar("g_gametype");
 			if (gametype_dvar && gametype_dvar->current.string)
 			{
-				const std::string ref = gametype_dvar->current.string;
-				if (const auto* mode = gamemodes::find(ref))
+				const std::string gametype = gametype_dvar->current.string;
+				const auto* mode = gamemodes::find(gametype);
+				auto party_mode = false;
+
+				if (mode)
 				{
 					game::Dvar_SetFromStringByNameFromSource("g_gametype", mode->base, game::DVAR_SOURCE_INTERNAL);
+				}
+				else if (!game::environment::is_dedi())
+				{
+					const auto* party_dvar = game::Dvar_FindVar("mwx_party_mode");
+					if (party_dvar && party_dvar->current.string && *party_dvar->current.string)
+					{
+						const auto* party = gamemodes::find(party_dvar->current.string);
+						if (party && gametype == party->base)
+						{
+							mode = party;
+							party_mode = true;
+						}
+					}
+				}
+
+				if (mode)
+				{
 					game::Dvar_SetFromStringByNameFromSource("scr_game_hodgepodgeMode",
 						std::to_string(mode->hodgepodge).data(), game::DVAR_SOURCE_INTERNAL);
 					game::Dvar_SetFromStringByNameFromSource("scr_game_madprops",
 						std::to_string(mode->madprops).data(), game::DVAR_SOURCE_INTERNAL);
-					game::Dvar_SetFromStringByNameFromSource("mwx_gamemode", ref.data(), game::DVAR_SOURCE_INTERNAL);
-					console::info("[gamemodes] %s -> %s (hodgepodge %i, madprops %i)\n",
-						ref.data(), mode->base, mode->hodgepodge, mode->madprops);
+					game::Dvar_SetFromStringByNameFromSource("mwx_gamemode", mode->ref, game::DVAR_SOURCE_INTERNAL);
+
+					if (party_mode)
+					{
+						console::info("[gamemodes] %s -> %s (party mode) (hodgepodge %i, madprops %i)\n",
+							mode->ref, mode->base, mode->hodgepodge, mode->madprops);
+					}
+					else
+					{
+						console::info("[gamemodes] %s -> %s (hodgepodge %i, madprops %i)\n",
+							mode->ref, mode->base, mode->hodgepodge, mode->madprops);
+					}
 				}
 				else
 				{
