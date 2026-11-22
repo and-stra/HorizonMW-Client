@@ -29,6 +29,7 @@
 #include <utils/hook.hpp>
 #include <utils/io.hpp>
 #include <utils/binary_resource.hpp>
+#include <utils/nt.hpp>
 
 #include "steam/steam.hpp"
 
@@ -643,6 +644,11 @@ namespace ui_scripting
 
 				load_script(rawfile_name, buffer);
 			}
+
+#ifndef DEBUG
+			// MWX: load our own LUI scripts from the game folder after HMW's zone scripts
+			load_scripts((utils::nt::library{}.get_folder() / "mwx" / "ui_scripts").string());
+#endif
 		}
 
 		void try_start()
@@ -830,6 +836,12 @@ namespace ui_scripting
 			}
 
 			dvars::register_bool("r_preloadShadersFrontendAllow", true, game::DVAR_FLAG_SAVED, "Allow shader popup on startup");
+
+			scheduler::once([]()
+			{
+				dvars::register_bool("mwx_autoplay", true, game::DVAR_FLAG_SAVED,
+					"Skip the intro and press Play Online once on startup");
+			}, scheduler::pipeline::main);
 
 			utils::hook::call(0x25E809_b, db_find_x_asset_header_stub);
 			utils::hook::call(0x25E6BB_b, db_find_x_asset_header_stub);

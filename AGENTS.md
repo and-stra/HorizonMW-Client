@@ -37,6 +37,9 @@ friends on LAN, short loading times. No master server, accounts or anti-cheat.
 | `mcp.cpp` | `mwx.exe -mcp`: MCP server, see [docs/mcp.md](docs/mcp.md) |
 | `repack.cpp` | `mwx.exe -repack all` (hmw-mod\zone only; `usermaps` / `everything` / zone names also possible): zlib zones → LZ4 blocks |
 
+- `data/mwx/` is copied to `GAME\mwx\` by `build-mwx.bat`; `GAME\mwx\ui_scripts\` is loaded after HMW's zone ui_scripts (also in release).
+- autoplay: `mwx_autoplay 1` skips the intro and presses Play Online once.
+
 ## Testing
 
 - Use the MCP tools (`start_game`, `wait_for`, `load_times`, `console_log`, `game_status`),
