@@ -53,6 +53,28 @@ feeder-based LUI browser (gamemodes phase 2e). Candidates for later: direct conn
   starts it with plain `g_gametype dz`. `gtnw` has no script anywhere (test leftover).
 - `dz` has no row in `mp/gametypesTable.csv` -> no proper name/icon in our menus.
 
+## Corrections after a closer look (2026-11-22)
+
+- Already in our client (open-source code): usermap clearing in `cl_disconnect_stub` (party.cpp),
+  `cm_unload_stub` (mapents.cpp), deferred connect while `Live_SyncOnlineDataFlags != 0` (party.cpp).
+  Not in our client: the configstring overflow warning (exe detours `G_FindConfigstringIndex`,
+  base+0x8B530) and the version-mismatch check on join.
+- Gametype whitelist and names come from HMW's zone `hmw_patch_code_post_gfx_mp`: rawfile
+  `maps/mp/gametypes/_gametypes.txt` = dm dom sd war conf vlobby koth sab ctf dd hp gun gtnw dz, and one
+  `maps/mp/gametypes/<ref>.txt` per gametype with its name keys (e.g. dz.txt -> MPUI_DZ,
+  gtnw.txt -> MPUI_GTNW; also infect, sr, ball, twar, mugger, zombies, goliath from AW). These .txt
+  files are what the engine's display name uses (no slasher.txt -> raw "slasher").
+- **GTNW is not implemented**: whitelisted and named, but no `gtnw.gsc` exists in any HMW zone ->
+  error when selected. Port candidate: `COD-GSC-Source/IW4-GSC/maps/mp/gametypes/gtnw.gsc` (MW2).
+- ADS sensitivity (exe): every frame while `CL_IsCgameInitialized` (0x33C640): remember the normal
+  `sensitivity` once, set `sensitivity = base * lerp(1, m_ads_sensitivity_scale, adsFrac)` with
+  adsFrac = float at `getCGArray() + 0x39C`, only when it differs by > 0.001; when cgame is not
+  initialized, restore the remembered value.
+- Raw mouse input (exe): registers a raw mouse device (usage page 1, usage 2) on the game window
+  (`hWnd`, 0xC9DD2E0); the WM_INPUT path and how deltas reach the game are not found yet (it keeps
+  pointers to base+0xC9DC3FC / 0xC9DC400). Needs more reverse engineering before a spec.
+  (The exe's detour of 0x12C8F0 = CL_CharEvent only blocks typing while the ImGui overlay is open.)
+
 ## Recommendations (user decides)
 1. Drop Zone: add a `dz` table row + names (like the party modes), remove `gtnw` from the
    Standard list, test a DZ match. Small, fits the gamemodes work.
