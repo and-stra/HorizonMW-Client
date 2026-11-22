@@ -321,8 +321,12 @@ updateloadouts()
         self thread setinfectedmsg();
         // HMW gives the tactical insertion (flare_mp) through this perk. HMW puts it in the lethal slot,
         // which holds the throwing knife here, so it goes into the tactical slot (like MW3/AW Infected).
-        self giveperk("specialty_tacticalinsertion", 0);
+        // same order as the user's working HMW infect mod: weapon, slot, then one charge, then the perk
+        // (the perk only starts the placement monitor; its start ammo left the slot empty)
+        self giveweapon("flare_mp");
         self settacticalweapon("flare_mp");
+        self setweaponammoclip("flare_mp", 1);
+        self giveperk("specialty_tacticalinsertion", 0);
         self setmovespeedscale(INFECTED_MOVE_SCALAR);
 
         // bots: native AI only throws offhands when encouraged
