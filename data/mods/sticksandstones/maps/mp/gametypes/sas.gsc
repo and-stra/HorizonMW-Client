@@ -48,6 +48,12 @@ main()
     if (getdvar("sas_weapon") == "")
         setdvar("sas_weapon", SAS_CROSSBOW);
 
+    // AW's crossbow (maps\mp\_exocrossbow in AW): the bolt sticks, blinks and explodes after 1.5 s. The explosion
+    // and its damage come from the weapon (timedDetonation, explosionRadius); the blinking light, the warning
+    // sound and the explosion effect were AW script, ported below. Both effects are in this mod.s mod.ff (AW loaded the same two).
+    level.sas_bolt_blink_fx = loadfx("vfx/lights/light_beacon_crossbow");
+    level.sas_bolt_explode_fx = loadfx("vfx/explosion/frag_grenade_default");
+
     setspecialloadouts();
 
     level.teambased = 0;
@@ -166,6 +172,59 @@ sasspawnfinished()
 
     if (isbot(self))
         self botsetflag("encourage_grenade_use", 1);
+
+    self thread sasmonitorbolts();
+}
+
+sasmonitorbolts()
+{
+    self notify("sas_monitor_bolts");
+    self endon("sas_monitor_bolts");
+    self endon("death");
+    self endon("disconnect");
+    level endon("game_ended");
+
+    for (;;)
+    {
+        self waittill("missile_fire", bolt, weapon);
+        if (isdefined(bolt) && isdefined(weapon) && issubstr(weapon, "exocrossbow"))
+            bolt thread sasboltthink(self);
+    }
+}
+
+sasboltthink(owner)
+{
+    self endon("death");
+    self waittill("missile_stuck", stuckto);
+
+    // blinking light + warning sound while the fuse runs (AW _exocrossbow::sticky_fx)
+    fx_origin = spawn("script_model", self.origin);
+    fx_origin setmodel("tag_origin");
+    fx_origin.angles = self.angles;
+    fx_origin linkto(self);
+    self thread sasboltexplodefx(fx_origin);
+
+    wait 0.1;
+    if (isdefined(level.sas_bolt_blink_fx))
+        playfxontag(level.sas_bolt_blink_fx, fx_origin, "tag_origin");
+    self playsound("exocrossbow_warning");
+}
+
+// the bolt entity is removed when the weapon explodes it: play the explosion effect where it was
+sasboltexplodefx(fx_origin)
+{
+    position = self.origin;
+    while (isdefined(self))
+    {
+        position = self.origin;
+        wait 0.05;
+    }
+
+    if (isdefined(fx_origin))
+        fx_origin delete();
+
+    if (isdefined(level.sas_bolt_explode_fx))
+        playfx(level.sas_bolt_explode_fx, position);
 }
 
 onplayerkilled(einflictor, attacker, idamage, smeansofdeath, sweapon, vdir, shitloc, psoffsettime, deathanimduration, lifeid)

@@ -13,7 +13,8 @@
             "class_choice": false,
             "strings": {
                 "MWX_SAS_BANKRUPTED": "BANKRUPTED!",
-                "MWX_SAS_BANKRUPT_ENEMY": "BANKRUPTED AN ENEMY!"
+                "MWX_SAS_BANKRUPT_ENEMY": "BANKRUPTED AN ENEMY!",
+                "WEAPON_EXPLOSIVE_EXO_CROSSBOW": "Crossbow"
             }
         }
     ]

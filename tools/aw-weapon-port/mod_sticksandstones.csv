@@ -1,0 +1,6 @@
+// zone "mod" of the Sticks and Stones mod (GAME\zone_source\mod_sticksandstones.csv), built with the H1 x64-zt.
+// The weapon pulls its models, materials, techsets, xanims, sounds and fx in as dependencies.
+weapon,iw5_exocrossbow_mp
+fx,vfx/lights/light_beacon_crossbow
+fx,vfx/explosion/frag_grenade_default
+sound,exocrossbow_warning
