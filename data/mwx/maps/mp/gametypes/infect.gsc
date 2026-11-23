@@ -313,8 +313,14 @@ onspawnfinished()
     // HMW's applyloadout notifies "applyloadout" (lower case), H1's "applyLoadout"; a normal spawn also
     // ends with "spawned_player". Waiting for only "applyLoadout" never fired, so infected never got the
     // tactical insertion and survivors never got scavenger.
-    self common_scripts\utility::waittill_any("applyloadout", "applyLoadout", "spawned_player");
-    self updateloadouts();
+    // every loadout (re)apply in this life, not only the first: a team change in the same frame
+    // (onspawnplayer -> giveloadout) re-applied the loadout after updateloadouts and wiped scavenger
+    for (;;)
+    {
+        self common_scripts\utility::waittill_any("applyloadout", "applyLoadout", "spawned_player");
+        waittillframeend;
+        self updateloadouts();
+    }
 }
 
 updateloadouts()
