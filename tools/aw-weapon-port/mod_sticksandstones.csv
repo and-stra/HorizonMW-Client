@@ -1,5 +1,8 @@
-// zone "mod" of the Sticks and Stones mod (GAME\zone_source\mod_sticksandstones.csv), built with the H1 x64-zt.
+// zone "mod" of the Sticks and Stones mod (GAME\zone_source\mod.csv; the internal zone name must be "mod"), H1 x64-zt.
 // The weapon pulls its models, materials, techsets, xanims, sounds and fx in as dependencies.
+// MWR's own hands model by reference (",," = not built into the zone): the weapon needs a hands model so the gun
+// hangs on the hands and the player's faction arms are drawn; AW's model of the same name are the exo arms
+xmodel,,viewmodel_base_viewhands
 weapon,iw5_exocrossbow_mp
 // the gun models must be in the zone; listed explicitly so a missing model fails the build instead of being skipped
 xmodel,vm_crossbow_base

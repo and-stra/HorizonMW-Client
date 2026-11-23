@@ -13,9 +13,11 @@ remaining conversion in one step (it merges the overnight repair scripts pad-wea
   * fixed-size string arrays (hideTags 32, reticleViewModels 64, gunModel/worldModel 2, turret spin sounds 4)
   * null fields inside animOverrides / reloadOverrides / notetrackOverrides
   * attachments: only the ones named with --attachment are kept (each kept one must be converted and built too)
-  * handModel: cleared, so the player's MWR arms are drawn (HMW sets them per faction with setviewmodel).
-    AW's value "viewmodel_base_viewhands" are the exo arms, and MWR has its own model with that name: building
-    the AW one into a zone would replace MWR's model for every weapon. --hands <xmodel> sets a different one.
+  * handModel: "viewmodel_base_viewhands". The game needs a hands model on the weapon: the gun hangs on the hands'
+    weapon bone, and the player's faction arms (setviewmodel) are drawn in its place. Empty = no arms and the gun
+    floats at the viewmodel origin (too big / too close). The zone CSV must list it as a REFERENCE
+    ("xmodel,,viewmodel_base_viewhands" before the weapon), so MWR's model is used: AW's model of the same name
+    are the exo arms and would replace MWR's for every weapon. --hands <xmodel> sets a different one.
   * exo-only anim slots (boost jump/slam, dodge, slide and sprint fire, exo punch, boost landing) are cleared: MWR
     has no exo movement, so they would only be built into the zone for nothing (--keep-exo keeps them)
 
@@ -241,8 +243,8 @@ def convert(weapon, attachments=(), hands=None, keep_exo=False):
     if missing:
         print("warning: attachments not on the weapon: %s" % ", ".join(missing))
 
-    # the player's arms (setviewmodel) instead of the weapon's; see the header
-    weapon["handModel"] = hands if hands else ""
+    # MWR's hands model by reference (see the header and the zone CSV)
+    weapon["handModel"] = hands if hands else "viewmodel_base_viewhands"
     weapon.pop("handsModel", None)
 
     return converted
@@ -254,7 +256,7 @@ def main():
     parser.add_argument("output")
     parser.add_argument("--attachment", action="append", default=[], help="attachment to keep (repeatable)")
     parser.add_argument("--keep-exo", action="store_true", help="keep the exo-only anim slots")
-    parser.add_argument("--hands", default="", help="hands model to keep on the weapon (default: none, the player's MWR arms)")
+    parser.add_argument("--hands", default="", help="hands model on the weapon (default viewmodel_base_viewhands, MWR's)")
     args = parser.parse_args()
 
     with open(args.input, encoding="utf-8") as f:
