@@ -326,7 +326,10 @@ namespace fastfiles
 			const auto* fs_game = game::Dvar_FindVar("fs_game");
 
 			const std::string dir = fs_basepath ? fs_basepath->current.string : "";
-			const std::string mod_dir = fs_game ? fs_game->current.string : "";
+			// MWX: the loaded mod first. fs_game is read-only in release builds (filesystem.cpp), so the write in
+			// mods::set_mod can be refused at startup and mod.ff was then never found.
+			const auto loaded_mod = mods::get_mod();
+			const std::string mod_dir = loaded_mod.has_value() ? loaded_mod.value() : (fs_game ? fs_game->current.string : "");
 			const std::string name = base_filename;
 
 			if (name == "mod.ff")
