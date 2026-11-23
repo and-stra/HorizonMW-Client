@@ -152,7 +152,8 @@ namespace mods
 
 		bool can_change_mod()
 		{
-			if (!game::Com_InFrontend() && !game::VirtualLobby_Loaded())
+			// MWX: the plain HMW main menu reports Com_InFrontend() == false (same quirk the debug server works around); use "cgame is running and not in the virtual lobby" as the match test
+			if (game::CL_IsCgameInitialized() && !game::VirtualLobby_Loaded())
 			{
 				console::info("Cannot change the mod while in a match!\n");
 				return false;
