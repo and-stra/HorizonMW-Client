@@ -50,7 +50,7 @@ main()
 
     // AW's crossbow (maps\mp\_exocrossbow in AW): the bolt sticks, blinks and explodes after 1.5 s. The explosion
     // and its damage come from the weapon (timedDetonation, explosionRadius); the blinking light, the warning
-    // sound and the explosion effect were AW script, ported below. Both effects are in this mod.s mod.ff (AW loaded the same two).
+    // sound and the explosion effect were AW script, ported below. Both effects are in this mod's mod.ff (AW loaded the same two).
     level.sas_bolt_blink_fx = loadfx("vfx/lights/light_beacon_crossbow");
     level.sas_bolt_explode_fx = loadfx("vfx/explosion/frag_grenade_default");
 
