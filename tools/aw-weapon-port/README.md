@@ -23,6 +23,8 @@ Tools: x64-zt (`refs\tools\x64-zt`), the S1 copy in the AW folder (`zonetool.exe
    `python s1_weapon_to_h1.py <dump>\weapons\iw5_exocrossbow_mp.json GAME\zonetool\mod_sticksandstones\weapons\iw5_exocrossbow_mp.json`
    (no attachments; add `--attachment crossbowscopebase` only if ADS has no scope, then the attachment needs the same
    treatment).
+   The converter clears the weapon's hands model (the player's MWR arms are used; AW's `viewmodel_base_viewhands`
+   are the exo arms and share their name with MWR's model) and the exo-only anim slots.
 3. `GAME\zone_source\mod_sticksandstones.csv` = `mod_sticksandstones.csv` from this folder.
 4. H1 x64-zt: `buildzone mod_sticksandstones`; copy `zone\mod_sticksandstones.ff` to `GAME\mods\sticksandstones\mod.ff`.
 

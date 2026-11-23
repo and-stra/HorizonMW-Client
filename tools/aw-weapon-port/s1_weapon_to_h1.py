@@ -13,6 +13,11 @@ remaining conversion in one step (it merges the overnight repair scripts pad-wea
   * fixed-size string arrays (hideTags 32, reticleViewModels 64, gunModel/worldModel 2, turret spin sounds 4)
   * null fields inside animOverrides / reloadOverrides / notetrackOverrides
   * attachments: only the ones named with --attachment are kept (each kept one must be converted and built too)
+  * handModel: cleared, so the player's MWR arms are drawn (HMW sets them per faction with setviewmodel).
+    AW's value "viewmodel_base_viewhands" are the exo arms, and MWR has its own model with that name: building
+    the AW one into a zone would replace MWR's model for every weapon. --hands <xmodel> sets a different one.
+  * exo-only anim slots (boost jump/slam, dodge, slide and sprint fire, exo punch, boost landing) are cleared: MWR
+    has no exo movement, so they would only be built into the zone for nothing (--keep-exo keeps them)
 
 Usage: s1_weapon_to_h1.py <input.json> <output.json> [--attachment <name> ...] [--hands <xmodel>]
 Crossbow: --attachment crossbowscopebase (its built-in scope; the optics attachments are not needed)
@@ -189,9 +194,21 @@ def fix_overrides(weapon):
                 override[key] = sound_map(override[key])
 
 
-def convert(weapon, attachments=(), hands=None):
+EXO_ANIM_PREFIXES = ("HIGH_JUMP_", "DODGE_", "SLIDE_", "SPRINTANDFIRE_", "MELEE_ALT_", "LAND_DIP", "SPRINT_IN_FROM_SLIDE")
+
+
+def convert(weapon, attachments=(), hands=None, keep_exo=False):
+    cleared = 0
     for name in ("szXAnimsRightHanded", "szXAnimsLeftHanded", "szXAnims"):
-        weapon[name] = anim_table(weapon.get(name))
+        table = anim_table(weapon.get(name))
+        if not keep_exo:
+            for key in table:
+                if key.startswith(EXO_ANIM_PREFIXES) and table[key]:
+                    table[key] = ""
+                    cleared += 1
+        weapon[name] = table
+    if cleared:
+        print("cleared %d exo-only anim slots" % cleared)
 
     # keep the reload/charge sounds: built from the parallel arrays, never by padding those arrays themselves
     weapon["notetrackSoundMap"] = sound_map(weapon.get("notetrackSoundMap"),
@@ -224,8 +241,9 @@ def convert(weapon, attachments=(), hands=None):
     if missing:
         print("warning: attachments not on the weapon: %s" % ", ".join(missing))
 
-    if hands is not None and "handsModel" in weapon:
-        weapon["handsModel"] = hands
+    # the player's arms (setviewmodel) instead of the weapon's; see the header
+    weapon["handModel"] = hands if hands else ""
+    weapon.pop("handsModel", None)
 
     return converted
 
@@ -235,13 +253,14 @@ def main():
     parser.add_argument("input")
     parser.add_argument("output")
     parser.add_argument("--attachment", action="append", default=[], help="attachment to keep (repeatable)")
-    parser.add_argument("--hands", help="replace the weapon's hands model (AW exo arms), e.g. an MWR viewhands xmodel")
+    parser.add_argument("--keep-exo", action="store_true", help="keep the exo-only anim slots")
+    parser.add_argument("--hands", default="", help="hands model to keep on the weapon (default: none, the player's MWR arms)")
     args = parser.parse_args()
 
     with open(args.input, encoding="utf-8") as f:
         weapon = json.load(f)
 
-    converted = convert(weapon, args.attachment, args.hands)
+    converted = convert(weapon, args.attachment, args.hands, args.keep_exo)
 
     with open(args.output, "w", encoding="utf-8") as f:
         json.dump(weapon, f, indent=4)
