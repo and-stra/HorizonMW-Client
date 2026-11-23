@@ -21,6 +21,9 @@ friends on LAN, short loading times. No master server, accounts or anti-cheat.
 ## Rules
 
 - Never modify or delete game files or `.ff`/`.pak` files without a backup.
+- Work only inside `C:\Games\cod-hwm`. Never copy, move or extract anything to other drives, other folders or
+  virtual disks (VHD/VHDX, Dev Drives): a 38 GB move into the user's Dev Drive VHDX filled C: and detached it.
+  Check free space before any large copy/extract and keep at least 20 GB free on C:.
   `mwx.exe -repack` moves originals to `hmw-mod\zone_backup_zlib\`; `-repack-restore` undoes it.
 - String dvars can't be registered in `post_unpack` (crash: `MT_AllocIndex ... script string`).
   Register them in `scheduler::once(..., scheduler::pipeline::main)`.
