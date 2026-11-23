@@ -159,6 +159,18 @@ sasspawnfinished()
 
     self takeallweapons();
     self giveweapon(crossbow);
+
+    // the crossbow comes from the mod's mod.ff; without it, play with a sniper instead of being unarmed
+    if (!self hasweapon(crossbow))
+    {
+        if (!isdefined(level.sas_warned))
+        {
+            level.sas_warned = 1;
+            print("[sas] weapon " + crossbow + " not available (mod.ff not loaded?), using h2_m21_mp");
+        }
+        crossbow = "h2_m21_mp";
+        self giveweapon(crossbow);
+    }
     self giveweapon(melee);
     self giveweapon(SAS_TOMAHAWK);
     self setlethalweapon(SAS_TOMAHAWK);
