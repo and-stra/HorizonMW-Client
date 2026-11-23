@@ -365,6 +365,11 @@ namespace lan
 		auto responses = run_query({target}, timeout, true);
 		if (responses.empty())
 		{
+			char text[INET_ADDRSTRLEN]{};
+			inet_ntop(AF_INET, &target.sin_addr, text, sizeof(text));
+			console::warn("[lan] no getInfo answer from %s:%u (netadr type %i, raw port 0x%04X)\n", text,
+				static_cast<unsigned>(ntohs(target.sin_port)), static_cast<int>(address.type),
+				static_cast<unsigned>(address.port));
 			return {};
 		}
 
