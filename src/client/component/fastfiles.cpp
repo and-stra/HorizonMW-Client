@@ -9,6 +9,7 @@
 #include "weapon.hpp"
 #include "stock_weapons.hpp"
 #include "gamemodes.hpp"
+#include "factions.hpp"
 #include "load_timing.hpp"
 
 #include "game/dvars.hpp"
@@ -159,6 +160,7 @@ namespace fastfiles
 					{
 						result.stringTable = stock_weapons::patch(result.stringTable);
 						result.stringTable = gamemodes::patch_stringtable(result.stringTable);
+						result.stringTable = factions::patch_stringtable(result.stringTable);
 
 						const auto override_stringtable = db_find_xasset_header_hook.invoke<game::XAssetHeader>(type, override_asset_name.data(), 0);
 						if (override_stringtable.stringTable)
