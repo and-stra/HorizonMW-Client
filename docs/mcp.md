@@ -161,6 +161,25 @@ instance of that kind).
 | `input` | see above | the debug method |
 | `game_status`, `run_command`, `get_dvar`, `set_dvar`, `console_log`, `load_times` | as before | the debug methods |
 | `start_game` / `stop_game` | `dedicated`, `args` / `target` | older aliases of start_client/start_server and stop_instance |
+| `list_tests` | – | the test names from `mwx\tests\tests.json` |
+| `run_test` | `name` | **starts a job** and returns at once: `{job, name, state}` |
+| `run_all_tests` | `name` (optional) | starts a job for all tests (or one) |
+| `test_status` | `job` (optional) | `{jobs: [{job, name, state, elapsed_s, result}]}`, newest first |
+| `cancel_test` | `job` | stops the running job and its server |
+
+Tests are described in [testing.md](testing.md).
+
+### Tool calls must stay short
+
+MCP clients give a tool call a limited time. opencode closes the server after about 60 s (and then
+removes the tools until it restarts it), so **no tool may block for a minute**. That is why
+
+- `run_test` / `run_all_tests` return a job id immediately and the client polls `test_status`
+  (a full run takes ~20-25 minutes),
+- `wait_for` stops waiting after 45 s and returns
+  `{reached: false, still_waiting: true, ...}` - call it again (with the same `timeout_s`) until it
+  returns `reached: true`. This is what `start_server -> wait_for in_game` looks like when a map
+  load takes longer.
 
 Typical run:
 
@@ -216,9 +235,15 @@ Claude desktop app: `%APPDATA%\Claude\claude_desktop_config.json`, then restart 
 - The bridge process itself is also `mwx.exe`: stopping **all** `mwx.exe` processes kills the MCP
   connection (opencode reconnects after the config file is touched). Stop game instances with
   `stop_instance`, or by their PID.
-- A rebuild copies `mwx.exe` into the game folder, which fails while the bridge or a game is
-  running. Disable the MCP server in the config (or stop the game) before building.
+- A rebuild copies `mwx.exe` into the game folder. A running `mwx.exe` cannot be overwritten, but
+  it can be renamed, so `build-branch.bat` / `tools\build\build-mwx.bat` rename the old file to
+  `mwx-prev-<n>.exe` and copy the new one; a running bridge or game keeps working with the old
+  image and the next start uses the new build. Stale `mwx-prev-*.exe` files are deleted by the next
+  build when they are no longer in use.
 - Running the game and a dedicated server on one PC works (different debug ports); the bridge
   hands out free ports automatically (client 27099+, server 27108+).
+- Two game instances at once is possible, but a *stale* instance (a game that never exited, e.g.
+  after a killed client) blocks the next map load: always stop instances with `stop_instance` and
+  check `list_instances` / `Get-Process mwx` before a test run.
 - Adding a debug method: handle it in `debug_server.cpp` (`handle()`), then expose it as a tool
   in `mcp.cpp` (`tools()` + `call_tool()`).

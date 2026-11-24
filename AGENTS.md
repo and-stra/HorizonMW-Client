@@ -7,10 +7,18 @@ friends on LAN, short loading times. No master server, accounts or anti-cheat.
 ## Build
 
 - Windows, Visual Studio 2022 Build Tools ("Desktop development with C++").
-- `C:\Games\cod-hwm\build-mwx.bat` does everything: checkout `mwx`, fast-forward to
-  `claude/mwx`, submodules, premake, msbuild Release x64, copies `mwx.exe` into the game
-  folder. Log: `C:\Games\cod-hwm\build-mwx.log`.
+- The build script is in the repository: `tools\build\build-mwx.bat [-nogit] [-game <dir>] [-log <file>]`.
+  It updates the submodules, runs premake + msbuild (Release x64), copies `mwx.exe` into the game
+  folder, archives `mwx.pdb` per commit (`refs\pdb\<hash>\`) and mirrors `data\mwx` / `data\mods`.
+  Without `-nogit` it checks out `mwx` and fast-forwards to `claude/mwx` first.
+- The thin wrappers next to the game folder keep the old call sites working:
+  `C:\Games\cod-hwm\build-mwx.bat` (normal build, log `build-mwx.log`) and
+  `C:\Games\cod-hwm\build-branch.bat` (`-nogit`: builds whatever is checked out, log
+  `build-branch.log`; used for `opencode/autonomous` and fix branches).
 - Output is `mwx.exe`. It must never overwrite `hmw-mod.exe` (the official v1.6.7 client).
+- A running `mwx.exe` (a game or the MCP server) cannot be overwritten, but it can be renamed: the
+  script moves it to `mwx-prev-<n>.exe` and copies the new build. The running process keeps the old
+  image; the next start uses the new one.
 
 ## Branches
 
@@ -47,8 +55,15 @@ friends on LAN, short loading times. No master server, accounts or anti-cheat.
 ## Testing
 
 - Use the MCP tools (`start_client`, `start_server`, `wait_for`, `players`, `events`, `screenshot`,
-  `ui_snapshot`/`ui_click`, `gsc_eval`, `run_test`, `run_all_tests`, `load_times`, `console_log`),
-  see [docs/mcp.md](docs/mcp.md) and [docs/testing.md](docs/testing.md).
+  `ui_snapshot`/`ui_click`, `gsc_eval`, `run_test`, `run_all_tests`, `test_status`, `load_times`,
+  `console_log`), see [docs/mcp.md](docs/mcp.md) and [docs/testing.md](docs/testing.md).
+- Game mode tests: `data/mwx/tests/<name>.gsc` + an entry in `data/mwx/tests/tests.json`. Run them
+  with `run_all_tests` (a background job, poll `test_status`) or, without the MCP,
+  `powershell -File tools\test\run-tests.ps1 [-Name <test>]`. A full run is ~20-25 minutes.
+- One MCP tool call must stay under ~60 s: opencode kills the MCP server when a call runs longer,
+  so `run_test`/`run_all_tests` return a job and `wait_for` returns `still_waiting` after 45 s.
+- GSC check before every commit: `powershell -File tools\gsc-check\check-all.ps1`
+  (cross-file `path::function` calls for every `.gsc` in `data\`).
 - Logs in the game folder: `mwx-logs\load_times.log`, `mwx-logs\repack.log`,
   `hmw-mod\logs\games_mp.log`, crash dumps in `minidumps\`.
 - opencode integration: `opencode.json` in the repo root registers the MWX MCP server
@@ -77,3 +92,14 @@ friends on LAN, short loading times. No master server, accounts or anti-cheat.
   if the script says the branches diverged, stop and report it to Claude.
 
 - GSC check without the game (Linux): `tools/gsc-check/build.sh`, then `tools/gsc-check/gsct <file.gsc> <COD-GSC-Source/H1-GSC>`; compiles with the repo's gsc-tool for H1 and resolves unqualified calls.
+
+## Autonomous runs
+
+- Long autonomous runs (e.g. the branch `opencode/autonomous`) build with
+  `C:\Games\cod-hwm\build-branch.bat` (`-nogit`), keep the PDB per commit and write their progress
+  to `C:\Games\cod-hwm\mwx-debug\autonomous\report.md` (done work, commits, test results,
+  decisions, open issues).
+- They push only their own branch (never `mwx` / `main` / `claude/mwx`), never merge, rebase or
+  force-push, and revert a failed milestone on that branch so it keeps building.
+- The regression check before a milestone is finished: build, `run_all_tests` (or
+  `tools\test\run-tests.ps1`), then the report and the push.

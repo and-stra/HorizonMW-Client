@@ -190,125 +190,6 @@ namespace party
 			}
 		}
 
-		/*
-		void check_download_map(const utils::info_string& info, std::vector<download::file_t>& files)
-		{
-			const auto mapname = info.get("mapname");
-			if (fastfiles::is_stock_map(mapname))
-			{
-				return;
-			}
-
-			if (mapname.contains('.') || mapname.contains("::"))
-			{
-				throw std::runtime_error(utils::string::va("Invalid server mapname value '%s'", mapname.data()));
-			}
-
-			const auto check_file = [&](const usermap_file& file)
-			{
-				const std::string filename = utils::string::va("hmw-usermaps/%s/%s%s",
-					mapname.data(), mapname.data(), file.extension.data());
-				const auto source_hash = info.get(file.name);
-				if (source_hash.empty())
-				{
-					if (!file.optional)
-					{
-						std::string missing_value = "Server '%s' is empty";
-						if (file.name == "usermap_hash"s)
-						{
-							missing_value += " (or you are missing content for map '%s')";
-						}
-						throw std::runtime_error(utils::string::va(missing_value.data(), file.name.data(), mapname.data()));
-					}
-
-					return;
-				}
-
-				const auto hash = get_file_hash(filename);
-				console::debug("hash != source_hash => %s != %s\n", source_hash.data(), hash.data());
-				if (hash != source_hash)
-				{
-					files.emplace_back(filename, source_hash);
-					return;
-				}
-			};
-
-			for (const auto& file : usermap_files)
-			{
-				check_file(file);
-			}
-		}
-
-		bool check_download_mod(const utils::info_string& info, std::vector<download::file_t>& files)
-		{
-			static const auto fs_game = game::Dvar_FindVar("fs_game");
-			const auto client_fs_game = utils::string::to_lower(fs_game->current.string);
-			const auto server_fs_game = utils::string::to_lower(info.get("fs_game"));
-
-			if (server_fs_game.empty() && client_fs_game.empty())
-			{
-				return false;
-			}
-
-			if (server_fs_game.empty() && !client_fs_game.empty())
-			{
-				mods::set_mod("");
-				return true;
-			}
-
-			if (!server_fs_game.starts_with("mods/") || server_fs_game.contains('.') || server_fs_game.contains("::"))
-			{
-				throw std::runtime_error(utils::string::va("Invalid server fs_game value '%s'", server_fs_game.data()));
-			}
-
-			auto needs_restart = false;
-			for (const auto& file : mod_files)
-			{
-				const auto source_hash = info.get(file.name);
-				if (source_hash.empty())
-				{
-					if (file.optional)
-					{
-						continue;
-					}
-
-					throw std::runtime_error(
-						utils::string::va("Server '%s' is empty", file.name.data()));
-				}
-
-				const auto file_path = server_fs_game + "/mod" + file.extension;
-				auto has_to_download = !utils::io::file_exists(file_path);
-
-				if (!has_to_download)
-				{
-					const auto hash = get_file_hash(file_path);
-					console::debug("has_to_download = %s != %s\n", source_hash.data(), hash.data());
-					has_to_download = source_hash != hash;
-				}
-
-				if (has_to_download)
-				{
-					// unload mod before downloading it
-					if (client_fs_game == server_fs_game)
-					{
-						mods::set_mod("", true);
-						return true;
-					}
-					else
-					{
-						files.emplace_back(file_path, source_hash);
-					}
-				}
-				else if (client_fs_game != server_fs_game)
-				{
-					mods::set_mod(server_fs_game);
-					needs_restart = true;
-				}
-			}
-
-			return needs_restart;
-		}
-		*/
 
 		void close_joining_popups()
 		{
@@ -322,110 +203,6 @@ namespace party
 			}
 		}
 
-		/*
-		std::string get_whitelist_json_path()
-		{
-			return (utils::properties::get_appdata_path() / "whitelist.json").generic_string();
-		}
-
-		nlohmann::json get_whitelist_json_object()
-		{
-			std::string data;
-			if (!utils::io::read_file(get_whitelist_json_path(), &data))
-			{
-				return nullptr;
-			}
-
-			nlohmann::json obj;
-			try
-			{
-				obj = nlohmann::json::parse(data.data());
-			}
-			catch (const nlohmann::json::parse_error& ex)
-			{
-				menu_error(utils::string::va("%s\n", ex.what()));
-				return nullptr;
-			}
-
-			return obj;
-		}
-
-		std::string target_ip_to_string(const game::netadr_s& target)
-		{
-			return utils::string::va("%i.%i.%i.%i",
-				static_cast<int>(saved_info_response.host.ip[0]),
-				static_cast<int>(saved_info_response.host.ip[1]),
-				static_cast<int>(saved_info_response.host.ip[2]),
-				static_cast<int>(saved_info_response.host.ip[3]));
-		}
-
-		bool download_files(const game::netadr_s& target, const utils::info_string& info, bool allow_download);
-
-		bool should_user_confirm(const game::netadr_s& target)
-		{
-			nlohmann::json obj = get_whitelist_json_object();
-			if (obj != nullptr)
-			{
-				const auto target_ip = target_ip_to_string(target);
-				for (const auto& [key, value] : obj.items())
-				{
-					if (value.is_string() && value.get<std::string>() == target_ip)
-					{
-						return false;
-					}
-				}
-			}
-
-			close_joining_popups();
-			command::execute("lui_open_popup popup_confirmdownload", false);
-
-			return true;
-		}
-
-		bool needs_vid_restart = false;
-
-		bool download_files(const game::netadr_s& target, const utils::info_string& info, bool allow_download)
-		{
-			try
-			{
-				std::vector<download::file_t> files{};
-
-				const auto needs_restart = check_download_mod(info, files);
-				needs_vid_restart = needs_vid_restart || needs_restart;
-				check_download_map(info, files);
-
-				if (files.size() > 0)
-				{
-					if (!allow_download && should_user_confirm(target))
-					{
-						return true;
-					}
-
-					download::stop_download();
-					download::start_download(target, info, files);
-					return true;
-				}
-				else if (needs_restart || needs_vid_restart)
-				{
-					command::execute("vid_restart");
-					needs_vid_restart = false;
-					scheduler::once([=]()
-					{
-						mods::read_stats();
-						connect(target);
-					}, scheduler::pipeline::main);
-					return true;
-				}
-			}
-			catch (const std::exception& e)
-			{
-				menu_error(e.what());
-				return true;
-			}
-
-			return false;
-		}
-		*/
 
 		void set_new_map(const char* mapname, const char* gametype, game::msg_t* msg)
 		{
@@ -543,24 +320,6 @@ namespace party
 
 	void user_download_response(bool response)
 	{
-		/*
-		if (!response)
-		{
-			return;
-		}
-
-		nlohmann::json obj = get_whitelist_json_object();
-		if (obj == nullptr)
-		{
-			obj = {};
-		}
-
-		obj.push_back(target_ip_to_string(saved_info_response.host));
-
-		utils::io::write_file(get_whitelist_json_path(), obj.dump(4));
-
-		download_files(saved_info_response.host, saved_info_response.info_string, true);
-		*/
 	}
 
 	void menu_error(const std::string& error)
@@ -900,12 +659,6 @@ namespace party
 			}
 			command::execute(utils::string::va("ui_mapname %s", mapname.data()), true);
 
-			/*auto* maxclients = game::Dvar_FindVar("sv_maxclients");
-			if (maxclients)
-			{
-				command::execute(utils::string::va("ui_maxclients %i", maxclients->current.integer), true);
-				command::execute(utils::string::va("party_maxplayers %i", maxclients->current.integer), true);
-			}*/
 
 			command::execute((dev ? "sv_cheats 1" : "sv_cheats 0"), true);
 
