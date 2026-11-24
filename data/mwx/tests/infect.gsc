@@ -49,6 +49,24 @@ main()
         }
     }
 
+    // the flag is cleared as soon as a second player is infected; right after the countdown the
+    // first infected is the only axis player
+    if (!isdefined(firstinfected))
+    {
+        foreach (player in level.players)
+        {
+            if (isdefined(player.team) && player.team == "axis")
+            {
+                if (!isdefined(firstinfected))
+                    firstinfected = player;
+            }
+        }
+    }
+
+    axisatstart = 0;
+    if (isdefined(level.infect_teamscores) && isdefined(level.infect_teamscores["axis"]))
+        axisatstart = level.infect_teamscores["axis"];
+
     havefirst = 0;
     if (isdefined(firstinfected))
         havefirst = 1;
@@ -56,7 +74,10 @@ main()
     if (isdefined(survivor))
         havesurvivor = 1;
 
-    test_assert(havefirst, "exactly one first infected", "1", havefirst);
+    if (axisatstart > 1)
+        havefirst = 0;
+
+    test_assert(havefirst, "exactly one first infected", "1", axisatstart);
     test_assert(havesurvivor, "at least one survivor", ">0", survivorcount);
 
     if (!havefirst || !havesurvivor)

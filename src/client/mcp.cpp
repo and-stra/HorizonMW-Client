@@ -573,7 +573,21 @@ namespace mcp
 					else if (event["type"] == "test_assert")
 					{
 						const auto& data = event["data"];
-						if (data.value("ok", data.value("passed", false)))
+
+						auto ok = false;
+						if (data.contains("ok"))
+						{
+							if (data["ok"].is_boolean())
+							{
+								ok = data["ok"].get<bool>();
+							}
+							else if (data["ok"].is_number())
+							{
+								ok = data["ok"].get<double>() != 0.0;
+							}
+						}
+
+						if (ok)
 						{
 							passed++;
 						}
@@ -607,7 +621,8 @@ namespace mcp
 			result["failures"] = failures;
 			result["steps"] = steps;
 			result["script_errors"] = script_errors;
-			result["done"] = done.is_null() ? false : done["data"].value("ok", true);
+			result["done"] = !done.is_null() && done["data"].contains("ok") && done["data"]["ok"].is_number() &&
+				done["data"]["ok"].get<double>() != 0.0;
 			result["duration_s"] = duration;
 			result["total_s"] = total_wait;
 
