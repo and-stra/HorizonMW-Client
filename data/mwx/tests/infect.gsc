@@ -3,15 +3,44 @@
 // Checks the first infected, the loadouts of both teams, that a survivor becomes infected with
 // the right loadout, the team counts and the "survivors eliminated" win.
 //
-// Start it with run_test {name:"infect"}: that sets mwx_test=infect and the scr_* dvars that
-// shorten the first-infected timer, loads mp_crash and waits for test_done.
+// Start it with run_test {name:"infect"}: that starts a dedicated server on mp_shipment with
+// g_gametype infect, mwx_test=infect and 3 bots.
 
 #include mwx\tests\_test;
+
+// fills level.mwx_firstinfected / level.mwx_survivor / level.mwx_axis / level.mwx_allies
+scanplayers()
+{
+    level.mwx_firstinfected = undefined;
+    level.mwx_survivor = undefined;
+    level.mwx_axis = 0;
+    level.mwx_allies = 0;
+
+    foreach (player in level.players)
+    {
+        if (!isdefined(player.team))
+            continue;
+
+        if (player.team == "axis")
+        {
+            level.mwx_axis++;
+            if (!isdefined(level.mwx_firstinfected))
+                level.mwx_firstinfected = player;
+        }
+        else if (player.team == "allies")
+        {
+            level.mwx_allies++;
+            if (!isdefined(level.mwx_survivor))
+                level.mwx_survivor = player;
+        }
+    }
+}
 
 main()
 {
     test_step("wait for the first infected");
 
+    // the gametype starts the first-infected countdown after the prematch
     waited = 0;
     while (waited < 120 && !isdefined(level.infect_chosefirstinfected))
     {
@@ -29,76 +58,33 @@ main()
         return;
     }
 
-    test_step("check the first infected");
+    test_step("wait for the team change");
 
-    firstinfected = undefined;
-    survivor = undefined;
-    survivorcount = 0;
-
-    foreach (player in level.players)
+    // setfirstinfected starts the team change as a thread, so the axis player appears a moment
+    // after level.infect_chosefirstinfected
+    scanplayers();
+    waited = 0;
+    while (waited < 60 && (level.mwx_axis < 1 || level.mwx_allies < 1))
     {
-        if (isdefined(player.isinitialinfected) && player.isinitialinfected)
-        {
-            firstinfected = player;
-        }
-        else if (isdefined(player.team) && player.team == "allies")
-        {
-            survivorcount++;
-            if (!isdefined(survivor))
-                survivor = player;
-        }
+        wait 0.25;
+        waited = waited + 0.25;
+        scanplayers();
     }
 
-    // the flag is cleared as soon as a second player is infected; right after the countdown the
-    // first infected is the only axis player
-    if (!isdefined(firstinfected))
-    {
-        foreach (player in level.players)
-        {
-            if (isdefined(player.team) && player.team == "axis")
-            {
-                if (!isdefined(firstinfected))
-                    firstinfected = player;
-            }
-        }
-    }
+    test_assert(level.mwx_axis == 1, "exactly one first infected", "1", level.mwx_axis);
+    test_assert(level.mwx_allies > 0, "at least one survivor", ">0", level.mwx_allies);
 
-    axisatstart = 0;
-    if (isdefined(level.infect_teamscores) && isdefined(level.infect_teamscores["axis"]))
-        axisatstart = level.infect_teamscores["axis"];
-
-    havefirst = 0;
-    if (isdefined(firstinfected))
-        havefirst = 1;
-    havesurvivor = 0;
-    if (isdefined(survivor))
-        havesurvivor = 1;
-
-    if (axisatstart > 1)
-        havefirst = 0;
-
-    test_assert(havefirst, "exactly one first infected", "1", axisatstart);
-    test_assert(havesurvivor, "at least one survivor", ">0", survivorcount);
-
-    if (!havefirst || !havesurvivor)
+    if (level.mwx_axis < 1 || !isdefined(level.mwx_survivor))
     {
         test_done(0);
         return;
     }
 
-    test_assert(firstinfected.team == "axis", "first infected team", "axis", firstinfected.team);
-    test_assert(firstinfected hasweapon("h2_hatchet_mp"), "first infected has the hatchet",
-        "h2_hatchet_mp", "checked");
-    test_assert(firstinfected hasweapon("iw9_throwknife_mp"), "first infected has the throwing knife",
-        "iw9_throwknife_mp", "checked");
-    test_assert(firstinfected hasweapon("flare_mp"), "first infected has the tactical insertion",
-        "flare_mp", "checked");
+    firstinfected = level.mwx_firstinfected;
+    survivor = level.mwx_survivor;
 
-    speed = 0;
-    if (isdefined(firstinfected.movespeedscale))
-        speed = firstinfected.movespeedscale;
-    test_assert(speed >= 1.1, "first infected move speed scale", ">=1.1", speed);
-
+    // the survivor loadout is checked first: the first infected can already kill a survivor while
+    // the checks below poll for the infected's loadout
     test_step("check the survivor loadout");
 
     test_assert(survivor hasweapon("h2_spas12_mp"), "survivor primary", "h2_spas12_mp", "checked");
@@ -111,11 +97,36 @@ main()
         scavenger = 1;
     test_assert(scavenger, "survivor has scavenger", "1", scavenger);
 
+    test_step("check the first infected");
+
+    // the loadout and the move speed are applied by the gametype a moment after the team change
+    waited = 0;
+    speed = 0;
+    while (waited < 15)
+    {
+        speed = mwx_movespeedscale(firstinfected);
+        if (speed >= 1.1 && firstinfected hasweapon("h2_hatchet_mp") && firstinfected hasweapon("flare_mp"))
+            break;
+        wait 0.25;
+        waited = waited + 0.25;
+    }
+
+    test_assert(firstinfected.team == "axis", "first infected team", "axis", firstinfected.team);
+    test_assert(firstinfected hasweapon("h2_hatchet_mp"), "first infected has the hatchet",
+        "h2_hatchet_mp", "checked");
+    test_assert(firstinfected hasweapon("iw9_throwknife_mp"), "first infected has the throwing knife",
+        "iw9_throwknife_mp", "checked");
+    test_assert(firstinfected hasweapon("flare_mp"), "first infected has the tactical insertion",
+        "flare_mp", "checked");
+    test_assert(speed >= 1.1, "first infected move speed scale", ">=1.1", speed);
+
     test_step("infect a survivor");
 
-    axisbefore = level.infect_teamscores["axis"];
-    survivor dodamage(1000, firstinfected, firstinfected, "MOD_PISTOL_BULLET", "h2_hatchet_mp",
-        (0, 0, 0), "torso_upper");
+    axisbefore = level.mwx_axis;
+    // H1's 7 argument dodamage form does nothing in this build (probe: hp unchanged); the 2
+    // argument form kills. The death is attributed to the world, which the gametype handles like
+    // a suicide - allowed after the first infection.
+    survivor dodamage(1000, survivor.origin);
 
     waited = 0;
     while (waited < 10 && survivor.team != "axis")
@@ -129,8 +140,17 @@ main()
         infectedteam = survivor.team;
 
     test_assert(infectedteam == "axis", "killed survivor became infected", "axis", infectedteam);
-    test_assert(level.infect_teamscores["axis"] == axisbefore + 1, "infected team count",
-        axisbefore + 1, level.infect_teamscores["axis"]);
+
+    // the gametype applies the infected loadout a moment after the team change
+    waited = 0;
+    while (waited < 15 && !(survivor hasweapon("h2_hatchet_mp")))
+    {
+        wait 0.25;
+        waited = waited + 0.25;
+    }
+
+    scanplayers();
+    test_assert(level.mwx_axis == axisbefore + 1, "infected team count", axisbefore + 1, level.mwx_axis);
     test_assert(survivor hasweapon("h2_hatchet_mp"), "new infected has the hatchet", "h2_hatchet_mp", "checked");
     test_assert(survivor hasweapon("iw9_throwknife_mp"), "new infected has the throwing knife",
         "iw9_throwknife_mp", "checked");
@@ -162,8 +182,7 @@ main()
     {
         if (isdefined(player.team) && player.team == "allies")
         {
-            player dodamage(1000, firstinfected, firstinfected, "MOD_PISTOL_BULLET", "h2_hatchet_mp",
-                (0, 0, 0), "torso_upper");
+            player dodamage(1000, player.origin);
         }
     }
 

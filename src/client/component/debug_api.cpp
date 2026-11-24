@@ -1205,6 +1205,31 @@ namespace debug_api
 					return scripting::script_value{};
 				});
 
+				// the move speed scale of a player (playerState.moveSpeedScaleMultiplier), which
+				// setmovespeedscale writes and GSC cannot read back otherwise
+				gsc::function::add("mwx_movespeedscale", [](const gsc::function_args& args) -> scripting::script_value
+				{
+					if (args.size() < 1)
+					{
+						return scripting::script_value{0.f};
+					}
+
+					const scripting::entity entity{args[0].as<scripting::entity>()};
+					const auto ref = entity.get_entity_reference();
+					if (ref.classnum != 0 || ref.entnum >= 32)
+					{
+						return scripting::script_value{0.f};
+					}
+
+					const auto& client = (*game::svs_clients)[ref.entnum];
+					if (!client.gentity || !client.gentity->client)
+					{
+						return scripting::script_value{0.f};
+					}
+
+					return scripting::script_value{client.gentity->client->ps.moveSpeedScaleMultiplier};
+				});
+
 				gsc::function::add("mwx_event", [](const gsc::function_args& args)
 				{
 					mwx_event(args);

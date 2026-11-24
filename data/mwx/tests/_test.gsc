@@ -31,6 +31,11 @@ test_step(name)
     mwx_test_log("step: " + name);
 }
 
+test_log(text)
+{
+    mwx_test_log("" + text);
+}
+
 test_assert(condition, name, expected, actual)
 {
     ok = 0;
