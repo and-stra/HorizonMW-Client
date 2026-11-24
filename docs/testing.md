@@ -95,7 +95,10 @@ Rules:
 | `timeout_s` | how long the bridge waits for `test_done` |
 | `listen` | `true` = run on a client that hosts (listen server) instead of a dedicated server |
 
-Party modes are `war` + `scr_game_hodgepodgeMode` (slasher = 2, RPG = 6), the same as the UI does.
+Party modes run as their virtual gametype (`gametype: "slasher"`, `"rpg"`), not as
+`war` + `scr_game_hodgepodgeMode`: `gamemodes.cpp` translates the ref to `war` + the hodgepodge dvar
+at script load and resets the dvar for every other gametype, so a `+set scr_game_hodgepodgeMode 2`
+next to `g_gametype war` is reset to 0 again (the slasher test hung on that).
 
 The extra runs (`infect_rust`, `war_rust`, `war_terrace`) reuse the scripts on other maps: HMW
 usermap loading (`mp_rust`) and an AW map port (`mp_terrace`, factions + helicopter).
@@ -171,8 +174,8 @@ the clock itself is the thing under test, or sets a state field to its last step
 | war | war | mp_shipment | war | spawn state, a kill, normal end |
 | dm | war | mp_shipment | dm | free-for-all smoke |
 | sd / dom / dz | objective | mp_crash | sd / dom / dz | objectives exist + normal end |
-| slasher | slasher | mp_shipment | war (hodgepodge 2) | one life, one slasher, survivor bots may fire, last survivor gets the powers, all survivors dead |
-| rpg | rpg | mp_shipment | war (hodgepodge 6) | RPG only, ammo refill |
+| slasher | slasher | mp_shipment | slasher | one life, one slasher, survivor bots may fire, last survivor gets the powers, all survivors dead |
+| rpg | rpg | mp_shipment | rpg | RPG only, ammo refill |
 | oic | oic | mp_shipment | oic | revolver with 1 round, +1 round per kill, 3 lives, last alive wins |
 | aon | aon | mp_shipment | aon | empty USP + throwing knife + 3 perks, 20 kills, never-died bonus |
 | cranked | cranked | mp_shipment | cranked | kill makes cranked, 30 s timer, resets and double team score, explosion = suicide without score loss |
