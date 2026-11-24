@@ -36,7 +36,8 @@ wait_alive(player, timeout)
 
 set_score(player, value)
 {
-    player maps\mp\gametypes\_gamescore::_setplayerscore(value);
+    // _setplayerscore takes (player, value) - calling it as a method passes the value as the player
+    maps\mp\gametypes\_gamescore::_setplayerscore(player, value);
     return player.pers["score"];
 }
 

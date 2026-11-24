@@ -150,6 +150,15 @@ main()
         ended = 1;
     test_assert(ended, "game ended", "1", ended);
 
+    // endgame runs in a thread: give the winner a moment after level.gameended (the flake was
+    // reading "?"/"none" right after the event)
+    waited = 0;
+    while (waited < 10 && (!isdefined(level.finalkillcam_winner) || level.finalkillcam_winner == "none"))
+    {
+        wait 0.25;
+        waited = waited + 0.25;
+    }
+
     winner = "?";
     if (isdefined(level.finalkillcam_winner))
         winner = level.finalkillcam_winner;

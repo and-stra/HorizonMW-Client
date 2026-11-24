@@ -30,6 +30,51 @@ alivecount()
     return count;
 }
 
+// oic diagnosis: the full run failed to end the match while a lone run passed. Kills during the
+// spawn grace period do not consume lives (H1 _gamelogic::default_ondeadevent returns early while
+// level.ingraceperiod is set), so the state is logged and kills wait for the grace period.
+log_state(label)
+{
+    grace = "undef";
+    if (isdefined(level.ingraceperiod))
+        grace = level.ingraceperiod;
+
+    ended = "undef";
+    if (isdefined(level.gameended))
+        ended = level.gameended;
+
+    test_log("state " + label + ": grace=" + grace + " gameended=" + ended +
+        " numlives=" + maps\mp\_utility::getgametypenumlives() +
+        " potential=" + maps\mp\_utility::getpotentiallivingplayers().size);
+
+    foreach (player in level.players)
+    {
+        lives = "undef";
+        if (isdefined(player.pers) && isdefined(player.pers["lives"]))
+            lives = player.pers["lives"];
+
+        session = "undef";
+        if (isdefined(player.sessionstate))
+            session = player.sessionstate;
+
+        test_log("  " + player.name + " alive=" + isalive(player) + " sessionstate=" + session +
+            " lives=" + lives);
+    }
+}
+
+// returns the waited time; 0 = the grace period was already over
+wait_grace(timeout)
+{
+    waited = 0;
+    while (waited < timeout && isdefined(level.ingraceperiod) && level.ingraceperiod)
+    {
+        wait 0.25;
+        waited = waited + 0.25;
+    }
+
+    return waited;
+}
+
 first_alive(ignore1, ignore2)
 {
     foreach (player in level.players)
@@ -65,6 +110,8 @@ eliminate(attacker, victim)
         if (!wait_alive(victim, 10))
             return 1;
 
+        // kills during the grace period do not take a life (see log_state)
+        wait_grace(20);
         wait 0.5;
         test_kill(victim, attacker, attacker.oic_weapon);
 
@@ -76,6 +123,8 @@ eliminate(attacker, victim)
             waited = waited + 0.25;
         }
         wait 1.5;
+
+        log_state("after kill " + victim.name + " try " + tries);
     }
 
     if (isalive(victim))
@@ -149,9 +198,15 @@ main()
 
     test_step("lives");
 
+    // the spawn grace period is over before any kill counts (H1 ignores deaths during it)
+    waited = wait_grace(30);
+    test_log("grace waited " + waited + " s");
+    log_state("before kills");
+
     // two more kills: the victim respawns twice and is gone after the third death
     eliminated = eliminate(attacker, victim);
     test_assert(eliminated, "victim eliminated after three deaths", "1", eliminated);
+    log_state("after first elimination");
 
     test_step("last player alive wins");
 
@@ -164,15 +219,19 @@ main()
 
         eliminated = eliminate(attacker, other);
         test_assert(eliminated, "player eliminated", "1", eliminated);
+        log_state("after elimination round " + round);
         round++;
     }
 
+    // the last death starts the endgame in a thread; wait for it before checking the winner
     waited = 0;
     while (waited < 20 && !level.gameended)
     {
         wait 0.25;
         waited = waited + 0.25;
     }
+
+    log_state("final");
 
     ended = 0;
     if (level.gameended)
