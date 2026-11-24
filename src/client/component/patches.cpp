@@ -10,6 +10,7 @@
 #include "scheduler.hpp"
 #include "filesystem.hpp"
 #include "menus.hpp"
+#include "mods.hpp"
 
 #include "game/game.hpp"
 #include "game/dvars.hpp"
@@ -390,8 +391,7 @@ namespace patches
 #endif
 		}
 
-		template<size_t N>
-		bool try_load_all_zones(std::array<std::string, N> zones)
+		bool try_load_all_zones(std::vector<std::string>& zones)
 		{
 			auto* info = utils::memory::get_allocator()->allocate_array<game::XZoneInfo>(zones.size());
 			const auto _ = gsl::finally([&]() 
@@ -428,7 +428,7 @@ namespace patches
 			// game folder, and its read fails the load; we have our own launcher.)
 			// (the rest of HMW's weapon/content zones that sit in hmw-mod/zone;
 			// each is loaded only if its file exists)
-			std::array<std::string, 9> zones
+			std::vector<std::string> zones
 			{
 				"hmw_killstreak",
 				"hmw_attachments",
@@ -440,6 +440,15 @@ namespace patches
 				"hmw_dlc_factions",
 				"hmw_dlc_killstreaks"
 			};
+
+			// MWX: the loaded mod's zone last, so it can reference HMW's assets (hands models, anims, ...) and
+			// override them. In the common zones it loaded before these and a reference to an HMW asset was fatal
+			// ("Could not load default asset 'void' for asset type 'xmodel'").
+			if (mods::get_mod().has_value())
+			{
+				console::info("[mods] loading mod.ff of %s\n", mods::get_mod().value().data());
+				zones.emplace_back("mod");
+			}
 
 			try_load_all_zones(zones);
 

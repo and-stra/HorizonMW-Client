@@ -439,13 +439,6 @@ namespace fastfiles
 			try_load_zone("hmw_post_gfx", true);
 			try_load_zone("hmw_common", true);
 
-			// MWX: the loaded mod's zone (mods/<name>/mod.ff, opened by sys_create_file from the fs_game folder).
-			// The engine never requested it on its own (no "Loading fastfile mod" in the mod tests), so the mod's
-			// weapons never existed in game. Loaded after HMW's zones; Lua inside it is refused (load_lua_file_asset_stub).
-			if (mods::get_mod().has_value() && try_load_zone("mod", false))
-			{
-				console::info("[mods] loading mod.ff of %s\n", mods::get_mod().value().data());
-			}
 			
 
 			game::DB_LoadXAssets(data.data(), static_cast<std::uint32_t>(data.size()), syncMode);
