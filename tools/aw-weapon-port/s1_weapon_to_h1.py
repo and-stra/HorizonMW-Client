@@ -255,6 +255,7 @@ def main():
     parser.add_argument("input")
     parser.add_argument("output")
     parser.add_argument("--attachment", action="append", default=[], help="attachment to keep (repeatable)")
+    parser.add_argument("--anims-from", help="diagnosis: take the viewmodel anim table (szXAnims) from this H1 weapon JSON")
     parser.add_argument("--keep-exo", action="store_true", help="keep the exo-only anim slots")
     parser.add_argument("--hands", default="", help="hands model on the weapon (default viewhands_tf141, loaded in MWR multiplayer)")
     args = parser.parse_args()
@@ -263,6 +264,14 @@ def main():
         weapon = json.load(f)
 
     converted = convert(weapon, args.attachment, args.hands, args.keep_exo)
+
+    if args.anims_from:
+        with open(args.anims_from, encoding="utf-8") as f:
+            donor = json.load(f)
+        for name in ("szXAnims", "szXAnimsRightHanded", "szXAnimsLeftHanded"):
+            if isinstance(donor.get(name), dict):
+                weapon[name] = donor[name]
+        print("viewmodel anims taken from %s" % args.anims_from)
 
     with open(args.output, "w", encoding="utf-8") as f:
         json.dump(weapon, f, indent=4)
