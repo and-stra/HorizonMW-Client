@@ -174,8 +174,18 @@ main()
         waited = waited + 0.25;
     }
 
+    // the loadout can be re-applied once more right after the team change (a leftover pistol was
+    // seen when the check ran in between)
+    waited = 0;
+    while (waited < 10 && survivor hasweapon("h2_usp_mp"))
+    {
+        wait 0.25;
+        waited = waited + 0.25;
+    }
+
     scanplayers();
-    test_assert(level.mwx_axis == axisbefore + 1, "infected team count", axisbefore + 1, level.mwx_axis);
+    // a bot can infect a second survivor while this check runs, so the count only has to grow
+    test_assert(level.mwx_axis >= axisbefore + 1, "infected team count", ">=" + (axisbefore + 1), level.mwx_axis);
     test_assert(survivor hasweapon("h2_hatchet_mp"), "new infected has the hatchet", "h2_hatchet_mp", "checked");
     test_assert(survivor hasweapon("iw9_throwknife_mp"), "new infected has the throwing knife",
         "iw9_throwknife_mp", "checked");
@@ -360,8 +370,9 @@ time_end()
 
     test_step("time limit");
 
-    // the gametype extends its clock dynamically (gametimer), so the test calls its own time-limit
-    // handler instead of waiting for a real 1 minute clock
+    // the gametype extends its clock dynamically (gametimer: minutes passed + 2), so a short
+    // scr_infect_timelimit does not end the match on its own. The test calls the gametype's own
+    // time-limit handler: winner, reason and end flow are the real ones.
     if (!level.gameended)
         [[level.ontimelimit]]();
 

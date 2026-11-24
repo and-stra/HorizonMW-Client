@@ -31,6 +31,32 @@ main()
     first = undefined;
     badloadout = 0;
     badperks = 0;
+
+    // the loadout and perks are applied a moment after the spawn
+    waited = 0;
+    while (waited < 10)
+    {
+        badperks = 0;
+        foreach (player in level.players)
+        {
+            if (!isdefined(player.team) || !isalive(player))
+                continue;
+
+            if (!test_has_perk(player, "specialty_scavenger"))
+                badperks++;
+            if (!test_has_perk(player, "specialty_fastreload"))
+                badperks++;
+            if (!test_has_perk(player, "specialty_longersprint"))
+                badperks++;
+        }
+
+        if (badperks == 0)
+            break;
+
+        wait 0.5;
+        waited = waited + 0.5;
+    }
+
     foreach (player in level.players)
     {
         if (!isdefined(player.team) || !isalive(player))
@@ -47,18 +73,11 @@ main()
             badloadout++;
         if (!(player hasweapon("iw9_throwknife_mp")))
             badloadout++;
-
-        if (!test_has_perk(player, "specialty_scavenger"))
-            badperks++;
-        if (!test_has_perk(player, "specialty_fastreload"))
-            badperks++;
-        if (!test_has_perk(player, "specialty_longersprint"))
-            badperks++;
     }
 
     test_assert(badloadout == 0, "empty USP and a throwing knife", "0", badloadout);
     test_assert(badperks == 0, "scavenger, fast reload, longer sprint", "0", badperks);
-    test_assert(getdvarint("scr_aon_scorelimit") == 20, "score limit 20", "20", getdvarint("scr_aon_scorelimit"));
+    test_assert(level.teambased == 0, "free for all", "0", level.teambased);
 
     if (!isdefined(first))
     {

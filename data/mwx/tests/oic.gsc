@@ -53,26 +53,30 @@ ammo_total(player)
     return player getweaponammoclip(player.oic_weapon) + player getweaponammostock(player.oic_weapon);
 }
 
-// kills `victim` three times (oic: 3 lives) and returns 1 when the victim stops respawning
+// kills `victim` until it stops respawning (oic: 3 lives) and returns 1 when it is gone
 eliminate(attacker, victim)
 {
-    deaths = 0;
     tries = 0;
 
-    while (tries < 6)
+    while (tries < 8)
     {
         tries++;
+
         if (!wait_alive(victim, 10))
-            break;
+            return 1;
 
         wait 0.5;
         test_kill(victim, attacker, attacker.oic_weapon);
-        deaths++;
-        wait 0.5;
-    }
 
-    // after the third death there is no respawn
-    wait 3;
+        // wait for the death, then for the respawn window
+        waited = 0;
+        while (waited < 5 && isalive(victim))
+        {
+            wait 0.25;
+            waited = waited + 0.25;
+        }
+        wait 1.5;
+    }
 
     if (isalive(victim))
         return 0;
@@ -151,18 +155,16 @@ main()
 
     test_step("last player alive wins");
 
-    other = first_alive(attacker);
-    if (isdefined(other))
+    round = 0;
+    while (round < 3 && alivecount() > 1)
     {
-        eliminated = eliminate(attacker, other);
-        test_assert(eliminated, "second player eliminated", "1", eliminated);
-    }
+        other = first_alive(attacker);
+        if (!isdefined(other))
+            break;
 
-    other = first_alive(attacker);
-    if (isdefined(other))
-    {
         eliminated = eliminate(attacker, other);
-        test_assert(eliminated, "third player eliminated", "1", eliminated);
+        test_assert(eliminated, "player eliminated", "1", eliminated);
+        round++;
     }
 
     waited = 0;

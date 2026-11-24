@@ -52,6 +52,11 @@ main()
 
     test_step("rules");
 
+    // M4: the gametype is the party ref in the console/engine, the GSC sees the base gametype
+    test_assert(getdvar("g_gametype") == "war", "GSC sees the base gametype", "war", getdvar("g_gametype"));
+    test_assert(getdvarint("scr_game_hodgepodgeMode") == 2, "hodgepodge mode 2", "2",
+        getdvarint("scr_game_hodgepodgeMode"));
+
     test_assert(slasher.team == "axis", "slasher is on axis", "axis", slasher.team);
     test_assert(level.mm_teamscores["axis"] == 1, "exactly one slasher", "1", level.mm_teamscores["axis"]);
     test_assert(level.mm_teamscores["allies"] >= 2, "survivors", ">=2", level.mm_teamscores["allies"]);

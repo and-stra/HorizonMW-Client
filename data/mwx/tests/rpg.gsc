@@ -27,10 +27,19 @@ main()
         if (!(player hasweapon("h1_rpg_mp")))
             badloadout++;
 
-        // only the RPG (and HMW's default offhands)
-        primaries = player getweaponslistprimaries();
-        if (primaries.size != 1 || primaries[0] != "h1_rpg_mp")
+        // only the RPG (plus grenades/offhands); the class system does not list the RPG as a
+        // primary/secondary (it is a projectile), so check every weapon instead
+        foreach (weapon in player getweaponslistall())
+        {
+            if (weapon == "h1_rpg_mp" || weapon == "none")
+                continue;
+
+            if (maps\mp\gametypes\_class::isvalidoffhand(weapon) ||
+                maps\mp\gametypes\_class::isvalidequipment(weapon))
+                continue;
+
             badloadout++;
+        }
     }
 
     test_assert(badloadout == 0, "everyone has only the RPG", "0", badloadout);
