@@ -19,6 +19,9 @@ namespace scheduler
 			std::function<bool()> handler{};
 			std::chrono::milliseconds interval{};
 			std::chrono::high_resolution_clock::time_point last_call{};
+			// where the task was scheduled, for the error log
+			const char* file{};
+			std::uint32_t line{};
 		};
 
 		using task_list = std::vector<task>;
@@ -62,12 +65,14 @@ namespace scheduler
 						}
 						catch (const std::exception& e)
 						{
-							console::error("[scheduler] task failed: %s\n", e.what());
+							console::error("[scheduler] task from %s:%u failed and was removed: %s\n",
+								i->file ? i->file : "?", i->line, e.what());
 							res = cond_end;
 						}
 						catch (...)
 						{
-							console::error("[scheduler] task failed (unknown error)\n");
+							console::error("[scheduler] task from %s:%u failed and was removed (unknown error)\n",
+								i->file ? i->file : "?", i->line);
 							res = cond_end;
 						}
 
@@ -149,7 +154,7 @@ namespace scheduler
 	}
 
 	void schedule(const std::function<bool()>& callback, const pipeline type,
-	              const std::chrono::milliseconds delay)
+	              const std::chrono::milliseconds delay, const std::source_location& location)
 	{
 		assert(type >= 0 && type < pipeline::count);
 
@@ -157,44 +162,46 @@ namespace scheduler
 		task.handler = callback;
 		task.interval = delay;
 		task.last_call = std::chrono::high_resolution_clock::now();
+		task.file = location.file_name();
+		task.line = location.line();
 
 		pipelines[type].add(std::move(task));
 	}
 
 	void loop(const std::function<void()>& callback, const pipeline type,
-	          const std::chrono::milliseconds delay)
+	          const std::chrono::milliseconds delay, const std::source_location& location)
 	{
 		schedule([callback]()
 		{
 			callback();
 			return cond_continue;
-		}, type, delay);
+		}, type, delay, location);
 	}
 
 	void once(const std::function<void()>& callback, const pipeline type,
-	          const std::chrono::milliseconds delay)
+	          const std::chrono::milliseconds delay, const std::source_location& location)
 	{
 		schedule([callback]()
 		{
 			callback();
 			return cond_end;
-		}, type, delay);
+		}, type, delay, location);
 	}
 
 	void on_game_initialized(const std::function<void()>& callback, const pipeline type,
-	                         const std::chrono::milliseconds delay)
+	                         const std::chrono::milliseconds delay, const std::source_location& location)
 	{
 		schedule([=]()
 		{
 			const auto dw_init = game::Live_SyncOnlineDataFlags(0) == 0;
 			if (dw_init && game::Sys_IsDatabaseReady2())
 			{
-				once(callback, type, delay);
+				once(callback, type, delay, location);
 				return cond_end;
 			}
 
 			return cond_continue;
-		}, pipeline::main);
+		}, pipeline::main, 0ms, location);
 	}
 
 	class component final : public component_interface

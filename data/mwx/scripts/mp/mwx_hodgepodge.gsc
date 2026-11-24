@@ -88,10 +88,9 @@ alive_on_team(team, ignore)
 
 onmmplayerkilled_stub(einflictor, attacker, idamage, smeansofdeath, sweapon, vdir, shitloc, timeoffset, deathanimduration, killid)
 {
-    if (!isdefined(attacker))
-        return;
-
-    if ((attacker == self || !isplayer(attacker)) && !level.mm_allowsuicide)
+    // a death without a player attacker (falling, the world, a suicide) counts once the slasher is
+    // chosen; before that the vanilla rule (no attacker = ignored) kept the survivor counts too high
+    if ((!isdefined(attacker) || attacker == self || !isplayer(attacker)) && !level.mm_allowsuicide)
         return;
 
     level notify("update_game_time");

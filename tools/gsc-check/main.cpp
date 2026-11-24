@@ -16,7 +16,7 @@ int main(int argc, char** argv){
   // MWX/HMW client GSC extensions (src/client/component/gsc), unknown to the stock H1 tables
   static const char* ext_funcs[] = { "array", "assert", "assertex", "copyfolder", "createdirectory", "directoryexists",
     "directoryisempty", "executecommand", "fileexists", "filesize", "getfunction", "isusingmatchrulesdata", "jsonparse",
-    "jsonprint", "jsonserialize", "listfiles", "logprint", "map", "onplayersay", "print", "println", "readfile",
+    "jsonprint", "jsonserialize", "listfiles", "logprint", "map", "mwx_event", "mwx_movespeedscale", "mwx_result", "mwx_test_log", "onplayersay", "print", "println", "readfile",
     "removefile", "replacefunc", "say", "setslowmotion", "toupper", "type", "typeof", "va", "writefile" };
   static const char* ext_meths[] = { "force_play_weap_anim", "tell" };
   std::uint16_t id = 0x7000;

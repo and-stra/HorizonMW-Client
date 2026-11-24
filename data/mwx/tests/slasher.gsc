@@ -44,6 +44,12 @@ main()
 
     slasher = level.slasher;
 
+    // the full weapon names, built the same way _hodgepodge::switchtostartweapon builds them (the bare
+    // refs are no weapon names; the kill log showed the Colt as h2_colt45_mp)
+    shovel = maps\mp\gametypes\_class::buildweaponname("h1_meleeshovel");
+    colt = maps\mp\gametypes\_class::buildweaponname("h1_colt45");
+    test_log("slasher weapons: " + shovel + ", " + colt);
+
     test_step("rules");
 
     test_assert(slasher.team == "axis", "slasher is on axis", "axis", slasher.team);
@@ -52,7 +58,7 @@ main()
     test_assert(getdvarint("scr_war_numlives") == 1, "one life", "1", getdvarint("scr_war_numlives"));
     test_assert(isdefined(slasher.isslasher) && slasher.isslasher == 1, "slasher flag", "1",
         isdefined(slasher.isslasher) ? slasher.isslasher : "undefined");
-    test_assert(slasher hasweapon("h1_meleeshovel"), "slasher has the shovel", "h1_meleeshovel", "checked");
+    test_assert(slasher hasweapon(shovel), "slasher has the shovel", "h1_meleeshovel", "checked");
 
     test_step("survivor loadout");
 
@@ -62,12 +68,12 @@ main()
     if (isdefined(survivor))
     {
         waited = 0;
-        while (waited < 10 && !(survivor hasweapon("h1_colt45")))
+        while (waited < 10 && !(survivor hasweapon(colt)))
         {
             wait 0.25;
             waited = waited + 0.25;
         }
-        test_assert(survivor hasweapon("h1_colt45"), "survivor has the colt", "h1_colt45", "checked");
+        test_assert(survivor hasweapon(colt), "survivor has the colt", "h1_colt45", "checked");
     }
 
     // MWX fix: onmmspawnplayer turns firing off for every bot; slasher_botfire turns it back on for
@@ -94,7 +100,7 @@ main()
         if (!isdefined(victim))
             break;
 
-        test_kill(victim, slasher, "h1_meleeshovel");
+        test_kill(victim, slasher, shovel);
         tries++;
         wait 3;
     }
@@ -116,14 +122,14 @@ main()
         if (isdefined(lastsurvivor.isslasher) && lastsurvivor.isslasher == 1)
             powered = 1;
         test_assert(powered, "last survivor got the slasher powers", "1", powered);
-        test_assert(lastsurvivor hasweapon("h1_meleeshovel"), "last survivor has the shovel",
+        test_assert(lastsurvivor hasweapon(shovel), "last survivor has the shovel",
             "h1_meleeshovel", "checked");
     }
 
     test_step("all survivors dead -> slasher wins");
 
     if (isdefined(lastsurvivor))
-        test_kill(lastsurvivor, slasher, "h1_meleeshovel");
+        test_kill(lastsurvivor, slasher, shovel);
 
     waited = 0;
     while (waited < 20 && !level.gameended)
