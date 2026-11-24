@@ -287,6 +287,11 @@ namespace debug_server
 				return on_pipeline(scheduler::pipeline::server, [params] { return json{{"result", debug_api::entities(params)}}; }, 10000ms);
 			}
 
+			if (method == "model_bounds")
+			{
+				return on_pipeline(scheduler::pipeline::server, [params] { return json{{"result", debug_api::model_bounds(params)}}; }, 30000ms);
+			}
+
 			if (method == "bots")
 			{
 				return on_pipeline(scheduler::pipeline::server, [params] { return json{{"result", debug_api::bots(params)}}; }, 15000ms);

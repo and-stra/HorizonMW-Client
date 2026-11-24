@@ -9,6 +9,7 @@
 #include "component/memory.hpp"
 #include "component/gamemodes.hpp"
 #include "component/mods.hpp"
+#include "component/ph_props.hpp"
 
 #include "game/dvars.hpp"
 
@@ -429,6 +430,12 @@ namespace gsc
 				return 1;
 			}
 
+			// generated Prop Hunt prop lists are served by fastfiles/ph_props.cpp
+			if (type == game::ASSET_TYPE_STRINGTABLE && name && ph_props::generated_table_exists(name))
+			{
+				return 1;
+			}
+
 			return db_xasset_exists_hook.invoke<int>(type, name);
 		}
 
@@ -436,6 +443,11 @@ namespace gsc
 		{
 			// a default script asset is not loaded; the alias must not look like one
 			if (type == game::ASSET_TYPE_SCRIPTFILE && name && gamemodes::script_alias(name))
+			{
+				return 0;
+			}
+
+			if (type == game::ASSET_TYPE_STRINGTABLE && name && ph_props::generated_table_exists(name))
 			{
 				return 0;
 			}

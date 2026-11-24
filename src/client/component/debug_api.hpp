@@ -18,6 +18,7 @@ namespace debug_api
 	// --- game state ---------------------------------------------------------
 	nlohmann::json players();
 	nlohmann::json entities(const nlohmann::json& params);
+	nlohmann::json model_bounds(const nlohmann::json& params);
 	nlohmann::json bots(const nlohmann::json& params);
 	nlohmann::json gsc_eval(const nlohmann::json& params);
 	nlohmann::json perf();

@@ -23,15 +23,162 @@ init()
 install()
 {
     waited = 0;
-    while (waited < 60 && (!isdefined(level.hodgepodgemode) || level.hodgepodgemode != 2))
+    while (waited < 60 && !isdefined(level.hodgepodgemode))
     {
         wait 0.1;
         waited = waited + 0.1;
     }
 
-    if (!isdefined(level.hodgepodgemode) || level.hodgepodgemode != 2)
+    if (!isdefined(level.hodgepodgemode))
         return;
 
+    if (level.hodgepodgemode == 9)
+    {
+        install_ph();
+        return;
+    }
+
+    if (level.hodgepodgemode != 2)
+        return;
+
+    install_slasher();
+}
+
+// Prop Hunt (hodgepodge 9). The stock onspawnplayer starts handleprop() for the defenders and
+// handleprop waits for "applyLoadout" to build the prop; the mode class is applied in the same
+// frame as the spawn, so on this build the notify arrives before the thread waits and no prop is
+// ever created (mp_crash: proplist 25, defenders alive with the hunter weapon, self.prop never
+// defined). Repeating the notify after the spawn is the same path a class change uses.
+install_ph()
+{
+    // ph_init() runs inside onstartgametype; wait until its globals exist (proplist from the CSV)
+    waited = 0;
+    while (waited < 10 && !isdefined(level.proplist))
+    {
+        wait 0.1;
+        waited = waited + 0.1;
+    }
+
+    if (!isdefined(level.proplist))
+        return;
+
+    // The party ref is level.gametype ("ph"/"mprops"), but MWR's hodgepodge code was written
+    // for g_gametype "war": its setupdvars only sets scr_war_* and the watched dvars are
+    // scr_<gametype>_*, so getgametypenumlives() stayed 0 (unlimited lives: dead props respawned,
+    // the round could never end by elimination). The watched-dvar table is filled before the
+    // party ref is known, so override the getter itself.
+    replacefunc(maps\mp\_utility::getgametypenumlives, ::ph_numlives_stub);
+
+    if (level.madpropsmode)
+    {
+        level.numlives = 4;
+    }
+    else
+    {
+        level.numlives = 1;
+    }
+
+    level.mwx_ph_fix = 1;
+
+    // the lives machinery stays ineffective with the party-ref gametype (see above); MWR asks
+    // level.gamemodemayspawn() before every spawn, so one life per round is enforced there
+    level.gamemodemayspawn = ::ph_mayspawn;
+    level thread ph_onconnect();
+
+    foreach (player in level.players)
+        player thread ph_ensure_prop();
+}
+
+ph_numlives_stub()
+{
+    if (level.madpropsmode)
+        return 4;
+    return 1;
+}
+
+// One life per round for the props (see install_ph). `ph_dead_this_round` is stamped by
+// ph_watch_death on the player's "death" notify and compared with game["roundsPlayed"], so a
+// new round spawns again without depending on the broken lives dvar.
+ph_mayspawn(shouldspawn)
+{
+    if (level.madpropsmode)
+        return 1;
+    if (!isdefined(self.team) || self.team != game["defenders"])
+        return 1;
+    if (!maps\mp\_utility::gamehasstarted())
+        return 1;
+    if (!isdefined(self.ph_dead_this_round))
+        return 1;
+
+    rounds = 0;
+    if (isdefined(game["roundsPlayed"]))
+        rounds = game["roundsPlayed"];
+
+    if (self.ph_dead_this_round == rounds)
+        return 0;
+
+    return 1;
+}
+
+ph_watch_death()
+{
+    self endon("disconnect");
+    level endon("game_ended");
+
+    for (;;)
+    {
+        self waittill("death");
+
+        rounds = 0;
+        if (isdefined(game["roundsPlayed"]))
+            rounds = game["roundsPlayed"];
+        self.ph_dead_this_round = rounds;
+    }
+}
+
+ph_onconnect()
+{
+    for (;;)
+    {
+        level waittill("connected", player);
+        player thread ph_ensure_prop();
+    }
+}
+
+ph_ensure_prop()
+{
+    self endon("disconnect");
+
+    if (!isdefined(self.ph_deathwatch))
+    {
+        self.ph_deathwatch = 1;
+        thread ph_watch_death();
+    }
+
+    for (;;)
+    {
+        wait 0.25;
+
+        if (!isdefined(game["defenders"]) || self.team != game["defenders"])
+            continue;
+
+        // this build starts the props with pers["lives"] 0 (the watched numlives dvar was
+        // registered before the party ref was known), which made every dead prop respawn and
+        // kept the round from ending. Prop Hunt gives the props one life.
+        if (!level.madpropsmode && isalive(self) && isdefined(self.pers["lives"]) && self.pers["lives"] <= 0)
+            self.pers["lives"] = 1;
+
+        if (isdefined(self.prop))
+            continue;
+        if (!isalive(self))
+            continue;
+
+        self notify("applyLoadout");
+    }
+}
+
+install_slasher()
+{
     // initmmmode() runs in onstartgametype, after the mode is known; it assigns the stock kill
     // handler, so the stub is installed after it
     waited = 0;

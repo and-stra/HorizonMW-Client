@@ -1121,6 +1121,14 @@ namespace mcp
 						{"team", {{"type", "string"}}}, {"target", target_schema()}}}, {"required", {"action"}}}},
 				},
 				{
+					{"name", "model_bounds"},
+					{"description", "XModel asset bounds: model or models[] -> {model, loaded, mins, maxs, radius, contents}. Used to size Prop Hunt props."},
+					{"inputSchema", {{"type", "object"}, {"properties", {
+						{"model", {{"type", "string"}}},
+						{"models", {{"type", "array"}, {"items", {{"type", "string"}}}}},
+						{"target", target_schema()}}}}},
+				},
+				{
 					{"name", "events"},
 					{"description", "Server-side event stream with a cursor: since = last id. Types: kill, damage, join, quit, spawn, team_change, match_end, script_error, console_error, console_warning, test_assert, test_done. 5000 events are kept."},
 					{"inputSchema", {{"type", "object"}, {"properties", {
@@ -1243,6 +1251,7 @@ namespace mcp
 			if (name == "gsc_eval") return rpc(target, "gsc_eval", {{"code", args.value("code", "")}}, 40);
 			if (name == "players") return rpc(target, "players", json::object(), 30);
 			if (name == "entities") return rpc(target, "entities", args, 30);
+			if (name == "model_bounds") return rpc(target, "model_bounds", args, 60);
 			if (name == "bots") return rpc(target, "bots", args, 30);
 
 			if (name == "input")

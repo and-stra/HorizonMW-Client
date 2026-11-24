@@ -814,6 +814,52 @@ namespace debug_api
 		return json{{"entities", parsed}};
 	}
 
+	json model_bounds(const json& params)
+	{
+		// XModel asset bounds (midPoint/halfSize), for the Prop Hunt prop list generator:
+		// the script side cannot read xmodel bounds (getentitymodelbounds returns 0 for script
+		// models) and spawning hundreds of models just to look at them needs a map load per batch.
+		auto bounds_of = [](const std::string& name) -> json
+		{
+			if (name.empty())
+			{
+				return json{{"error", "empty model name"}};
+			}
+
+			const auto asset = game::DB_FindXAssetHeader(game::ASSET_TYPE_XMODEL, name.data(), false);
+			const auto* model = asset.model;
+			if (model == nullptr)
+			{
+				return json{{"model", name}, {"loaded", false}};
+			}
+
+			const auto& b = model->bounds;
+			return json{
+				{"model", name},
+				{"loaded", true},
+				{"mins", {b.midPoint[0] - b.halfSize[0], b.midPoint[1] - b.halfSize[1], b.midPoint[2] - b.halfSize[2]}},
+				{"maxs", {b.midPoint[0] + b.halfSize[0], b.midPoint[1] + b.halfSize[1], b.midPoint[2] + b.halfSize[2]}},
+				{"radius", model->radius},
+				{"contents", model->contents},
+			};
+		};
+
+		if (params.contains("models") && params["models"].is_array())
+		{
+			json result = json::array();
+			for (const auto& entry : params["models"])
+			{
+				if (entry.is_string())
+				{
+					result.push_back(bounds_of(entry.get<std::string>()));
+				}
+			}
+			return json{{"models", result}};
+		}
+
+		return bounds_of(params.value("model", ""));
+	}
+
 	json bots(const json& params)
 	{
 		const auto action = params.value("action", "");
