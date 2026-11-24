@@ -47,7 +47,11 @@ slasher_botfire()
         // onmmspawnplayer ran allowfire(0) for every bot
         waittillframeend;
         if (self.team == "allies")
+        {
             self allowfire(1);
+            // visible for the game mode tests (GSC has no allowfire getter)
+            self.mwx_botfire = 1;
+        }
     }
 }
 
