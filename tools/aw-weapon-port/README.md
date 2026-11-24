@@ -23,9 +23,10 @@ Tools: x64-zt (`refs\tools\x64-zt`), the S1 copy in the AW folder (`zonetool.exe
    `python s1_weapon_to_h1.py <dump>\weapons\iw5_exocrossbow_mp.json GAME\zonetool\mod_sticksandstones\weapons\iw5_exocrossbow_mp.json`
    (no attachments; add `--attachment crossbowscopebase` only if ADS has no scope, then the attachment needs the same
    treatment).
-   The converter sets the weapon's hands model to `viewmodel_base_viewhands` and clears the exo-only anim slots.
-   The zone CSV must reference that model (`xmodel,,viewmodel_base_viewhands`, before the weapon): MWR's model is
-   used and the player's faction arms are drawn. Without a hands model there are no arms and the gun floats at the
+   The converter sets the weapon's hands model to `viewhands_tf141` and clears the exo-only anim slots.
+   The zone CSV must reference that model (`xmodel,,viewhands_tf141`, before the weapon). `viewmodel_base_viewhands`
+   (what HMW's weapons use) is not loaded yet when mod.ff loads and crashes the game. Full process and error list:
+   `docs/aw-weapon-porting.md`. Without a hands model there are no arms and the gun floats at the
    viewmodel origin; with AW's model built in, the exo arms would replace MWR's for every weapon.
    The zone must be built with the internal name `mod` (zone_source\mod.csv -> zone\mod.ff), otherwise the game
    fails with "Disc read error 'mod'".
