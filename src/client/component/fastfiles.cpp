@@ -116,6 +116,24 @@ namespace fastfiles
 
 		game::XAssetHeader db_find_xasset_header_stub(game::XAssetType type, const char* name, int allow_create_default)
 		{
+			// M4: a party ref (slasher, rpg, ...) is a real gametype whose script is the base gametype's
+			// script under the ref's name. Scr_LoadScript asks for "maps/mp/gametypes/<ref>"; return
+			// war.gsc for it so the script (and every label lookup later) resolves.
+			if (type == game::ASSET_TYPE_SCRIPTFILE && name)
+			{
+				if (const auto* alias = gamemodes::script_alias(name))
+				{
+					console::info("[gamemodes] script alias %s -> %s\n", name, alias);
+
+					auto alias_header = db_find_xasset_header_hook.invoke<game::XAssetHeader>(
+						game::ASSET_TYPE_SCRIPTFILE, alias, 0);
+					if (alias_header.scriptfile)
+					{
+						return alias_header;
+					}
+				}
+			}
+
 			// MWX: the zones still draw the MW2 loading icon; use HMW's own animated logo
 			// (material "hmw_loading_animation" in hmw_patch_code_post_gfx_mp) like the official client.
 			if (type == game::ASSET_TYPE_MATERIAL && name &&

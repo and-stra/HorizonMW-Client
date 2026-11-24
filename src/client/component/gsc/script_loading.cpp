@@ -147,7 +147,6 @@ namespace gsc
 		}
 
 		bool force_load = false;
-		bool translated = false;
 
 		std::vector<std::function<void()>> context_ready_callbacks;
 
@@ -280,6 +279,33 @@ namespace gsc
 			return {{reinterpret_cast<std::uint8_t*>(script_file->bytecode), static_cast<std::uint32_t>(script_file->bytecodeLen)}, stack_data};
 		}
 
+		utils::hook::detour scr_get_function_handle_hook;
+
+		// M4: the aliased gametype script (war.gsc) is registered under the base name, while the
+		// engine asks for labels with "maps/mp/gametypes/<party ref>"; resolve those names to the base.
+		unsigned int scr_get_function_handle_stub(const char* filename, const unsigned int handle)
+		{
+			if (filename != nullptr)
+			{
+				if (const auto* alias = gamemodes::script_alias(filename))
+				{
+					if (game::Dvar_FindVar("mwx_debug_gamemodes") && game::Dvar_FindVar("mwx_debug_gamemodes")->current.enabled)
+					{
+						console::info("[gamemodes] label lookup %s -> %s\n", filename, alias);
+					}
+
+					// the script is registered either under the requested name or under the base name
+					const auto aliased = scr_get_function_handle_hook.invoke<unsigned int>(alias, handle);
+					if (aliased != 0)
+					{
+						return aliased;
+					}
+				}
+			}
+
+			return scr_get_function_handle_hook.invoke<unsigned int>(filename, handle);
+		}
+
 		void load_script(const std::string& name)
 		{
 			if (!game::Scr_LoadScript(name.data()))
@@ -391,70 +417,37 @@ namespace gsc
 			return game::DB_IsXAssetDefault(type, name);
 		}
 
-		void load_gametype_script_stub(void* a1, void* a2)
+		utils::hook::detour db_xasset_exists_hook;
+		utils::hook::detour db_is_xasset_default_hook;
+
+		int db_xasset_exists_stub(game::XAssetType type, const char* name)
 		{
-			// MWX: translate a virtual party mode into its base gametype and mode dvars.
-			// `translated` means "translated, waiting for the restore in gamemodes::on_level_load":
-			// the loader runs twice per map load (the 2nd call must not touch anything), and a later
-			// reload of the scripts (e.g. when bots join) must translate again, so the flag is
-			// cleared by the restore, not only on shutdown.
-			if (!translated)
+			// M4: the alias script has no asset of its own; Scr_LoadScript checks the existence before it
+			// loads, so the party refs have to report "exists" here too.
+			if (type == game::ASSET_TYPE_SCRIPTFILE && name && gamemodes::script_alias(name))
 			{
-				const auto* gametype_dvar = game::Dvar_FindVar("g_gametype");
-				if (gametype_dvar && gametype_dvar->current.string)
-				{
-					const std::string gametype = gametype_dvar->current.string;
-					const auto* mode = gamemodes::find(gametype);
-					auto party_mode = false;
-
-					if (mode)
-					{
-						game::Dvar_SetFromStringByNameFromSource("g_gametype", mode->base, game::DVAR_SOURCE_INTERNAL);
-					}
-					else if (!game::environment::is_dedi())
-					{
-						const auto* party_dvar = game::Dvar_FindVar("mwx_party_mode");
-						if (party_dvar && party_dvar->current.string && *party_dvar->current.string)
-						{
-							const auto* party = gamemodes::find(party_dvar->current.string);
-							if (party && gametype == party->base)
-							{
-								mode = party;
-								party_mode = true;
-							}
-						}
-					}
-
-					if (mode)
-					{
-						game::Dvar_SetFromStringByNameFromSource("scr_game_hodgepodgeMode",
-							std::to_string(mode->hodgepodge).data(), game::DVAR_SOURCE_INTERNAL);
-						game::Dvar_SetFromStringByNameFromSource("scr_game_madprops",
-							std::to_string(mode->madprops).data(), game::DVAR_SOURCE_INTERNAL);
-						game::Dvar_SetFromStringByNameFromSource("mwx_gamemode", mode->ref, game::DVAR_SOURCE_INTERNAL);
-
-						if (party_mode)
-						{
-							console::info("[gamemodes] %s -> %s (party mode) (hodgepodge %i, madprops %i)\n",
-								mode->ref, mode->base, mode->hodgepodge, mode->madprops);
-						}
-						else
-						{
-							console::info("[gamemodes] %s -> %s (hodgepodge %i, madprops %i)\n",
-								mode->ref, mode->base, mode->hodgepodge, mode->madprops);
-						}
-					}
-					else
-					{
-						game::Dvar_SetFromStringByNameFromSource("scr_game_hodgepodgeMode", "0", game::DVAR_SOURCE_INTERNAL);
-						game::Dvar_SetFromStringByNameFromSource("scr_game_madprops", "0", game::DVAR_SOURCE_INTERNAL);
-						game::Dvar_SetFromStringByNameFromSource("mwx_gamemode", "", game::DVAR_SOURCE_INTERNAL);
-					}
-
-					translated = mode != nullptr;
-				}
+				return 1;
 			}
 
+			return db_xasset_exists_hook.invoke<int>(type, name);
+		}
+
+		int db_is_xasset_default_stub(game::XAssetType type, const char* name)
+		{
+			// a default script asset is not loaded; the alias must not look like one
+			if (type == game::ASSET_TYPE_SCRIPTFILE && name && gamemodes::script_alias(name))
+			{
+				return 0;
+			}
+
+			return db_is_xasset_default_hook.invoke<int>(type, name);
+		}
+
+		void load_gametype_script_stub(void* a1, void* a2)
+		{
+			// M4: no translation any more - a party ref stays in g_gametype, the script alias in the
+			// asset lookup loads the base gametype's script under the ref's name, and the GSC getdvar
+			// override reports the base name to the scripts.
 			utils::hook::invoke<void>(0x18BC00_b, a1, a2);
 
 			force_load = true;
@@ -591,18 +584,6 @@ namespace gsc
 		}
 	}
 
-	bool consume_translation()
-	{
-		const auto was_translated = translated;
-		translated = false;
-		return was_translated;
-	}
-
-	bool translation_pending()
-	{
-		return translated;
-	}
-
 	void on_context_ready(const std::function<void()>& callback)
 	{
 		context_ready_callbacks.push_back(callback);
@@ -667,6 +648,12 @@ namespace gsc
 			utils::hook::call(0x50E357_b, find_script);
 			utils::hook::call(0x50E367_b, db_is_x_asset_default);
 
+			// M4: label lookups of a party ref resolve to the base gametype's script
+			scr_get_function_handle_hook.create(game::Scr_GetFunctionHandle, scr_get_function_handle_stub);
+			// M4: Scr_LoadScript asks whether the script asset exists before loading it
+			db_xasset_exists_hook.create(game::DB_XAssetExists, db_xasset_exists_stub);
+			db_is_xasset_default_hook.create(game::DB_IsXAssetDefault, db_is_xasset_default_stub);
+
 			// GScr_LoadScripts: initial loading of scripts
 			utils::hook::call(0x18C325_b, load_gametype_script_stub);
 
@@ -675,7 +662,6 @@ namespace gsc
 
 			scripting::on_shutdown([](bool free_scripts, bool post_shutdown)
 			{
-				translated = false;
 				logfile::clear_callbacks();
 				if (free_scripts && post_shutdown)
 				{

@@ -17,6 +17,7 @@
 #include <utils/memory.hpp>
 #include <utils/compression.hpp>
 #include <utils/hook.hpp>
+#include <utils/string.hpp>
 
 #include <algorithm>
 #include <cstring>
@@ -328,6 +329,51 @@ namespace gamemodes
 		return nullptr;
 	}
 
+	const char* script_alias(const char* name)
+	{
+		constexpr auto prefix = "maps/mp/gametypes/";
+		constexpr auto prefix_len = sizeof("maps/mp/gametypes/") - 1;
+
+		if (!name || std::strncmp(name, prefix, prefix_len) != 0)
+		{
+			return nullptr;
+		}
+
+		const auto* mode = find(name + prefix_len);
+		if (!mode)
+		{
+			return nullptr;
+		}
+
+		// war.gsc contains the whole game logic (labels included); loading it under the party ref's
+		// name is what makes g_gametype=<ref> work without switching the dvar.
+		return utils::string::va("maps/mp/gametypes/%s", mode->base);
+	}
+
+	void apply_gametype(const char* gametype)
+	{
+		if (!gametype)
+		{
+			return;
+		}
+
+		const auto* mode = find(gametype);
+		if (mode)
+		{
+			game::Dvar_SetFromStringByNameFromSource("scr_game_hodgepodgeMode",
+				std::to_string(mode->hodgepodge).data(), game::DVAR_SOURCE_INTERNAL);
+			game::Dvar_SetFromStringByNameFromSource("scr_game_madprops",
+				std::to_string(mode->madprops).data(), game::DVAR_SOURCE_INTERNAL);
+			game::Dvar_SetFromStringByNameFromSource("mwx_gamemode", mode->ref, game::DVAR_SOURCE_INTERNAL);
+			return;
+		}
+
+		// normal gametype: a later match must not inherit a party mode's dvars
+		game::Dvar_SetFromStringByNameFromSource("scr_game_hodgepodgeMode", "0", game::DVAR_SOURCE_INTERNAL);
+		game::Dvar_SetFromStringByNameFromSource("scr_game_madprops", "0", game::DVAR_SOURCE_INTERNAL);
+		game::Dvar_SetFromStringByNameFromSource("mwx_gamemode", "", game::DVAR_SOURCE_INTERNAL);
+	}
+
 	namespace
 	{
 		bool debug_enabled()
@@ -340,21 +386,17 @@ namespace gamemodes
 
 		const mode* active_mode_for(const char* base)
 		{
-			// the running match wins over a lobby selection
-			for (const auto* dvar_name : {"mwx_gamemode", "mwx_party_mode"})
+			const auto* dvar = game::Dvar_FindVar("mwx_gamemode");
+			const auto* value = dvar && dvar->current.string ? dvar->current.string : nullptr;
+			if (!value || !*value)
 			{
-				const auto* dvar = game::Dvar_FindVar(dvar_name);
-				const auto* value = dvar && dvar->current.string ? dvar->current.string : nullptr;
-				if (!value || !*value)
-				{
-					continue;
-				}
+				return nullptr;
+			}
 
-				const auto* mode = find(value);
-				if (mode && std::strcmp(mode->base, base) == 0)
-				{
-					return mode;
-				}
+			const auto* mode = find(value);
+			if (mode && std::strcmp(mode->base, base) == 0)
+			{
+				return mode;
 			}
 
 			return nullptr;
@@ -383,7 +425,7 @@ namespace gamemodes
 			return ui_get_game_type_display_name_hook.invoke<const char*>(gametype);
 		}
 
-		void on_ui_gametype(game::dvar_value* value)
+		void on_g_gametype(game::dvar_value* value)
 		{
 			if (!value || !value->string)
 			{
@@ -392,41 +434,247 @@ namespace gamemodes
 
 			if (debug_enabled())
 			{
-				console::info("[gamemodes] ui_gametype <- %s\n", value->string);
+				console::info("[gamemodes] g_gametype <- %s\n", value->string);
 			}
 
-			const auto* party_dvar = game::Dvar_FindVar("mwx_party_mode");
-			if (!party_dvar || !party_dvar->current.string || !*party_dvar->current.string)
+			apply_gametype(value->string);
+		}
+
+		// ---------------------------------------------------------------- GSC getdvar override
+		// M4: the party ref stays in g_gametype (loading screen, scoreboard, menus show it), while the
+		// shipped GSC compares getdvar("g_gametype") with the base gametype ("war"). The H1 builtin
+		// table is an array of { const char* name; void (*func)(); int type; }; the entry for getdvar is
+		// found by looking for the name string and a pointer to it followed by a code pointer, then its
+		// function is detoured. Only the "g_gametype" name is rewritten.
+		struct memory_range
+		{
+			uintptr_t begin = 0;
+			uintptr_t end = 0;
+			bool executable = false;
+		};
+
+		std::vector<memory_range> module_ranges()
+		{
+			std::vector<memory_range> ranges;
+			const auto* base = reinterpret_cast<const std::uint8_t*>(GetModuleHandleA(nullptr));
+			if (!base)
 			{
-				return;
+				return ranges;
 			}
 
-			const auto* mode = find(party_dvar->current.string);
-			if (mode && std::strcmp(value->string, mode->base) == 0)
+			const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
+			if (dos->e_magic != IMAGE_DOS_SIGNATURE)
 			{
-				game::Dvar_SetFromStringByNameFromSource("ui_gametype", mode->ref, game::DVAR_SOURCE_INTERNAL);
+				return ranges;
+			}
+
+			const auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS*>(base + dos->e_lfanew);
+			if (nt->Signature != IMAGE_NT_SIGNATURE)
+			{
+				return ranges;
+			}
+
+			const auto* section = IMAGE_FIRST_SECTION(nt);
+			for (unsigned i = 0; i < nt->FileHeader.NumberOfSections; ++i)
+			{
+				const auto size = static_cast<uintptr_t>(std::max(section[i].Misc.VirtualSize, section[i].SizeOfRawData));
+				if (size == 0)
+				{
+					continue;
+				}
+
+				memory_range range{};
+				range.begin = reinterpret_cast<uintptr_t>(base + section[i].VirtualAddress);
+				range.end = range.begin + size;
+				range.executable = (section[i].Characteristics & IMAGE_SCN_MEM_EXECUTE) != 0;
+				ranges.push_back(range);
+			}
+
+			return ranges;
+		}
+
+		bool range_executable(const std::vector<memory_range>& ranges, const uintptr_t address)
+		{
+			for (const auto& range : ranges)
+			{
+				if (range.executable && address >= range.begin && address + 1 <= range.end)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		utils::hook::detour getdvar_hook;
+		bool getdvar_hooked = false;
+
+		// H1's builtin function table: an array of function pointers, indexed by the compiler's builtin
+		// id (xsk's h1_func.cpp: getdvar = 0x39). The names are not in the exe, so the table is found by
+		// its shape: a run of ~778 code pointers, with getdvar/getdvarint/getdvarfloat (0x39..0x3B) all
+		// valid. If that is not unique the override stays off.
+		constexpr auto h1_builtin_count = 778;
+		constexpr auto h1_getdvar_id = 0x39;
+
+		void getdvar_stub()
+		{
+			const auto* name = game::Scr_GetString(0);
+			if (name && std::strcmp(name, "g_gametype") == 0)
+			{
+				const auto* gametype = game::Dvar_FindVar("g_gametype");
+				if (gametype && gametype->current.string && find(gametype->current.string))
+				{
+					game::Scr_AddString(find(gametype->current.string)->base);
+					return;
+				}
+			}
+
+			if (getdvar_hooked)
+			{
+				getdvar_hook.invoke<void>();
 			}
 		}
 
-		void on_party_mode(game::dvar_value* value)
+		void install_getdvar_override()
 		{
-			if (!value || !value->string)
+			const auto ranges = module_ranges();
+			if (ranges.empty())
 			{
+				console::warn("[gamemodes] cannot find the module ranges, GSC getdvar override off\n");
 				return;
 			}
 
-			const auto* mode = find(value->string);
-			if (!mode)
+			std::vector<uintptr_t> tables;
+
+			for (const auto& range : ranges)
 			{
+				if (range.executable)
+				{
+					continue;
+				}
+
+				auto start = range.begin;
+				auto count = 0u;
+
+				for (auto addr = range.begin; addr + sizeof(uintptr_t) <= range.end; addr += sizeof(uintptr_t))
+				{
+					const auto value = *reinterpret_cast<const uintptr_t*>(addr);
+					const auto valid = value == 0 || range_executable(ranges, value);
+
+					if (valid)
+					{
+						if (count == 0)
+						{
+							start = addr;
+						}
+						count++;
+						continue;
+					}
+
+
+					if (count == h1_builtin_count &&
+						range_executable(ranges, *reinterpret_cast<const uintptr_t*>(start + (h1_getdvar_id + 1) * sizeof(uintptr_t))) &&
+						range_executable(ranges, *reinterpret_cast<const uintptr_t*>(start + (h1_getdvar_id + 2) * sizeof(uintptr_t))))
+					{
+						tables.push_back(start);
+					}
+
+					count = 0;
+				}
+
+				if (count == h1_builtin_count &&
+					range_executable(ranges, *reinterpret_cast<const uintptr_t*>(start + (h1_getdvar_id + 1) * sizeof(uintptr_t))) &&
+					range_executable(ranges, *reinterpret_cast<const uintptr_t*>(start + (h1_getdvar_id + 2) * sizeof(uintptr_t))))
+				{
+					tables.push_back(start);
+				}
+			}
+
+			if (tables.size() != 1)
+			{
+				// H1 may store { u32 name-hash, u32 type, void (*func)(); } (16 bytes per entry): then only
+				// every second qword is a code pointer and the 8-byte scan above finds nothing.
+				std::vector<uintptr_t> stride_tables;
+				std::vector<int> stride_offsets;
+
+				for (const auto& range : ranges)
+				{
+					if (range.executable)
+					{
+						continue;
+					}
+
+					for (auto func_offset = 0; func_offset <= 8; func_offset += 8)
+					{
+						auto start = range.begin;
+						auto count = 0u;
+
+						for (auto addr = range.begin; addr + 16 <= range.end; addr += 16)
+						{
+							const auto function = *reinterpret_cast<const uintptr_t*>(addr + func_offset);
+							const auto other = *reinterpret_cast<const uintptr_t*>(addr + (func_offset == 0 ? 8 : 0));
+							const auto valid = range_executable(ranges, function) && !range_executable(ranges, other);
+
+							if (valid)
+							{
+								if (count == 0)
+								{
+									start = addr;
+								}
+								count++;
+								continue;
+							}
+
+							if (count == h1_builtin_count)
+							{
+								stride_tables.push_back(start);
+								stride_offsets.push_back(func_offset);
+							}
+
+							count = 0;
+						}
+
+						if (count == h1_builtin_count)
+						{
+							stride_tables.push_back(start);
+							stride_offsets.push_back(func_offset);
+						}
+					}
+				}
+
+				if (stride_tables.size() != 1)
+				{
+					console::warn("[gamemodes] %zu/%zu builtin tables, GSC getdvar override off\n",
+						tables.size(), stride_tables.size());
+					return;
+				}
+
+				const auto function = *reinterpret_cast<const uintptr_t*>(
+					stride_tables.front() + h1_getdvar_id * 16 + stride_offsets.front());
+				if (!range_executable(ranges, function))
+				{
+					console::warn("[gamemodes] stride getdvar slot is not code, GSC getdvar override off\n");
+					return;
+				}
+
+				getdvar_hook.create(reinterpret_cast<void*>(function), getdvar_stub);
+				getdvar_hooked = true;
+				console::info("[gamemodes] GSC getdvar(g_gametype) override on (stride table 0x%llX, getdvar 0x%llX)\n",
+					static_cast<unsigned long long>(stride_tables.front()),
+					static_cast<unsigned long long>(function));
 				return;
 			}
 
-			const auto* gametype_dvar = game::Dvar_FindVar("ui_gametype");
-			if (gametype_dvar && gametype_dvar->current.string &&
-				std::strcmp(gametype_dvar->current.string, mode->base) == 0)
+			const auto function = *reinterpret_cast<const uintptr_t*>(tables.front() + h1_getdvar_id * sizeof(uintptr_t));
+			if (!range_executable(ranges, function))
 			{
-				game::Dvar_SetFromStringByNameFromSource("ui_gametype", mode->ref, game::DVAR_SOURCE_INTERNAL);
+				console::warn("[gamemodes] getdvar slot is not code, GSC getdvar override off\n");
+				return;
 			}
+
+			getdvar_hook.create(reinterpret_cast<void*>(function), getdvar_stub);
+			getdvar_hooked = true;
+			console::info("[gamemodes] GSC getdvar(g_gametype) override on (table 0x%llX, getdvar 0x%llX)\n",
+				static_cast<unsigned long long>(tables.front()), static_cast<unsigned long long>(function));
 		}
 	}
 
@@ -469,29 +717,6 @@ namespace gamemodes
 		cached_table.result = build_stringtable(original);
 		cached_table.done = true;
 		return cached_table.result ? cached_table.result : original;
-	}
-
-	void on_level_load()
-	{
-		if (!gsc::consume_translation())
-		{
-			return;
-		}
-
-		const auto* gamemode_dvar = game::Dvar_FindVar("mwx_gamemode");
-		if (!gamemode_dvar || !gamemode_dvar->current.string || !*gamemode_dvar->current.string)
-		{
-			return;
-		}
-
-		const auto* mode = find(gamemode_dvar->current.string);
-		if (!mode)
-		{
-			return;
-		}
-
-		game::Dvar_SetFromStringByNameFromSource("g_gametype", mode->ref, game::DVAR_SOURCE_INTERNAL);
-		console::info("[gamemodes] g_gametype restored to %s\n", mode->ref);
 	}
 
 	class component final : public component_interface
@@ -579,13 +804,19 @@ namespace gamemodes
 				}
 			}
 
-			if (!game::environment::is_dedi())
+			// M4: the party ref is the gametype; the mode dvars follow it (both on the server and on a
+			// listen host/client, so a dedicated server with +set g_gametype slasher works too)
+			dvars::callback::on_new_value("g_gametype", on_g_gametype);
+			install_getdvar_override();
+			scheduler::once([]()
 			{
-				dvars::callback::on_new_value("ui_gametype", on_ui_gametype);
-				dvars::callback::on_new_value("mwx_party_mode", on_party_mode);
-				// on_g_gametype is disabled: with g_gametype = the party ref at match start, the engine looked up
-				// labels in maps/mp/gametypes/<party ref> ("Could not find label in script ...slasher")
-			}
+				// the command line (+set g_gametype ...) is applied before the callback exists
+				const auto* gametype = game::Dvar_FindVar("g_gametype");
+				if (gametype && gametype->current.string)
+				{
+					apply_gametype(gametype->current.string);
+				}
+			}, scheduler::pipeline::main);
 
 			ui_get_game_type_display_name_hook.create(game::UI_GetGameTypeDisplayName,
 				ui_get_game_type_display_name_stub);
@@ -594,8 +825,6 @@ namespace gamemodes
 			{
 				dvars::register_string("mwx_gamemode", "", game::DVAR_FLAG_NONE,
 					"Current MWX party game mode (empty for normal modes)");
-				dvars::register_string("mwx_party_mode", "", game::DVAR_FLAG_NONE,
-					"Selected MWX party game mode (base gametype stays unchanged)");
 				dvars::register_bool("mwx_gsc_print", false, game::DVAR_FLAG_NONE, "Print GSC print()/println() output to the console (release builds)");
 				dvars::register_bool("mwx_debug_gamemodes", false, game::DVAR_FLAG_NONE,
 					"Log gamemode dvar writes and the loading screen menu");

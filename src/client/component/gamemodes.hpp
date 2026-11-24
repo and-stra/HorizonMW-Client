@@ -18,8 +18,13 @@ namespace gamemodes
 	// The virtual party game modes in one place.
 	const mode* find(const std::string& ref);
 
-	// Puts the party mode ref back into g_gametype after the gametype script read it.
-	void on_level_load();
+	// M4: the party refs are real gametypes whose script is the base gametype's script under another
+	// name. Returns the real script name to load for `name` ("maps/mp/gametypes/<ref>" ->
+	// "maps/mp/gametypes/war"), or nullptr when `name` is not a party ref.
+	const char* script_alias(const char* name);
+
+	// Sets scr_game_hodgepodgeMode / scr_game_madprops / mwx_gamemode for a g_gametype value.
+	void apply_gametype(const char* gametype);
 
 	// Appends the virtual refs to maps/mp/gametypes/_gametypes.txt.
 	game::RawFile* patch_rawfile(game::RawFile* original);

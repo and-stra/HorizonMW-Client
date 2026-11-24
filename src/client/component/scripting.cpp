@@ -129,7 +129,6 @@ namespace scripting
 
 		void scr_load_level_stub()
 		{
-			gamemodes::on_level_load();
 			gsc::load_init_handles();
 			scr_load_level_hook.invoke<void>();
 		}

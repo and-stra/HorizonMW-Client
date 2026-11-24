@@ -21,50 +21,5 @@ if Cac.GameModes.Data.Standard then
     Cac.GameModes.Data.Standard.List = { "dm", "war", "sd", "dom", "conf", "sab", "koth", "hp", "dz" }
 end
 
-local party_base = { ph = "war", mprops = "war", slasher = "war", snipers = "war", rpg = "war" }
-
--- name keys of the virtual modes (must match the C++ mode table in gamemodes.cpp)
-local party_name = {
-    ph = "MWX_GAMETYPE_PH",
-    mprops = "MWX_GAMETYPE_MPROPS",
-    slasher = "MWX_GAMETYPE_SLASHER",
-    snipers = "MWX_GAMETYPE_SNIPERS",
-    rpg = "MWX_GAMETYPE_RPG"
-}
-
--- selecting a mode in game setup goes through MatchRules.SetData("gametype", ref)
-local set_data = MatchRules.SetData
-MatchRules.SetData = function(key, value, ...)
-    if key == "gametype" then
-        local base = party_base[value]
-        if base then
-            Engine.SetDvarString("mwx_party_mode", value)
-            return set_data(key, base, ...)
-        end
-        Engine.SetDvarString("mwx_party_mode", "")
-    end
-    return set_data(key, value, ...)
-end
-
-local get_data = MatchRules.GetData
-MatchRules.GetData = function(key, ...)
-    local value = get_data(key, ...)
-    if key == "gametype" and select("#", ...) == 0 then
-        local mode = Engine.GetDvarString("mwx_party_mode")
-        if mode ~= "" and party_base[mode] == value then
-            return mode
-        end
-    end
-    return value
-end
-
--- the private lobby label and the setup menu mode button read Lobby.GameTypeNameAbbreviated()
-local game_type_name_abbreviated = Lobby.GameTypeNameAbbreviated
-Lobby.GameTypeNameAbbreviated = function(...)
-    local name = party_name[Engine.GetDvarString("mwx_party_mode")]
-    if name then
-        -- same case as the stock modes (the _CAPS name made party modes look different from Infected)
-        return Engine.Localize("@" .. name)
-    end
-    return game_type_name_abbreviated(...)
-end
+-- M4: the party refs are real gametypes (script alias + gametypesTable row), so the stock menus do the
+-- whole selection (MatchRules, lobby label, loadscreen) with no wrappers.

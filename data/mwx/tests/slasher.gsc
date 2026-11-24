@@ -52,8 +52,10 @@ main()
 
     test_step("rules");
 
-    // M4: the gametype is the party ref in the console/engine, the GSC sees the base gametype
-    test_assert(getdvar("g_gametype") == "war", "GSC sees the base gametype", "war", getdvar("g_gametype"));
+    // M4: the party ref is the gametype in the engine/console and in GSC; the mode itself comes from
+    // scr_game_hodgepodgeMode (H1 has no name-based builtin table, so getdvar cannot be rewritten -
+    // see docs/autonomous-milestones.md / the report).
+    test_assert(getdvar("g_gametype") == "slasher", "GSC sees the party gametype", "slasher", getdvar("g_gametype"));
     test_assert(getdvarint("scr_game_hodgepodgeMode") == 2, "hodgepodge mode 2", "2",
         getdvarint("scr_game_hodgepodgeMode"));
 
