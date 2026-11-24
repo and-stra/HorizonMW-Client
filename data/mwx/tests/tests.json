@@ -7,6 +7,18 @@
     "timeout_s": 300,
     "dvars": {
       "scr_infect_timelimit": "2",
+      "mwx_test_bots": 4
+    }
+  },
+  {
+    "name": "infect_time",
+    "script": "infect",
+    "gametype": "infect",
+    "map": "mp_shipment",
+    "timeout_s": 300,
+    "dvars": {
+      "mwx_test_time_end": 1,
+      "scr_infect_timelimit": "1",
       "mwx_test_bots": 3
     }
   },
@@ -19,6 +31,18 @@
     "dvars": {
       "scr_war_scorelimit": 20,
       "scr_war_timelimit": 2,
+      "mwx_test_bots": 4
+    }
+  },
+  {
+    "name": "dm",
+    "script": "war",
+    "gametype": "dm",
+    "map": "mp_shipment",
+    "timeout_s": 300,
+    "dvars": {
+      "scr_dm_scorelimit": 20,
+      "scr_dm_timelimit": 2,
       "mwx_test_bots": 4
     }
   },
@@ -57,6 +81,69 @@
     }
   },
   {
+    "name": "slasher",
+    "script": "slasher",
+    "gametype": "war",
+    "map": "mp_shipment",
+    "timeout_s": 300,
+    "dvars": {
+      "scr_game_hodgepodgeMode": 2,
+      "mwx_test_bots": 4
+    }
+  },
+  {
+    "name": "rpg",
+    "script": "rpg",
+    "gametype": "war",
+    "map": "mp_shipment",
+    "timeout_s": 300,
+    "dvars": {
+      "scr_game_hodgepodgeMode": 6,
+      "mwx_test_bots": 4
+    }
+  },
+  {
+    "name": "oic",
+    "script": "oic",
+    "gametype": "oic",
+    "map": "mp_shipment",
+    "timeout_s": 300,
+    "dvars": {
+      "mwx_test_bots": 4
+    }
+  },
+  {
+    "name": "aon",
+    "script": "aon",
+    "gametype": "aon",
+    "map": "mp_shipment",
+    "timeout_s": 300,
+    "dvars": {
+      "mwx_test_bots": 3
+    }
+  },
+  {
+    "name": "cranked",
+    "script": "cranked",
+    "gametype": "cranked",
+    "map": "mp_shipment",
+    "timeout_s": 300,
+    "dvars": {
+      "mwx_test_bots": 4
+    }
+  },
+  {
+    "name": "sas",
+    "script": "sas",
+    "gametype": "sas",
+    "map": "mp_shipment",
+    "mod": "mods/sticksandstones",
+    "timeout_s": 300,
+    "dvars": {
+      "mwx_test_bots": 3
+    }
+  },
+  {
     "name": "infect_rust",
     "script": "infect",
     "gametype": "infect",
@@ -64,7 +151,7 @@
     "timeout_s": 300,
     "dvars": {
       "scr_infect_timelimit": "2",
-      "mwx_test_bots": 3
+      "mwx_test_bots": 4
     }
   },
   {
@@ -84,7 +171,6 @@
     "script": "war",
     "gametype": "war",
     "map": "mp_terrace",
-    "listen": true,
     "timeout_s": 300,
     "dvars": {
       "scr_war_scorelimit": 20,

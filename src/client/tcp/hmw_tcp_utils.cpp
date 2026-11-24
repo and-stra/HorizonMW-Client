@@ -371,8 +371,6 @@ std::string getInfo_Json()
 		data["sv_running"] = utils::string::va("%i", party::get_dvar_bool("sv_running") && !game::VirtualLobby_Loaded());
 		data["dedicated"] = utils::string::va("%i", party::get_dvar_bool("dedicated"));
 		data["sv_wwwBaseUrl"] = party::get_dvar_string("sv_wwwBaseUrl");
-		data["sv_discordImageUrl"] = party::get_dvar_string("sv_discordImageUrl");
-		data["sv_discordImageText"] = party::get_dvar_string("sv_discordImageText");
 		data["port"] = utils::string::va("%i", party::get_dvar_int("net_port"));
 		data["sv_privateClients"] = utils::string::va("%i", party::get_dvar_int("sv_privateClients"));
 		data["sv_serverkey"] = party::get_dvar_string("sv_serverkey");

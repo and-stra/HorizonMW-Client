@@ -8,6 +8,7 @@
 #include <utils/string.hpp>
 
 #include <algorithm>
+#include <set>
 
 // MWX MCP bridge (stdio, newline-delimited JSON-RPC 2.0).
 //
@@ -429,6 +430,7 @@ namespace mcp
 			std::string script;
 			std::string map;
 			std::string gametype;
+			std::string mod;
 			json dvars = json::object();
 			int timeout_s = 300;
 			bool listen = false;
@@ -469,6 +471,7 @@ namespace mcp
 				test.script = entry.value("script", name);
 				test.map = entry.value("map", "mp_shipment");
 				test.gametype = entry.value("gametype", test.script);
+				test.mod = entry.value("mod", "");
 				test.dvars = entry.value("dvars", json::object());
 				test.timeout_s = entry.value("timeout_s", 300);
 				test.listen = entry.value("listen", false);
@@ -642,7 +645,7 @@ namespace mcp
 				auto test_dvars = test.dvars;
 				test_dvars["mwx_test"] = test.script;
 				started = start_instance(true, json{{"map", test.map}, {"gametype", test.gametype},
-					{"dvars", test_dvars}, {"test_mode", true}});
+					{"mod", test.mod}, {"dvars", test_dvars}, {"test_mode", true}});
 			}
 			if (started.contains("error"))
 			{
@@ -721,6 +724,7 @@ namespace mcp
 			const auto deadline = start + std::chrono::seconds(test.timeout_s);
 			json done{};
 			json events{};
+			std::set<int> handled_actions;
 
 			while (std::chrono::steady_clock::now() < deadline)
 			{
@@ -738,6 +742,19 @@ namespace mcp
 						{
 							done = event;
 							break;
+						}
+
+						// the test asks the runner for a console command (late joiner, map change, ...)
+						if (event["type"] == "test_action" && event["data"].contains("command"))
+						{
+							const auto idnum = event.value("id", 0);
+							if (!handled_actions.contains(idnum))
+							{
+								handled_actions.insert(idnum);
+								const auto command = event["data"]["command"].get<std::string>();
+								fprintf(stderr, "mwx mcp: test %s runs '%s'\n", test.name.data(), command.data());
+								rpc(id, "command", {{"command", command}}, 10);
+							}
 						}
 					}
 				}

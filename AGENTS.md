@@ -41,12 +41,14 @@ friends on LAN, short loading times. No master server, accounts or anti-cheat.
 | `repack.cpp` | `mwx.exe -repack all` (hmw-mod\zone only; `usermaps` / `everything` / zone names also possible): zlib zones → LZ4 blocks |
 
 - `data/mwx/` is copied to `GAME\mwx\` by `build-mwx.bat`; `GAME\mwx\ui_scripts\` is loaded after HMW's zone ui_scripts (also in release).
-- autoplay: `mwx_autoplay 1` skips the intro and presses Play Online once.
+- The test interface MCP (`mwx.exe -mcp`) replaces the old autoplay hack: the main menu "Play"
+  button works offline, no automatic key presses.
 
 ## Testing
 
-- Use the MCP tools (`start_game`, `wait_for`, `load_times`, `console_log`, `game_status`),
-  see [docs/mcp.md](docs/mcp.md).
+- Use the MCP tools (`start_client`, `start_server`, `wait_for`, `players`, `events`, `screenshot`,
+  `ui_snapshot`/`ui_click`, `gsc_eval`, `run_test`, `run_all_tests`, `load_times`, `console_log`),
+  see [docs/mcp.md](docs/mcp.md) and [docs/testing.md](docs/testing.md).
 - Logs in the game folder: `mwx-logs\load_times.log`, `mwx-logs\repack.log`,
   `hmw-mod\logs\games_mp.log`, crash dumps in `minidumps\`.
 - opencode integration: `opencode.json` in the repo root registers the MWX MCP server

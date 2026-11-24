@@ -1,0 +1,182 @@
+// MWX test: One in the Chamber (oic.gsc): revolver with 1 round, +1 round per kill, 3 lives, the
+// last player alive wins.
+
+#include mwx\tests\_test;
+
+wait_alive(player, timeout)
+{
+    waited = 0;
+    while (waited < timeout)
+    {
+        if (isalive(player))
+            return 1;
+
+        wait 0.25;
+        waited = waited + 0.25;
+    }
+
+    return 0;
+}
+
+alivecount()
+{
+    count = 0;
+    foreach (player in level.players)
+    {
+        if (isdefined(player.team) && isalive(player))
+            count++;
+    }
+
+    return count;
+}
+
+first_alive(ignore1, ignore2)
+{
+    foreach (player in level.players)
+    {
+        if (!isdefined(player.team) || !isalive(player))
+            continue;
+
+        if (isdefined(ignore1) && player == ignore1)
+            continue;
+        if (isdefined(ignore2) && player == ignore2)
+            continue;
+
+        return player;
+    }
+
+    return undefined;
+}
+
+ammo_total(player)
+{
+    return player getweaponammoclip(player.oic_weapon) + player getweaponammostock(player.oic_weapon);
+}
+
+// kills `victim` three times (oic: 3 lives) and returns 1 when the victim stops respawning
+eliminate(attacker, victim)
+{
+    deaths = 0;
+    tries = 0;
+
+    while (tries < 6)
+    {
+        tries++;
+        if (!wait_alive(victim, 10))
+            break;
+
+        wait 0.5;
+        test_kill(victim, attacker, attacker.oic_weapon);
+        deaths++;
+        wait 0.5;
+    }
+
+    // after the third death there is no respawn
+    wait 3;
+
+    if (isalive(victim))
+        return 0;
+
+    return 1;
+}
+
+main()
+{
+    test_step("wait for the players");
+
+    players = test_wait_players(4, 120);
+    test_assert(players >= 4, "players spawned", ">=4", players);
+
+    test_step("loadout");
+
+    first = undefined;
+    badloadout = 0;
+    foreach (player in level.players)
+    {
+        if (!isdefined(player.team) || !isalive(player))
+            continue;
+
+        if (!isdefined(first))
+            first = player;
+
+        if (!isdefined(player.oic_weapon))
+        {
+            badloadout++;
+            continue;
+        }
+
+        if (!(player hasweapon(player.oic_weapon)))
+            badloadout++;
+        if (player getweaponammoclip(player.oic_weapon) > 1)
+            badloadout++;
+        if (player getweaponammostock(player.oic_weapon) != 0)
+            badloadout++;
+    }
+
+    test_assert(badloadout == 0, "revolver with one round, no stock", "0", badloadout);
+    test_assert(getdvarint("scr_oic_numlives") == 3, "three lives", "3", getdvarint("scr_oic_numlives"));
+
+    if (!isdefined(first))
+    {
+        test_done(0);
+        return;
+    }
+
+    test_step("a kill gives one round");
+
+    attacker = first;
+    victim = first_alive(attacker);
+    test_assert(isdefined(victim), "victim", "player", isdefined(victim) ? victim.name : "none");
+    if (!isdefined(victim))
+    {
+        test_done(0);
+        return;
+    }
+
+    attacker setweaponammoclip(attacker.oic_weapon, 0);
+    attacker setweaponammostock(attacker.oic_weapon, 0);
+    wait 0.2;
+
+    test_kill(victim, attacker, attacker.oic_weapon);
+    wait 1;
+
+    after = ammo_total(attacker);
+    test_assert(after == 1, "one kill, one round", "1", after);
+
+    test_step("lives");
+
+    // two more kills: the victim respawns twice and is gone after the third death
+    eliminated = eliminate(attacker, victim);
+    test_assert(eliminated, "victim eliminated after three deaths", "1", eliminated);
+
+    test_step("last player alive wins");
+
+    other = first_alive(attacker);
+    if (isdefined(other))
+    {
+        eliminated = eliminate(attacker, other);
+        test_assert(eliminated, "second player eliminated", "1", eliminated);
+    }
+
+    other = first_alive(attacker);
+    if (isdefined(other))
+    {
+        eliminated = eliminate(attacker, other);
+        test_assert(eliminated, "third player eliminated", "1", eliminated);
+    }
+
+    waited = 0;
+    while (waited < 20 && !level.gameended)
+    {
+        wait 0.25;
+        waited = waited + 0.25;
+    }
+
+    ended = 0;
+    if (level.gameended)
+        ended = 1;
+    test_assert(ended, "game ended when one player was left", "1", ended);
+    test_assert(alivecount() == 1, "exactly one player alive", "1", alivecount());
+
+    test_done(1);
+}

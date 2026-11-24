@@ -83,6 +83,31 @@ end)
 
 -- HMW has no LUI.addmenubutton (calling it threw at frontend load and crashed the
 -- client in the engine's error path); wrap the registered mp_main_menu builder instead.
+local function move_before_last(list)
+    local children = {}
+    local child = list:getFirstChild()
+    while child ~= nil do
+        children[#children + 1] = child
+        child = child:getNextSibling()
+    end
+
+    local count = #children
+    if count < 2 then return end
+
+    -- the last element is the button AddButton just added (MODS), the one before it is Quit
+    local mods = children[count]
+    for i = 1, count do
+        list:removeElement(children[i])
+    end
+
+    for i = 1, count - 2 do
+        list:addElement(children[i])
+    end
+
+    list:addElement(mods)
+    list:addElement(children[count - 1])
+end
+
 local build_main_menu = LUI.MenuBuilder.m_types_build["mp_main_menu"]
 if type(build_main_menu) == "function" then
     LUI.MenuBuilder.m_types_build["mp_main_menu"] = function(menu, event)
@@ -90,6 +115,11 @@ if type(build_main_menu) == "function" then
         result:AddButton("@MWX_MENU_MODS", function()
             LUI.FlowManager.RequestAddMenu(nil, "mwx_mods_menu")
         end)
+
+        if result.list ~= nil then
+            move_before_last(result.list)
+        end
+
         return result
     end
 end

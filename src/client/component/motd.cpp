@@ -127,7 +127,6 @@ namespace motd
 		{
 			map =
 			{
-				{"discord", "https://discord.gg/horizonmw"},
 				{"website", "https://www.youtube.com/@horizonmw"},
 			};
 		}

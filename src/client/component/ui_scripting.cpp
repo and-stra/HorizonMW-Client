@@ -9,7 +9,6 @@
 
 #include "localized_strings.hpp"
 #include "console.hpp"
-#include "discord.hpp"
 #include "download.hpp"
 #include "game_module.hpp"
 #include "fps.hpp"
@@ -34,7 +33,6 @@
 
 #include "steam/steam.hpp"
 
-#include <discord_rpc.h>
 #include "stats.hpp"
 #include "voice/voice_chat_globals.hpp"
 
@@ -519,29 +517,7 @@ namespace ui_scripting
 				return state.base_url;
 			};
 
-			auto discord_table = table();
-			lua["discord"] = discord_table;
-
-			discord_table["respond"] = discord::respond;
-
-			discord_table["getavatarmaterial"] = [](const std::string& id)
-				-> script_value
-			{
-				const auto material = discord::get_avatar_material(id);
-				if (material == nullptr)
-				{
-					return {};
-				}
-
-				return lightuserdata(material);
-			};
-
-			discord_table["reply"] = table();
-			discord_table["reply"]["yes"] = DISCORD_REPLY_YES;
-			discord_table["reply"]["ignore"] = DISCORD_REPLY_IGNORE;
-			discord_table["reply"]["no"] = DISCORD_REPLY_NO;
-
-			auto motd_table = table();
+						auto motd_table = table();
 			lua["motd"] = motd_table;
 
 			motd_table["getnumfeaturedtabs"] = motd::get_num_featured_tabs;
@@ -916,12 +892,6 @@ namespace ui_scripting
 			}
 
 			dvars::register_bool("r_preloadShadersFrontendAllow", true, game::DVAR_FLAG_SAVED, "Allow shader popup on startup");
-
-			scheduler::once([]()
-			{
-				dvars::register_bool("mwx_autoplay", true, game::DVAR_FLAG_SAVED,
-					"Skip the intro and press Play Online once on startup");
-			}, scheduler::pipeline::main);
 
 			utils::hook::call(0x25E809_b, db_find_x_asset_header_stub);
 			utils::hook::call(0x25E6BB_b, db_find_x_asset_header_stub);

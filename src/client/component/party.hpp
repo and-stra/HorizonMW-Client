@@ -13,12 +13,6 @@ namespace party
 		std::string base_url;
 	};
 
-	struct discord_information
-	{
-		std::string image;
-		std::string image_text;
-	};
-
 	void user_download_response(bool response);
 
 	void menu_error(const std::string& error);
@@ -31,7 +25,6 @@ namespace party
 
 	void clear_sv_motd();
 	connection_state get_server_connection_state();
-	std::optional<discord_information> get_server_discord_info();
 
 	int get_client_num_by_name(const std::string& name);
 

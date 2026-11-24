@@ -42,7 +42,6 @@ namespace party
 	namespace
 	{
 		connection_state server_connection_state{};
-		std::optional<discord_information> server_discord_info{};
 
 		struct
 		{
@@ -755,14 +754,6 @@ namespace party
 				std::string maxclients = jsonObject.value("sv_maxclients", "0");
 				server_connection_state.max_clients = std::stoi(maxclients);
 
-				discord_information discord_info{};
-				discord_info.image = jsonObject.value("sv_discordImageUrl", "");
-				discord_info.image_text = jsonObject.value("sv_discordImageText", "");
-				if (!discord_info.image.empty() || !discord_info.image_text.empty())
-				{
-					server_discord_info.emplace(discord_info);
-				}
-
 				connecting_to_server = false;
 				voice_chat_globals::set_voice_message_shown_state(false);
 				connect_to_party(target, mapname, gametype);
@@ -926,11 +917,6 @@ namespace party
 	connection_state get_server_connection_state()
 	{
 		return server_connection_state;
-	}
-
-	std::optional<discord_information> get_server_discord_info()
-	{
-		return server_discord_info;
 	}
 
 	class component final : public component_interface
@@ -1229,8 +1215,6 @@ namespace party
 					info.set("sv_running", utils::string::va("%i", get_dvar_bool("sv_running") && !game::VirtualLobby_Loaded()));
 					info.set("dedicated", utils::string::va("%i", get_dvar_bool("dedicated")));
 					info.set("sv_wwwBaseUrl", get_dvar_string("sv_wwwBaseUrl"));
-					info.set("sv_discordImageUrl", get_dvar_string("sv_discordImageUrl"));
-					info.set("sv_discordImageText", get_dvar_string("sv_discordImageText"));
 
 					if (!fastfiles::is_stock_map(mapname))
 					{

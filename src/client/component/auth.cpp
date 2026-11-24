@@ -5,7 +5,6 @@
 #include "clantags.hpp"
 #include "command.hpp"
 #include "console.hpp"
-#include "discord.hpp"
 #include "network.hpp"
 
 #include "game/game.hpp"
@@ -125,9 +124,6 @@ namespace auth
 
 			utils::info_string info_string{ std::string{params[2]} };
 
-			// add discord ID to connect info string
-			info_string.set(hash_string("discord_id"), discord::get_discord_id());
-
 			const auto challenge = info_string.get(hash_string("challenge"));
 
 			connect_string.clear();
@@ -195,8 +191,6 @@ namespace auth
 				CALL(&network::send, *from, "error", "Challenge signature was invalid!", '\n');
 				return;
 			}
-
-			auto discordid = info_string.get(hash_string("discord_id"));
 
 			if (game::VirtualLobby_Loaded())
 			{
