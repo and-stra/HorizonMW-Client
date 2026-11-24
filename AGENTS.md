@@ -60,6 +60,7 @@ friends on LAN, short loading times. No master server, accounts or anti-cheat.
 - Game mode tests: `data/mwx/tests/<name>.gsc` + an entry in `data/mwx/tests/tests.json`. Run them
   with `run_all_tests` (a background job, poll `test_status`) or, without the MCP,
   `powershell -File tools\test\run-tests.ps1 [-Name <test>]`. A full run is ~20-25 minutes.
+  Weapons, perks, loadouts and spawn timing for new modes: [docs/hmw-weapons-perks.md](docs/hmw-weapons-perks.md).
 - One MCP tool call must stay under ~60 s: opencode kills the MCP server when a call runs longer,
   so `run_test`/`run_all_tests` return a job and `wait_for` returns `still_waiting` after 45 s.
 - GSC check before every commit: `powershell -File tools\gsc-check\check-all.ps1`

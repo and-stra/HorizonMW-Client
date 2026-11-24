@@ -1,6 +1,7 @@
 # MWX mod support
 
 A mod is a folder `GAME\mods\<name>\`. Repo copies live in `data/mods/<name>/`.
+Weapons, perks and loadouts for new modes: see [hmw-weapons-perks.md](hmw-weapons-perks.md).
 
 | file | purpose |
 |---|---|
