@@ -59,6 +59,81 @@ find_scavenger_trigger(origin)
     return best;
 }
 
+// diagnostics: the round state and every player at a step (the 2026-11-24 run 1 failure had
+// "new infected has no loadout" + "no late joiner" and the run was 136 s, over the 2 minute limit)
+log_state(label)
+{
+    scanplayers();
+
+    ended = 0;
+    if (isdefined(level.gameended) && level.gameended)
+        ended = 1;
+
+    state = "state " + label + ": gameended=" + ended + " axis=" + level.mwx_axis + " allies=" + level.mwx_allies;
+    if (isdefined(level.roundlimit))
+        state = state + " round=" + level.roundlimit;
+    test_log(state);
+
+    foreach (player in level.players)
+    {
+        team = "none";
+        if (isdefined(player.team))
+            team = player.team;
+
+        test_log("  " + player.name + " team=" + team + " alive=" + isalive(player) + " bot=" + isbot(player));
+    }
+}
+
+// keep the infected bots from ending the round while the checks run (they only stop targeting and
+// firing; the test still kills them itself)
+hold_infected()
+{
+    level.mwx_heldbots = [];
+
+    foreach (player in level.players)
+    {
+        if (!isdefined(player.team) || player.team != "axis" || !isbot(player))
+            continue;
+
+        player.ignoreall = 1;
+        player allowfire(0);
+        level.mwx_heldbots[level.mwx_heldbots.size] = player;
+    }
+
+    test_log("held " + level.mwx_heldbots.size + " infected bots");
+}
+
+release_infected()
+{
+    if (!isdefined(level.mwx_heldbots))
+        return;
+
+    foreach (player in level.mwx_heldbots)
+    {
+        if (!isdefined(player))
+            continue;
+
+        player.ignoreall = 0;
+        player allowfire(1);
+    }
+
+    level.mwx_heldbots = undefined;
+}
+
+find_new_player_any(names)
+{
+    foreach (player in level.players)
+    {
+        if (!isdefined(player.team))
+            continue;
+
+        if (!test_contains_name(names, player.name))
+            return player;
+    }
+
+    return undefined;
+}
+
 main()
 {
     if (getdvarint("mwx_test_time_end", 0))
@@ -102,6 +177,7 @@ main()
 
     test_assert(level.mwx_axis == 1, "exactly one first infected", "1", level.mwx_axis);
     test_assert(level.mwx_allies >= 2, "at least two survivors", ">=2", level.mwx_allies);
+    log_state("after team change");
 
     if (level.mwx_axis < 1 || !isdefined(level.mwx_survivor))
     {
@@ -166,6 +242,11 @@ main()
 
     test_assert(infectedteam == "axis", "killed survivor became infected", "axis", infectedteam);
 
+    log_state("after infect");
+    // the first infected can keep infecting the other survivors while the loadout checks run; the
+    // round then ends and the late joiner/scavenger steps fail. Hold the infected bots.
+    hold_infected();
+
     // the gametype applies the infected loadout a moment after the team change
     waited = 0;
     while (waited < 15 && !(survivor hasweapon("h2_hatchet_mp")))
@@ -189,6 +270,7 @@ main()
     test_assert(survivor hasweapon("h2_hatchet_mp"), "new infected has the hatchet", "h2_hatchet_mp", "checked");
     test_assert(survivor hasweapon("iw9_throwknife_mp"), "new infected has the throwing knife",
         "iw9_throwknife_mp", "checked");
+    log_state("after infected loadout");
 
     keepspistol = 0;
     if (survivor hasweapon("h2_usp_mp"))
@@ -197,6 +279,7 @@ main()
 
     // ---------------------------------------------------------------- late joiner
     test_step("late joiner");
+    log_state("before late joiner");
 
     names = [];
     foreach (player in level.players)
@@ -210,12 +293,19 @@ main()
     {
         wait 0.5;
         waited = waited + 0.5;
-        latejoiner = test_find_new_player(names, "allies");
+        latejoiner = find_new_player_any(names);
     }
 
-    test_assert(isdefined(latejoiner), "late joiner joined as survivor", "player", isdefined(latejoiner) ? latejoiner.name : "none");
+    joinerteam = "none";
+    if (isdefined(latejoiner) && isdefined(latejoiner.team))
+        joinerteam = latejoiner.team;
 
-    if (isdefined(latejoiner))
+    test_log("late joiner: " + (isdefined(latejoiner) ? latejoiner.name : "none") + " team=" + joinerteam);
+    log_state("after late joiner");
+    test_assert(isdefined(latejoiner) && joinerteam == "allies", "late joiner joined as survivor",
+        "allies", isdefined(latejoiner) ? joinerteam : "none");
+
+    if (isdefined(latejoiner) && joinerteam == "allies")
     {
         // the loadout is applied a moment after the spawn
         waited = 0;
@@ -301,6 +391,7 @@ main()
     }
 
     // ---------------------------------------------------------------- no killstreaks
+    release_infected();
     test_step("no killstreak weapons");
 
     killstreak = 0;
@@ -348,6 +439,7 @@ main()
         winner = level.finalkillcam_winner;
     test_assert(winner == "axis", "infected won", "axis", winner);
 
+    log_state("final");
     test_done(1);
 }
 

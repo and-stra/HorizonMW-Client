@@ -145,6 +145,41 @@ test_alive_on_team(team)
     return count;
 }
 
+// Bots kill each other between the test's own kills, which makes survivor/lives counts flaky
+// (slasher "one survivor left" got 0, oic ended with 2 alive). Hold every bot's targeting/firing
+// for a phase that counts players; the test's own kills use dodamage and still work.
+test_hold_bots()
+{
+    level.mwx_test_held = [];
+
+    foreach (player in level.players)
+    {
+        if (!isdefined(player.team) || !isbot(player))
+            continue;
+
+        player.ignoreall = 1;
+        player allowfire(0);
+        level.mwx_test_held[level.mwx_test_held.size] = player;
+    }
+}
+
+test_release_bots()
+{
+    if (!isdefined(level.mwx_test_held))
+        return;
+
+    foreach (player in level.mwx_test_held)
+    {
+        if (!isdefined(player))
+            continue;
+
+        player.ignoreall = 0;
+        player allowfire(1);
+    }
+
+    level.mwx_test_held = undefined;
+}
+
 // kills `victim` and attributes the kill to `attacker` (the third dodamage argument; a two argument
 // dodamage credits the world instead)
 test_kill(victim, attacker, weapon)

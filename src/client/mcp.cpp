@@ -71,6 +71,17 @@ namespace mcp
 			return GetExitCodeProcess(instance.info.hProcess, &code) && code == STILL_ACTIVE;
 		}
 
+		int process_exit_code(const instance_t& instance)
+		{
+			if (!instance.info.hProcess)
+			{
+				return -1;
+			}
+
+			DWORD code{};
+			return GetExitCodeProcess(instance.info.hProcess, &code) ? static_cast<int>(code) : -1;
+		}
+
 		std::optional<instance_t> find_instance(const std::string& target)
 		{
 			std::lock_guard _(instance_mutex);
@@ -191,6 +202,17 @@ namespace mcp
 			std::string command_line = utils::string::va("\"%s\" %s-debugport %u", exe.string().data(),
 				dedicated ? "-dedicated -memoryfix " : "", port);
 
+			// Each dedicated instance gets its own net port next to its debug port, so a server
+			// whose predecessor exited slowly can never collide on 27017 (cranked in the 2026-11-24
+			// full run). A caller-provided net_port (dvar or args) still wins because it comes later
+			// on the command line.
+			std::uint16_t net_port = 0;
+			if (dedicated && port >= static_cast<std::uint16_t>(debug_server::default_server_port + 10))
+			{
+				net_port = static_cast<std::uint16_t>(27016 + (port - (debug_server::default_server_port + 10)));
+				command_line += " +set net_port " + std::to_string(net_port);
+			}
+
 			// test mode: windowed 960x540, muted, no mouse capture (see test_mode.cpp)
 			if (args.value("test_mode", true))
 			{
@@ -262,7 +284,7 @@ namespace mcp
 			}
 
 			return json{{"id", instance.id}, {"pid", info.dwProcessId}, {"port", port},
-				{"dedicated", dedicated}, {"command_line", command_line}};
+				{"net_port", net_port}, {"dedicated", dedicated}, {"command_line", command_line}};
 		}
 
 		json stop_instance(const std::string& target)
@@ -679,6 +701,8 @@ namespace mcp
 			}
 
 			const auto id = started["id"].get<std::string>();
+			fprintf(stderr, "mwx mcp: test %s debug port %d, net port %d\n", test.name.data(),
+				started.value("port", 0), started.value("net_port", 0));
 			const auto stop = gsl::finally([&] { stop_instance(id); });
 
 			if (test.listen)
@@ -731,6 +755,13 @@ namespace mcp
 						break;
 					}
 				}
+
+				if (const auto instance = find_instance(id); instance.has_value() && instance->info.hProcess &&
+					!process_running(instance.value()))
+				{
+					return json{{"error", "server exited (code " + std::to_string(process_exit_code(instance.value())) + ")"},
+						{"test", test.name}, {"port", started.value("port", 0)}, {"net_port", started.value("net_port", 0)}};
+				}
 				std::this_thread::sleep_for(1s);
 			}
 
@@ -751,6 +782,8 @@ namespace mcp
 			json done{};
 			json events{};
 			std::set<int> handled_actions;
+			auto server_exited = false;
+			auto server_exit_code = -1;
 
 			while (std::chrono::steady_clock::now() < deadline)
 			{
@@ -787,6 +820,14 @@ namespace mcp
 
 				if (!done.is_null())
 				{
+					break;
+				}
+
+				if (const auto instance = find_instance(id); instance.has_value() && instance->info.hProcess &&
+					!process_running(instance.value()))
+				{
+					server_exited = true;
+					server_exit_code = process_exit_code(instance.value());
 					break;
 				}
 
@@ -875,6 +916,8 @@ namespace mcp
 			result["gametype"] = test.gametype;
 			result["mod"] = test.mod;
 			result["listen"] = test.listen;
+			result["port"] = started.value("port", 0);
+			result["net_port"] = started.value("net_port", 0);
 			result["passed"] = passed;
 			result["failed"] = failed;
 			result["failures"] = failures;
@@ -889,7 +932,9 @@ namespace mcp
 
 			if (done.is_null())
 			{
-				result["error"] = "timeout waiting for test_done";
+				result["error"] = server_exited
+					? "server exited (code " + std::to_string(server_exit_code) + ")"
+					: "timeout waiting for test_done";
 			}
 
 			return result;

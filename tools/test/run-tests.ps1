@@ -14,7 +14,8 @@ param(
     [string]$GameDir = "C:\Games\cod-hwm\Call of Duty Horizon Modern Warfare\Call of Duty Modern Warfare Remastered",
     [string]$Manifest = "",
     [switch]$KeepServer,
-    [int]$BasePort = 27200
+    [int]$BasePort = 27200,
+    [int]$BaseNetPort = 27016
 )
 
 $ErrorActionPreference = "Stop"
@@ -28,6 +29,17 @@ $tests = Get-Content $Manifest -Raw | ConvertFrom-Json
 if ($Name -ne "all") { $tests = @($tests | Where-Object { $_.name -eq $Name }) ; if (-not $tests) { throw "unknown test $Name" } }
 
 $script:portCounter = $BasePort
+$script:netPortCounter = $BaseNetPort
+
+function Wait-NetPortFree([int]$netPort) {
+    # a stopped server can hold its UDP port for a moment; the next server would exit on bind
+    for ($i = 0; $i -lt 30; $i++) {
+        $used = Get-NetUDPEndpoint -LocalPort $netPort -ErrorAction SilentlyContinue
+        if (-not $used) { return $true }
+        Start-Sleep -Seconds 1
+    }
+    return $false
+}
 
 function Rpc([int]$port, [string]$method, $params = @{}, [int]$timeout = 5) {
     $body = @{ method = $method; params = $params } | ConvertTo-Json -Depth 20 -Compress
@@ -53,21 +65,30 @@ function Stop-Server($process, [int]$port) {
 
 function Run-Test($test) {
     $port = $script:portCounter++
+    $netPort = $script:netPortCounter++
 
     $dvars = @{}
     if ($test.dvars) { foreach ($p in $test.dvars.PSObject.Properties) { $dvars[$p.Name] = "$($p.Value)" } }
     $dvars["mwx_test"] = $test.script
+    if (-not $dvars.ContainsKey("net_port")) { $dvars["net_port"] = "$netPort" }
 
-    $argList = "-dedicated -memoryfix -debugport $port +set mwx_test_mode 1"
+    # the mod flag must come before +set commands (the game flag parser ignores it after them)
+    $argList = "-dedicated -memoryfix -debugport $port"
+    if ($test.mod) { $argList += " -mod `"$($test.mod)`"" }
+    $argList += " +set mwx_test_mode 1"
     foreach ($k in ($dvars.Keys | Sort-Object)) { $argList += " +set $k `"$($dvars[$k])`"" }
     if ($test.gametype) { $argList += " +set g_gametype `"$($test.gametype)`"" }
-    if ($test.mod) { $argList += " -mod `"$($test.mod)`"" }
     if ($test.map) { $argList += " +map `"$($test.map)`"" }
     if ($test.args) { $argList += " $($test.args)" }
+
+    if (-not (Wait-NetPortFree $netPort)) {
+        return [ordered]@{ test = $test.name; error = "net port $netPort is still in use"; port = $port; net_port = $netPort }
+    }
 
     $start = Get-Date
     $log = Join-Path $env:TEMP "mwx-test-$($test.name)-$port.log"
     $errLog = Join-Path $env:TEMP "mwx-test-$($test.name)-$port.err.log"
+    Write-Host ("  $($test.name): debug port $port, net port $netPort")
     # output goes to files: no console window opens, so the run does not take the focus
     $process = Start-Process -FilePath $exe -ArgumentList $argList -WorkingDirectory $GameDir -PassThru `
         -RedirectStandardOutput $log -RedirectStandardError $errLog
@@ -79,6 +100,7 @@ function Run-Test($test) {
         gametype = $test.gametype
         mod = $test.mod
         port = $port
+        net_port = $netPort
         pid = $process.Id
         passed = 0
         failed = 0
@@ -100,7 +122,7 @@ function Run-Test($test) {
         }
 
         if (-not $running) {
-            $result.error = if ($process.HasExited) { "the server exited during the map load (exit code $($process.ExitCode), log $log)" } else { "the server did not start the map" }
+            $result.error = if ($process.HasExited) { "server exited (code $($process.ExitCode), log $log)" } else { "the server did not start the map" }
             if (Test-Path $log) { $result.console_tail = Get-Content $log -Tail 25 }
             return $result
         }
@@ -135,6 +157,7 @@ function Run-Test($test) {
         $startedMs = 0; $doneMs = 0
         $failures = New-Object System.Collections.ArrayList
         $steps = New-Object System.Collections.ArrayList
+        $logs = New-Object System.Collections.ArrayList
         $killWeapons = New-Object System.Collections.Generic.HashSet[string]
         $killCount = 0
 
@@ -143,6 +166,7 @@ function Run-Test($test) {
                 "script_error" { $result.script_errors++ }
                 "test_started" { $startedMs = [int64]$e.time_ms }
                 "test_step" { [void]$steps.Add($e.data) }
+                "test_log" { [void]$logs.Add($e.data) }
                 "test_done" { $doneMs = [int64]$e.time_ms; $result.done = ($e.data.ok -ne 0) }
                 "kill" {
                     $killCount++
@@ -161,9 +185,14 @@ function Run-Test($test) {
 
         $result.failures = $failures.ToArray()
         $result.steps = $steps.ToArray()
+        $result.logs = $logs.ToArray()
         $result.duration_s = if ($doneMs -gt $startedMs) { [math]::Round(($doneMs - $startedMs) / 1000.0, 1) } else { 0 }
         if (-not ($events | Where-Object { $_.type -eq "test_done" })) {
-            $result.error = "timeout waiting for test_done"
+            if ($process.HasExited) {
+                $result.error = "server exited (code $($process.ExitCode))"
+            } else {
+                $result.error = "timeout waiting for test_done"
+            }
             # keep the tail of the console for the report
             $console = Rpc $port "console" @{ lines = 40 } 5
             if ($console.result) { $result.console_tail = $console.result }

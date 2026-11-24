@@ -21,6 +21,41 @@ first_alive(team, ignore)
     return undefined;
 }
 
+log_state(label)
+{
+    allies = 0;
+    axis = 0;
+    foreach (player in level.players)
+    {
+        if (!isdefined(player.team))
+            continue;
+
+        if (player.team == "allies")
+            allies++;
+        else if (player.team == "axis")
+            axis++;
+    }
+
+    ended = 0;
+    if (isdefined(level.gameended) && level.gameended)
+        ended = 1;
+
+    winner = "undef";
+    if (isdefined(level.finalkillcam_winner))
+        winner = level.finalkillcam_winner;
+
+    alliesScore = "undef";
+    axisScore = "undef";
+    if (isdefined(level.mm_teamscores))
+    {
+        alliesScore = level.mm_teamscores["allies"];
+        axisScore = level.mm_teamscores["axis"];
+    }
+
+    test_log("state " + label + ": gameended=" + ended + " allies=" + allies + " axis=" + axis +
+        " scoreA=" + alliesScore + " scoreX=" + axisScore + " winner=" + winner);
+}
+
 main()
 {
     test_step("wait for the slasher");
@@ -98,6 +133,10 @@ main()
 
     test_step("last survivor gets the slasher powers");
 
+    // the slasher is a bot too and can kill a survivor between the test's kills (the "one survivor
+    // left" check got 0 in the 2026-11-24 full run); hold the bots for the elimination phase
+    test_hold_bots();
+
     // the MWX kill handler recounts the living survivors, so the final survivor is detected after
     // every kill (the stock counter stayed too high)
     tries = 0;
@@ -109,8 +148,18 @@ main()
 
         test_kill(victim, slasher, shovel);
         tries++;
-        wait 3;
+
+        // give the mode a moment to process the kill, but do not wait the full 3 s once only one
+        // survivor is left: the mode then gives that survivor the slasher powers and it can kill
+        // the slasher before the test's final kill (the "slasher won: allies" flake)
+        waited = 0;
+        while (waited < 3 && test_alive_on_team("allies") > 1)
+        {
+            wait 0.25;
+            waited = waited + 0.25;
+        }
     }
+    log_state("after elimination loop");
 
     lastsurvivor = first_alive("allies");
     alivecount = test_alive_on_team("allies");
@@ -121,22 +170,49 @@ main()
         waited = 0;
         while (waited < 15 && !(isdefined(lastsurvivor.isslasher) && lastsurvivor.isslasher == 1))
         {
-            wait 0.25;
-            waited = waited + 0.25;
+            // slashersettings() turns firing back on for the new slasher; keep it held so it cannot
+            // kill the original slasher while the test waits for the powers
+            lastsurvivor.ignoreall = 1;
+            lastsurvivor allowfire(0);
+            wait 0.05;
+            waited = waited + 0.05;
         }
 
         powered = 0;
         if (isdefined(lastsurvivor.isslasher) && lastsurvivor.isslasher == 1)
             powered = 1;
         test_assert(powered, "last survivor got the slasher powers", "1", powered);
+
+        // slashersettings() -> switchtostartweapon("axis") gives the shovel on the next frame
+        waited = 0;
+        while (waited < 5 && !(lastsurvivor hasweapon(shovel)))
+        {
+            lastsurvivor.ignoreall = 1;
+            lastsurvivor allowfire(0);
+            wait 0.1;
+            waited = waited + 0.1;
+        }
+
         test_assert(lastsurvivor hasweapon(shovel), "last survivor has the shovel",
             "h1_meleeshovel", "checked");
+
+        // one more hold after the power flag, then let the state settle for a moment
+        lastsurvivor.ignoreall = 1;
+        lastsurvivor allowfire(0);
+        wait 0.5;
+        log_state("after powers");
     }
 
     test_step("all survivors dead -> slasher wins");
+    log_state("before final kill");
 
     if (isdefined(lastsurvivor))
+    {
+        test_log("victim " + lastsurvivor.name + " team=" + lastsurvivor.team + " isslasher=" +
+            (isdefined(lastsurvivor.isslasher) ? lastsurvivor.isslasher : "undef") + " / attacker " +
+            slasher.name + " team=" + slasher.team);
         test_kill(lastsurvivor, slasher, shovel);
+    }
 
     waited = 0;
     while (waited < 20 && !level.gameended)
@@ -149,6 +225,7 @@ main()
     if (level.gameended)
         ended = 1;
     test_assert(ended, "game ended", "1", ended);
+    log_state("after game end");
 
     // endgame runs in a thread: give the winner a moment after level.gameended (the flake was
     // reading "?"/"none" right after the event)
@@ -162,7 +239,9 @@ main()
     winner = "?";
     if (isdefined(level.finalkillcam_winner))
         winner = level.finalkillcam_winner;
+    log_state("after winner wait");
     test_assert(winner == "axis", "slasher won", "axis", winner);
 
+    test_release_bots();
     test_done(1);
 }

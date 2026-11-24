@@ -6,7 +6,7 @@
     "map": "mp_shipment",
     "timeout_s": 300,
     "dvars": {
-      "scr_infect_timelimit": "2",
+      "scr_infect_timelimit": "10",
       "mwx_test_bots": 4
     }
   },
@@ -148,7 +148,7 @@
     "map": "mp_rust",
     "timeout_s": 300,
     "dvars": {
-      "scr_infect_timelimit": "2",
+      "scr_infect_timelimit": "10",
       "mwx_test_bots": 4
     }
   },

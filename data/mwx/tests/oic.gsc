@@ -198,6 +198,10 @@ main()
 
     test_step("lives");
 
+    // bots can kill each other (and consume lives) between the test's kills, which made the final
+    // "one left" check flaky; hold them for the elimination phase
+    test_hold_bots();
+
     // the spawn grace period is over before any kill counts (H1 ignores deaths during it)
     waited = wait_grace(30);
     test_log("grace waited " + waited + " s");
@@ -239,5 +243,6 @@ main()
     test_assert(ended, "game ended when one player was left", "1", ended);
     test_assert(alivecount() == 1, "exactly one player alive", "1", alivecount());
 
+    test_release_bots();
     test_done(1);
 }
