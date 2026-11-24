@@ -44,6 +44,14 @@ namespace localized_strings
 		});
 	}
 
+	void remove(const std::string& key)
+	{
+		localized_overrides.access([&](localized_map& map)
+		{
+			map.erase(key);
+		});
+	}
+
 	class component final : public component_interface
 	{
 	public:

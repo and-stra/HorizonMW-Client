@@ -31,4 +31,8 @@ namespace gamemodes
 
 	// Appends one row per virtual mode to mp/gameTypesTable.csv.
 	game::StringTable* patch_stringtable(game::StringTable* original);
+
+	// M6: forget the patched copies, so the next lookup rebuilds the whitelist and the gametype
+	// table from the current mod manifest (mods::get_gametypes()).
+	void invalidate();
 }

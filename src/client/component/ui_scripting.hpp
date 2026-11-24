@@ -1,5 +1,7 @@
 #pragma once
 
+#include "game/ui_scripting/script_value.hpp"
+
 namespace ui_scripting
 {
 	template <class... Args, std::size_t... I>
@@ -52,4 +54,9 @@ namespace ui_scripting
 	bool eval(const std::string& code, std::vector<std::string>* results, std::string* error);
 
 	bool lui_running();
+
+	// M6: shut the frontend LUI down and start it again (globals rebuild + scripts), then open
+	// the main menu. Used to pick up a new mod's ui_scripts / gametype list without a relaunch.
+	// on_menu_opened runs after the main menu was opened (for timing/logging).
+	void restart(const std::function<void()>& on_menu_opened = {});
 }

@@ -1196,6 +1196,32 @@ namespace fastfiles
 		return game::g_zones[index].name;
 	}
 
+	bool unload_zone(const char* name, bool create_default)
+	{
+		if (!name)
+		{
+			return false;
+		}
+
+		const auto count = *game::g_zoneCount;
+		for (auto i = count; i >= 1; --i)
+		{
+			const auto* zone = get_zone_name(i);
+			if (!zone || std::strcmp(zone, name) != 0)
+			{
+				continue;
+			}
+
+			console::info("[fastfiles] unloading zone '%s' (#%u)\n", name, i);
+
+			const auto index = static_cast<unsigned short>(i);
+			db_unload_x_zones_stub(&index, 1u, create_default);
+			return true;
+		}
+
+		return false;
+	}
+
 	void set_usermap(const std::string& usermap)
 	{
 		current_usermap.access([&](std::optional<std::string>& current_usermap_)

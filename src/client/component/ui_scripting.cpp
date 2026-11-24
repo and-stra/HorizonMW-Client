@@ -816,6 +816,42 @@ namespace ui_scripting
 		return *game::hks::lua_state != nullptr;
 	}
 
+	void restart(const std::function<void()>& on_menu_opened)
+	{
+		if (!lui_running())
+		{
+			console::info("[lui] restart skipped, LUI is not running\n");
+			return;
+		}
+
+		console::info("[lui] restarting the frontend\n");
+
+		// shuts the frontend/LUI down (M1: on its own it leaves the game without a menu)
+		utils::hook::invoke<void>(0x27BEC0_b);
+
+		// the original of the ui_init_stub hook: the UI/frontend init that also starts LUI
+		// (hks_start -> our globals rebuild and script load)
+		utils::hook::invoke<void*>(0x2A5540_b);
+
+		// the restart starts without a menu; open the main menu once the init had a frame to run
+		scheduler::once([on_menu_opened]()
+		{
+			if (!lui_running())
+			{
+				console::warn("[lui] restart: LUI did not come back, main menu not opened\n");
+				return;
+			}
+
+			console::info("[lui] restart: opening mp_main_menu\n");
+			game::LUI_OpenMenu(0, "mp_main_menu", 0, 0, 0);
+
+			if (on_menu_opened)
+			{
+				on_menu_opened();
+			}
+		}, scheduler::pipeline::main, 1000ms);
+	}
+
 	bool eval(const std::string& code, std::vector<std::string>* results, std::string* error)
 	{
 		try
@@ -904,7 +940,7 @@ namespace ui_scripting
 
 			command::add("lui_restart", []
 			{
-				utils::hook::invoke<void>(0x27BEC0_b);
+				restart();
 			});
 		}
 	};

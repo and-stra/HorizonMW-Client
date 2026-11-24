@@ -480,6 +480,15 @@ namespace gamemodes
 		return cached_table.result ? cached_table.result : original;
 	}
 
+	void invalidate()
+	{
+		std::lock_guard<std::mutex> lock(cache_mutex);
+		cached_rawfile_original = nullptr;
+		cached_rawfile = nullptr;
+		cached_table = {};
+		console::info("[gamemodes] gametype table and whitelist cache cleared\n");
+	}
+
 	class component final : public component_interface
 	{
 	public:

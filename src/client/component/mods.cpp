@@ -5,11 +5,17 @@
 
 #include "command.hpp"
 #include "console.hpp"
+#include "dvars.hpp"
+#include "fastfiles.hpp"
 #include "filesystem.hpp"
 #include "fonts.hpp"
+#include "gamemodes.hpp"
 #include "localized_strings.hpp"
 #include "mods.hpp"
 #include "scheduler.hpp"
+#include "ui_scripting.hpp"
+
+#include "game/dvars.hpp"
 
 #include <json.hpp>
 
@@ -31,6 +37,7 @@ namespace mods
 	{
 		std::optional<std::string> mod_path;
 		std::vector<mod_gametype> gametypes;
+		std::vector<std::string> gametype_string_keys;
 
 		utils::hook::detour db_release_xassets_hook;
 		bool release_assets = false;
@@ -71,9 +78,26 @@ namespace mods
 			}
 		}
 
+		void clear_gametype_strings()
+		{
+			for (const auto& key : gametype_string_keys)
+			{
+				localized_strings::remove(key);
+			}
+
+			gametype_string_keys.clear();
+		}
+
+		void add_gametype_string(const std::string& key, const std::string& value)
+		{
+			localized_strings::override(key, value);
+			gametype_string_keys.push_back(key);
+		}
+
 		void load_gametypes(const std::string& path)
 		{
 			gametypes.clear();
+			clear_gametype_strings();
 
 			const auto json = read_mod_json(path);
 			if (!json || !json->contains("gametypes") || !(*json)["gametypes"].is_array())
@@ -102,16 +126,16 @@ namespace mods
 				gametype.desc_key = "MWXMOD_" + upper + "_DESC";
 				gametype.class_choice = entry.value("class_choice", false);
 
-				localized_strings::override(gametype.name_key, name);
-				localized_strings::override(gametype.name_key + "_CAPS", to_upper(name));
-				localized_strings::override(gametype.desc_key, desc);
-				localized_strings::override(upper, to_upper(name)); // loading screen ("@" .. upper(ref))
+				add_gametype_string(gametype.name_key, name);
+				add_gametype_string(gametype.name_key + "_CAPS", to_upper(name));
+				add_gametype_string(gametype.desc_key, desc);
+				add_gametype_string(upper, to_upper(name)); // loading screen ("@" .. upper(ref))
 
 				for (const auto& key : {ref, upper})
 				{
-					localized_strings::override("OBJECTIVES_" + key, objective);
-					localized_strings::override("OBJECTIVES_" + key + "_SCORE", objective);
-					localized_strings::override("OBJECTIVES_" + key + "_HINT", objective);
+					add_gametype_string("OBJECTIVES_" + key, objective);
+					add_gametype_string("OBJECTIVES_" + key + "_SCORE", objective);
+					add_gametype_string("OBJECTIVES_" + key + "_HINT", objective);
 				}
 
 				if (entry.contains("strings") && entry["strings"].is_object())
@@ -120,7 +144,7 @@ namespace mods
 					{
 						if (value.is_string())
 						{
-							localized_strings::override(key, value.get<std::string>());
+							add_gametype_string(key, value.get<std::string>());
 						}
 					}
 				}
@@ -161,6 +185,126 @@ namespace mods
 
 			return true;
 		}
+
+		bool load_mod_zone()
+		{
+			if (!mod_path.has_value() || !fastfiles::exists("mod"))
+			{
+				return false;
+			}
+
+			console::info("[mods] loading the mod zone (%s/mod.ff)\n", mod_path->data());
+
+			game::XZoneInfo info{};
+			info.name = "mod";
+			info.allocFlags = game::DB_ZONE_COMMON | game::DB_ZONE_CUSTOM;
+			info.freeFlags = 0;
+			// submit the load; switch_mod waits for the database before it restarts the menu
+			game::DB_LoadXAssets(&info, 1u, game::DBSyncMode::DB_LOAD_SYNC);
+
+			// the zone list gets a new slot for this load (reported by modzone status)
+			console::info("[mods] mod zone load queued, zone count now %u\n", *game::g_zoneCount);
+			return true;
+		}
+
+		bool unload_mod_zone()
+		{
+			console::info("[mods] unloading the mod zone\n");
+
+			// The engine's own unload path for exactly this zone. XZoneInfo freeFlags matches by
+			// flag, not by name, and would free every custom zone loaded with the same flags
+			// (the hmw_* content zones): "Could not load default asset ... surfacefx".
+			// unload_zone takes the newest "mod" slot, the active one after a reload.
+			return fastfiles::unload_zone("mod", true);
+		}
+
+		void switch_mod(const std::string& path)
+		{
+			if (!can_change_mod())
+			{
+				return;
+			}
+
+			const auto current = mod_path.value_or("");
+			if (current == path)
+			{
+				console::info("[mods] %s is already loaded\n", path.empty() ? "no mod" : path.data());
+				return;
+			}
+
+			// M6 fallback: the old relaunch path (or an explicit mwx_mod_relaunch 1)
+			if (const auto* relaunch_dvar = game::Dvar_FindVar("mwx_mod_relaunch");
+				relaunch_dvar && relaunch_dvar->current.enabled)
+			{
+				relaunch(path);
+				return;
+			}
+
+			const auto start = std::chrono::steady_clock::now();
+			const auto elapsed_ms = [&start]()
+			{
+				return std::chrono::duration_cast<std::chrono::milliseconds>(
+					std::chrono::steady_clock::now() - start).count();
+			};
+
+			// never load a new mod.ff over the old one; if the old mod had a zone and the unload
+			// fails, relaunch instead
+			if (!current.empty() && fastfiles::exists("mod") && !unload_mod_zone())
+			{
+				console::error("[mods] the mod zone could not be unloaded, relaunching\n");
+				relaunch(path);
+				return;
+			}
+
+			const auto zone_ms = elapsed_ms();
+			set_mod(path);
+
+			if (!path.empty() && !load_mod_zone())
+			{
+				// a mod without mod.ff is allowed (scripts only); a broken one is reported and the
+				// next map load fails the normal way
+				if (fastfiles::exists("mod"))
+				{
+					console::error("[mods] the mod zone of %s could not be loaded, relaunching\n", path.data());
+					relaunch(path);
+					return;
+				}
+			}
+
+			const auto load_ms = elapsed_ms() - zone_ms;
+
+			gamemodes::invalidate();
+
+			// DB_LoadXAssets queues the zone load (even DB_LOAD_SYNC returned after a few ms and
+			// the mod.ff loaded for another ~18 s). Wait for the database before the menu restart,
+			// so the new menu and the first map start see a complete mod zone.
+			const auto waiting_logged = std::make_shared<bool>(false);
+			scheduler::schedule([start, path, waiting_logged]()
+			{
+				if (!game::Sys_IsDatabaseReady2())
+				{
+					if (!*waiting_logged)
+					{
+						console::info("[mods] waiting for the mod zone load to finish\n");
+						*waiting_logged = true;
+					}
+					return scheduler::cond_continue;
+				}
+
+				ui_scripting::restart([start, path]()
+				{
+					const auto total_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+						std::chrono::steady_clock::now() - start).count();
+					console::info("[mods] switched to %s without a relaunch, main menu ready after %lld ms\n",
+						path.empty() ? "no mod" : path.data(), total_ms);
+				});
+
+				return scheduler::cond_end;
+			}, scheduler::pipeline::main, 250ms);
+
+			console::info("[mods] switch to %s: zone unload %lld ms, load request %lld ms\n",
+				path.empty() ? "no mod" : path.data(), zone_ms, load_ms);
+		}
 	}
 
 	void set_mod(const std::string& path, const bool change_fs_game)
@@ -179,6 +323,7 @@ namespace mods
 		{
 			mod_path.reset();
 			gametypes.clear();
+			clear_gametype_strings();
 			return;
 		}
 
@@ -255,12 +400,18 @@ namespace mods
 			db_release_xassets_hook.create(0x399740_b, db_release_xassets_stub);
 
 			localized_strings::override("MWX_MENU_MODS", "MODS");
-			localized_strings::override("MWX_MENU_MODS_DESC", "Load a mod from the mods folder. The game restarts.");
+			localized_strings::override("MWX_MENU_MODS_DESC", "Load a mod from the mods folder.");
 			localized_strings::override("MWX_MODS_LOADED", "LOADED MOD");
 			localized_strings::override("MWX_MODS_AVAILABLE", "AVAILABLE MODS");
 			localized_strings::override("MWX_MODS_UNLOAD", "Unload mod");
-			localized_strings::override("MWX_MODS_UNLOAD_DESC", "Return to the unmodded game. The game restarts.");
+			localized_strings::override("MWX_MODS_UNLOAD_DESC", "Return to the unmodded game.");
 			localized_strings::override("MWX_MODS_NONE", "No mods found in the mods folder.");
+
+			scheduler::once([]()
+			{
+				dvars::register_bool("mwx_mod_relaunch", false, game::DVAR_FLAG_SAVED,
+					"Load/unload mods by relaunching the game (old M6 behaviour)");
+			}, scheduler::pipeline::main);
 
 			command::add("loadmod", [](const command::params& params)
 			{
@@ -277,12 +428,7 @@ namespace mods
 					return;
 				}
 
-				if (!can_change_mod())
-				{
-					return;
-				}
-
-				relaunch(path);
+				switch_mod(path);
 			});
 
 			command::add("unloadmod", []()
@@ -293,12 +439,70 @@ namespace mods
 					return;
 				}
 
-				if (!can_change_mod())
+				switch_mod("");
+			});
+
+			// M6 diagnostics: unload/load only the mod zone (no gamemode/LUI rebuild), used to
+			// prove the zone can be released at all. `modzone status` lists the loaded zone.
+			command::add("modzone", [](const command::params& params)
+			{
+				const std::string action = params.size() > 1 ? params.get(1) : "status";
+
+				if (action == "status")
 				{
+					auto mod_slots = 0u;
+					for (auto i = 1u; i <= *game::g_zoneCount; ++i)
+					{
+						const auto* zone = fastfiles::get_zone_name(i);
+						if (zone && std::strcmp(zone, "mod") == 0)
+						{
+							mod_slots++;
+						}
+					}
+
+					console::info("[mods] mod path: %s\n", mod_path.value_or("<none>").data());
+					console::info("[mods] zone count: %u, mod zone slots: %u, db ready: %i\n",
+						*game::g_zoneCount, mod_slots, game::Sys_IsDatabaseReady2() ? 1 : 0);
+					console::info("[mods] crossbow asset: exists %i, default %i\n",
+						game::DB_XAssetExists(game::ASSET_TYPE_WEAPON, "iw5_exocrossbow_mp") ? 1 : 0,
+						game::DB_IsXAssetDefault(game::ASSET_TYPE_WEAPON, "iw5_exocrossbow_mp") ? 1 : 0);
+					for (const auto& gametype : gametypes)
+					{
+						console::info("[mods] gametype: %s\n", gametype.ref.data());
+					}
 					return;
 				}
 
-				relaunch("");
+				if (action == "unload")
+				{
+					if (!can_change_mod())
+					{
+						return;
+					}
+					console::info("[mods] mod zone unload: %s\n", unload_mod_zone() ? "ok" : "failed");
+					return;
+				}
+
+				if (action == "list")
+				{
+					for (auto i = 1u; i <= *game::g_zoneCount; ++i)
+					{
+						console::info("[mods] zone %u: %s\n", i, fastfiles::get_zone_name(i));
+					}
+					return;
+				}
+
+				if (action == "load")
+				{
+					if (!can_change_mod())
+					{
+						return;
+					}
+					console::info("[mods] mod zone load: %s\n", load_mod_zone() ? "ok" : "failed");
+					return;
+				}
+
+				console::info("Usage: modzone [status|unload|load]\n");
 			});
 		}
 	};

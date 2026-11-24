@@ -15,6 +15,11 @@ namespace fastfiles
 
 	const char* get_zone_name(const unsigned int index);
 
+	// M6: release one loaded zone by name through the engine's own unload path (only that zone,
+	// unlike XZoneInfo freeFlags which matches by flag). create_default = true replaces assets
+	// that are still referenced with defaults instead of leaving dangling pointers.
+	bool unload_zone(const char* name, bool create_default = true);
+
 	void set_usermap(const std::string& usermap);
 	void clear_usermap();
 	std::optional<std::string> get_current_usermap();

@@ -23,9 +23,22 @@ Weapons, perks and loadouts for new modes: see [hmw-weapons-perks.md](hmw-weapon
 - The gametype is added to the allowed gametype list, the gametypes table and the PARTY group of
   Private Match. Name keys: `MWXMOD_<REF>`, `MWXMOD_<REF>_DESC`, objectives `OBJECTIVES_<REF>*`.
 
-Loading: main menu > MODS (or the console: `loadmod mods/<name>`, `unloadmod`). The game relaunches
-with `-mod "mods/<name>"`, so zones, tables and menus are built fresh. A dedicated server uses the
-same flag: `mwx.exe -dedicated -mod "mods/<name>" ...`.
+Loading: main menu > MODS (or the console: `loadmod mods/<name>`, `unloadmod`). Without a
+relaunch: the old `mod` zone is released, the new `mod.ff` is loaded, `mod.json` is re-read, the
+gametype whitelist/table/strings are rebuilt and the frontend LUI is restarted, so the MODS menu
+and the PARTY list show the new state. `mwx_mod_relaunch 1` (or a failed zone unload) falls back
+to the old relaunch. Only allowed outside a running match. Diagnostics: `modzone status`,
+`modzone list`, `modzone unload`, `modzone load`.
+
+Reloading the `mod` zone gives the engine a new zone slot; the old slot stays in the zone list
+(name `mod`, assets freed). Repeated switches therefore grow the zone list by one per loaded
+`mod.ff` (a handful is harmless; a very long session should relaunch).
+
+A dedicated server uses the same flag: `mwx.exe -dedicated -mod "mods/<name>" ...`.
+
+Note: starting a map from the client while a mod is loaded (at startup or after a switch) hangs on
+the loading screen in this build; the dedicated sas test is unaffected. Open issue, see the
+autonomous report.
 
 Not handled yet: joining a server that runs a mod you don't have (no download on LAN; both PCs need
 the same mod folder), and stats are shared with the unmodded game.
