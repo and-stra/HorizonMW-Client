@@ -149,6 +149,8 @@ namespace gsc
 		bool force_load = false;
 		bool translated = false;
 
+		std::vector<std::function<void()>> context_ready_callbacks;
+
 		game::ScriptFile* load_custom_script(const char* file_name, const std::string& real_name)
 		{
 			if (const auto itr = loaded_scripts.find(file_name); itr != loaded_scripts.end())
@@ -506,7 +508,7 @@ namespace gsc
 			game::DB_GetRawBuffer(rawfile, buf, size);
 		}
 
-		void scr_begin_load_scripts_stub()
+		void init_compiler_context()
 		{
 			const bool dev_script = developer_script ? developer_script->current.enabled : false;
 			const auto comp_mode = dev_script ?
@@ -535,8 +537,18 @@ namespace gsc
 
 					return { {}, script_data };
 				});
+		}
+
+		void scr_begin_load_scripts_stub()
+		{
+			init_compiler_context();
 
 			scr_begin_load_scripts_hook.invoke<void>();
+
+			for (const auto& callback : context_ready_callbacks)
+			{
+				callback();
+			}
 		}
 
 
@@ -581,6 +593,26 @@ namespace gsc
 	bool translation_pending()
 	{
 		return translated;
+	}
+
+	void on_context_ready(const std::function<void()>& callback)
+	{
+		context_ready_callbacks.push_back(callback);
+	}
+
+	void begin_runtime_compile()
+	{
+		init_compiler_context();
+
+		for (const auto& callback : context_ready_callbacks)
+		{
+			callback();
+		}
+	}
+
+	void end_runtime_compile()
+	{
+		gsc_ctx->cleanup();
 	}
 
 	game::ScriptFile* find_script(game::XAssetType type, const char* name, int allow_create_default)

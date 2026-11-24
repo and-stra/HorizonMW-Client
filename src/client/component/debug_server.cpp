@@ -3,9 +3,12 @@
 
 #include "command.hpp"
 #include "console.hpp"
+#include "debug_api.hpp"
 #include "debug_server.hpp"
 #include "party.hpp"
 #include "scheduler.hpp"
+#include "screenshot.hpp"
+#include "ui_debug.hpp"
 
 #include "game/game.hpp"
 
@@ -34,8 +37,9 @@ namespace debug_server
 		std::atomic_bool stop{false};
 		std::thread server_thread;
 
-		// runs `fn` on the game's main thread and waits for it
-		json on_main_thread(const std::function<json()>& fn, const std::chrono::milliseconds timeout = 2000ms)
+		// runs `fn` on `pipeline` and waits for it
+		json on_pipeline(const scheduler::pipeline pipeline, const std::function<json()>& fn,
+			const std::chrono::milliseconds timeout)
 		{
 			auto promise = std::make_shared<std::promise<json>>();
 			auto future = promise->get_future();
@@ -50,7 +54,7 @@ namespace debug_server
 				{
 					promise->set_value(json{{"error", e.what()}});
 				}
-			}, scheduler::pipeline::main);
+			}, pipeline);
 
 			if (future.wait_for(timeout) != std::future_status::ready)
 			{
@@ -58,6 +62,12 @@ namespace debug_server
 			}
 
 			return future.get();
+		}
+
+		// runs `fn` on the game's main thread and waits for it
+		json on_main_thread(const std::function<json()>& fn, const std::chrono::milliseconds timeout = 2000ms)
+		{
+			return on_pipeline(scheduler::pipeline::main, fn, timeout);
 		}
 
 		std::string dvar_string(const char* name)
@@ -230,6 +240,83 @@ namespace debug_server
 				return json{{"result", data}};
 			}
 
+			// --- MWX test interface (docs/mcp.md) ---
+
+			if (method == "screenshot")
+			{
+				return json{{"result", screenshot::capture(params)}};
+			}
+
+			if (method == "ui_snapshot")
+			{
+				return on_pipeline(scheduler::pipeline::lui, [] { return json{{"result", ui_debug::snapshot()}}; }, 5000ms);
+			}
+
+			if (method == "ui_click")
+			{
+				return on_pipeline(scheduler::pipeline::lui, [params] { return json{{"result", ui_debug::click(params)}}; }, 5000ms);
+			}
+
+			if (method == "ui_back")
+			{
+				return on_pipeline(scheduler::pipeline::lui, [] { return json{{"result", ui_debug::back()}}; }, 5000ms);
+			}
+
+			if (method == "ui_open")
+			{
+				return on_pipeline(scheduler::pipeline::lui, [params] { return json{{"result", ui_debug::open(params)}}; }, 5000ms);
+			}
+
+			if (method == "lua_eval")
+			{
+				return on_pipeline(scheduler::pipeline::lui, [params] { return json{{"result", ui_debug::lua_eval(params)}}; }, 10000ms);
+			}
+
+			if (method == "gsc_eval")
+			{
+				return on_pipeline(scheduler::pipeline::server, [params] { return json{{"result", debug_api::gsc_eval(params)}}; }, 30000ms);
+			}
+
+			if (method == "players")
+			{
+				return on_pipeline(scheduler::pipeline::server, [] { return json{{"result", debug_api::players()}}; }, 10000ms);
+			}
+
+			if (method == "entities")
+			{
+				return on_pipeline(scheduler::pipeline::server, [params] { return json{{"result", debug_api::entities(params)}}; }, 10000ms);
+			}
+
+			if (method == "bots")
+			{
+				return on_pipeline(scheduler::pipeline::server, [params] { return json{{"result", debug_api::bots(params)}}; }, 15000ms);
+			}
+
+			if (method == "input")
+			{
+				return on_main_thread([params] { return json{{"result", debug_api::input(params)}}; });
+			}
+
+			if (method == "events")
+			{
+				return json{{"result", debug_api::events(params)}};
+			}
+
+			if (method == "wait")
+			{
+				return debug_api::wait(params);
+			}
+
+			if (method == "perf")
+			{
+				return on_main_thread([] { return json{{"result", debug_api::perf()}}; });
+			}
+
+			if (method == "last_crash")
+			{
+				return json{{"result", debug_api::last_crash()}};
+			}
+
 			return json{{"error", "unknown method: " + method}};
 		}
 
@@ -271,6 +358,12 @@ namespace debug_server
 
 			return game::environment::is_dedi() ? default_server_port : default_client_port;
 		}
+	}
+
+	json run_on(const std::function<json()>& fn, const scheduler::pipeline pipeline,
+		const std::chrono::milliseconds timeout)
+	{
+		return on_pipeline(pipeline, fn, timeout);
 	}
 
 	class component final : public component_interface

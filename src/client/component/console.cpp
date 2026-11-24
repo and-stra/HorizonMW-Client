@@ -120,6 +120,10 @@ namespace console
 		std::deque<std::string> recent_lines;
 		constexpr std::size_t recent_max = 1000;
 
+		// MWX: event stream sinks (see console::add_sink)
+		std::mutex sink_mutex;
+		std::vector<sink> sinks;
+
 		void remember_line(const std::string& message)
 		{
 			std::lock_guard _(recent_mutex);
@@ -130,9 +134,30 @@ namespace console
 			}
 		}
 
+		void call_sinks(const int type, const std::string& message)
+		{
+			std::vector<sink> copy;
+			{
+				std::lock_guard _(sink_mutex);
+				copy = sinks;
+			}
+
+			for (const auto& callback : copy)
+			{
+				try
+				{
+					callback(type, message);
+				}
+				catch (...)
+				{
+				}
+			}
+		}
+
 		int dispatch_message(const int type, const std::string& message)
 		{
 			remember_line(message);
+			call_sinks(type, message);
 
 			if (rcon::message_redirect(message))
 			{
@@ -356,6 +381,12 @@ namespace console
 		std::lock_guard _(recent_mutex);
 		const auto first = recent_lines.size() > count ? recent_lines.size() - count : 0;
 		return {recent_lines.begin() + static_cast<std::ptrdiff_t>(first), recent_lines.end()};
+	}
+
+	void add_sink(sink callback)
+	{
+		std::lock_guard _(sink_mutex);
+		sinks.push_back(std::move(callback));
 	}
 
 	void print(const int type, const char* fmt, ...)

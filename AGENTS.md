@@ -49,6 +49,13 @@ friends on LAN, short loading times. No master server, accounts or anti-cheat.
   see [docs/mcp.md](docs/mcp.md).
 - Logs in the game folder: `mwx-logs\load_times.log`, `mwx-logs\repack.log`,
   `hmw-mod\logs\games_mp.log`, crash dumps in `minidumps\`.
+- opencode integration: `opencode.json` in the repo root registers the MWX MCP server
+  (`GAME\mwx.exe -mcp`). opencode only discovers project config from its own Location
+  directory upwards, so when opencode runs one level above the repo (`C:\Games\cod-hwm`)
+  the same file has to exist there too — that copy is what makes the tools show up in a
+  session started in `C:\Games\cod-hwm`. Check with `opencode mcp list` (or `/mcps`);
+  editing the file is enough, no restart needed. If the tools are missing, run
+  `opencode mcp add mwx -- <GAME>\mwx.exe -mcp` from the directory opencode uses.
 
 ## Workflow: Claude drives, opencode executes
 

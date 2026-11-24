@@ -17,4 +17,9 @@ namespace logfile
 	void disable_vm_execute_hook();
 
 	bool client_command_stub(const int client_num);
+
+	// MWX: called with every formatted game log line (G_LogPrintf), before it is written to
+	// the log file. Used by the test interface for the kill/damage/join event stream.
+	// Must be fast and must not log.
+	void add_line_callback(const std::function<void(const std::string&)>& callback);
 }

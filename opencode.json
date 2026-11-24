@@ -1,0 +1,14 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "mwx": {
+        "type": "local",
+        "command": [
+          "C:\\Games\\cod-hwm\\Call of Duty Horizon Modern Warfare\\Call of Duty Modern Warfare Remastered\\mwx.exe",
+          "-mcp"
+        ]
+      }
+    }
+  }
+}

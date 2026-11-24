@@ -47,5 +47,9 @@ namespace ui_scripting
 	template <typename F>
 	game::hks::cclosure* convert_function(F f);
 
+	// MWX: runs `code` in the LUI state. Results are converted with Lua's tostring, so a Lua
+	// helper can return JSON text. Returns false and fills `error` on compile/runtime errors.
+	bool eval(const std::string& code, std::vector<std::string>* results, std::string* error);
+
 	bool lui_running();
 }

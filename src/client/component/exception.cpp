@@ -16,6 +16,10 @@
 
 #include <exception/minidump.hpp>
 
+#include <dbghelp.h>
+
+#pragma comment(lib, "dbghelp.lib")
+
 namespace exception
 {
 	namespace
@@ -158,6 +162,70 @@ namespace exception
 			return timestamp;
 		}
 
+		std::vector<std::string> get_call_stack(const LPEXCEPTION_POINTERS exceptioninfo)
+		{
+			std::vector<std::string> frames{};
+
+			const auto process = GetCurrentProcess();
+			SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES);
+			if (!SymInitialize(process, nullptr, TRUE))
+			{
+				return frames;
+			}
+
+			const auto cleanup = gsl::finally([&] { SymCleanup(process); });
+
+			auto* context = exceptioninfo->ContextRecord;
+
+			STACKFRAME64 frame{};
+			frame.AddrPC.Offset = context->Rip;
+			frame.AddrPC.Mode = AddrModeFlat;
+			frame.AddrFrame.Offset = context->Rbp;
+			frame.AddrFrame.Mode = AddrModeFlat;
+			frame.AddrStack.Offset = context->Rsp;
+			frame.AddrStack.Mode = AddrModeFlat;
+
+			for (auto i = 0; i < 32; ++i)
+			{
+				if (!StackWalk64(IMAGE_FILE_MACHINE_AMD64, process, GetCurrentThread(), &frame, context, nullptr,
+					SymFunctionTableAccess64, SymGetModuleBase64, nullptr))
+				{
+					break;
+				}
+
+				if (frame.AddrPC.Offset == 0)
+				{
+					break;
+				}
+
+				std::string text = utils::string::va("%-18s 0x%llX", "?", frame.AddrPC.Offset);
+
+				std::array<char, sizeof(SYMBOL_INFO) + 256> buffer{};
+				auto* symbol = reinterpret_cast<SYMBOL_INFO*>(buffer.data());
+				symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+				symbol->MaxNameLen = 255;
+
+				DWORD64 displacement = 0;
+				if (SymFromAddr(process, frame.AddrPC.Offset, &displacement, symbol))
+				{
+					text = utils::string::va("%s+0x%llX", symbol->Name, displacement);
+					text += utils::string::va(" 0x%llX", frame.AddrPC.Offset);
+
+					IMAGEHLP_LINE64 line{};
+					line.SizeOfStruct = sizeof(line);
+					DWORD line_displacement = 0;
+					if (SymGetLineFromAddr64(process, frame.AddrPC.Offset, &line_displacement, &line))
+					{
+						text += utils::string::va(" (%s:%lu)", line.FileName, line.LineNumber);
+					}
+				}
+
+				frames.push_back(text);
+			}
+
+			return frames;
+		}
+
 		std::string generate_crash_info(const LPEXCEPTION_POINTERS exceptioninfo)
 		{
 			std::string info{};
@@ -187,6 +255,14 @@ namespace exception
 
 			line(utils::string::va("OS Version: %u.%u", version_info.dwMajorVersion, version_info.dwMinorVersion));
 
+			// MWX: a readable call stack, so last_crash (debug interface / MCP) shows where it died
+			line("");
+			line("Call stack:");
+			for (const auto& frame : get_call_stack(exceptioninfo))
+			{
+				line("  " + frame);
+			}
+
 			return info;
 		}
 
@@ -196,10 +272,18 @@ namespace exception
 			                                                 game::environment::get_real_mode(),
 			                                                 get_timestamp().data());
 
+			const auto info = generate_crash_info(exceptioninfo);
+
 			utils::compression::zip::archive zip_file{};
 			zip_file.add("crash.dmp", create_minidump(exceptioninfo));
-			zip_file.add("info.txt", generate_crash_info(exceptioninfo));
+			zip_file.add("info.txt", info);
 			zip_file.write(crash_name, "HorizonMW Crash Dump");
+
+			// MWX: the same text next to the dump, readable without unpacking the zip
+			// (last_crash in the debug interface / MCP)
+			utils::io::create_directory("mwx-logs");
+			utils::io::write_file("mwx-logs/last_crash.txt",
+				crash_name + "\n\n" + info);
 		}
 
 		bool is_harmless_error(const LPEXCEPTION_POINTERS exceptioninfo)

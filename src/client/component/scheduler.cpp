@@ -1,6 +1,7 @@
 #include <std_include.hpp>
 #include "loader/component_loader.hpp"
 
+#include "console.hpp"
 #include "scheduler.hpp"
 #include "game/game.hpp"
 
@@ -52,7 +53,24 @@ namespace scheduler
 
 						i->last_call = now;
 
-						const auto res = i->handler();
+						// MWX: one failing task must not stop the whole pipeline (and must not take
+						// the game down): log it and drop the task.
+						auto res = cond_continue;
+						try
+						{
+							res = i->handler();
+						}
+						catch (const std::exception& e)
+						{
+							console::error("[scheduler] task failed: %s\n", e.what());
+							res = cond_end;
+						}
+						catch (...)
+						{
+							console::error("[scheduler] task failed (unknown error)\n");
+							res = cond_end;
+						}
+
 						if (res == cond_end)
 						{
 							i = tasks.erase(i);

@@ -18,6 +18,9 @@
 
 #include <utils/hook.hpp>
 
+#include <array>
+#include <string_view>
+
 namespace scripting
 {
 	std::unordered_map<int, std::unordered_map<std::string, int>> fields_table;
@@ -54,6 +57,14 @@ namespace scripting
 
 		std::vector<std::function<void(bool, bool)>> shutdown_callbacks;
 
+		// MWX: debug interface event callbacks
+		std::mutex notify_callback_mutex;
+		std::vector<scripting::notify_callback> notify_callbacks;
+		constexpr auto notify_interest = std::to_array<std::string_view>({
+			"game_ended", "joined_team", "spawned_player", "spawned", "connected", "disconnect",
+			"killed", "killed_enemy", "killed_player", "damage", "damage_instant", "infected"
+		});
+
 		std::unordered_map<unsigned int, std::string> canonical_string_table;
 
 		void vm_notify_stub(const unsigned int notify_list_owner_id, const game::scr_string_t string_value,
@@ -71,6 +82,31 @@ namespace scripting
 					for (auto* value = top; value->type != game::VAR_PRECODEPOS; --value)
 					{
 						e.arguments.emplace_back(*value);
+					}
+
+					std::vector<scripting::notify_callback> callbacks;
+					{
+						std::lock_guard _(notify_callback_mutex);
+						callbacks = notify_callbacks;
+					}
+
+					if (!callbacks.empty())
+					{
+						const auto interested = std::find(notify_interest.begin(), notify_interest.end(),
+							std::string_view(e.name)) != notify_interest.end();
+						if (interested)
+						{
+							for (const auto& callback : callbacks)
+							{
+								try
+								{
+									callback(e.name, notify_list_owner_id, e.arguments);
+								}
+								catch (...)
+								{
+								}
+							}
+						}
 					}
 				}
 			}
@@ -213,6 +249,12 @@ namespace scripting
 	void on_shutdown(const std::function<void(bool, bool)>& callback)
 	{
 		shutdown_callbacks.push_back(callback);
+	}
+
+	void add_notify_callback(notify_callback callback)
+	{
+		std::lock_guard _(notify_callback_mutex);
+		notify_callbacks.push_back(std::move(callback));
 	}
 
 	std::optional<std::string> get_canonical_string(const unsigned int id)

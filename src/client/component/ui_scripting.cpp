@@ -840,6 +840,70 @@ namespace ui_scripting
 		return *game::hks::lua_state != nullptr;
 	}
 
+	bool eval(const std::string& code, std::vector<std::string>* results, std::string* error)
+	{
+		try
+		{
+			if (!lui_running())
+			{
+				if (error) *error = "LUI is not running (still loading?)";
+				return false;
+			}
+
+			const auto lua = get_globals();
+			const auto load_result = lua["loadstring"](code, "mwx_debug");
+			if (load_result.empty() || !load_result[0].is<function>())
+			{
+				if (error)
+				{
+					*error = load_result.size() > 1 && load_result[1].is<std::string>()
+						? load_result[1].as<std::string>()
+						: "could not compile the Lua chunk";
+				}
+				return false;
+			}
+
+			const auto call_result = lua["pcall"](load_result[0]);
+			if (call_result.empty() || !call_result[0].is<bool>() || !call_result[0].as<bool>())
+			{
+				if (error)
+				{
+					if (call_result.size() > 1 && call_result[1].is<std::string>())
+					{
+						*error = call_result[1].as<std::string>();
+					}
+					else if (call_result.size() > 1)
+					{
+						const auto str = lua["tostring"](call_result[1]);
+						*error = str.empty() ? "Lua error" : str[0].as<std::string>();
+					}
+					else
+					{
+						*error = "Lua error";
+					}
+				}
+				return false;
+			}
+
+			if (results)
+			{
+				const auto to_string = lua["tostring"];
+				for (auto i = 1u; i < call_result.size(); ++i)
+				{
+					const auto str = to_string(call_result[i]);
+					results->push_back(str.empty() ? std::string{} : str[0].as<std::string>());
+				}
+			}
+
+			return true;
+		}
+		catch (const std::exception& e)
+		{
+			if (error) *error = e.what();
+			return false;
+		}
+	}
+
 	class component final : public component_interface
 	{
 	public:

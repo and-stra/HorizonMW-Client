@@ -34,6 +34,7 @@ namespace logfile
 		utils::hook::detour g_log_printf_hook;
 
 		std::vector<scripting::function> say_callbacks;
+		std::vector<std::function<void(const std::string&)>> line_callbacks;
 
 		game::dvar_t* logfile;
 		game::dvar_t* g_log;
@@ -159,17 +160,33 @@ namespace logfile
 
 		void g_log_printf_stub(const char* fmt, ...)
 		{
-			if (!logfile->current.enabled)
-			{
-				return;
-			}
-
 			char va_buffer[0x400] = {0};
 
 			va_list ap;
 			va_start(ap, fmt);
 			vsprintf_s(va_buffer, fmt, ap);
 			va_end(ap);
+
+			// MWX: the test interface reads kills/damage/joins from these lines, also when the
+			// log file itself is turned off
+			if (!line_callbacks.empty())
+			{
+				for (const auto& callback : line_callbacks)
+				{
+					try
+					{
+						callback(va_buffer);
+					}
+					catch (...)
+					{
+					}
+				}
+			}
+
+			if (!logfile || !logfile->current.enabled)
+			{
+				return;
+			}
 
 			const auto file = g_log->current.string;
 			const auto time = *game::level_time / 1000;
@@ -186,6 +203,11 @@ namespace logfile
 	void clear_callbacks()
 	{
 		vm_execute_hooks.clear();
+	}
+
+	void add_line_callback(const std::function<void(const std::string&)>& callback)
+	{
+		line_callbacks.push_back(callback);
 	}
 
 	void enable_vm_execute_hook()

@@ -7,15 +7,19 @@
 #include <utils/http.hpp>
 #include <utils/string.hpp>
 
+#include <algorithm>
+
 // MWX MCP bridge (stdio, newline-delimited JSON-RPC 2.0).
 //
 // Add to an MCP client, e.g. Claude desktop (claude_desktop_config.json):
 //   "mcpServers": { "mwx": { "command": "C:\\...\\mwx.exe", "args": ["-mcp"] } }
-// or opencode (opencode.json):
+// or opencode (opencode.json in the repo):
 //   "mcp": { "mwx": { "type": "local", "command": ["C:\\...\\mwx.exe", "-mcp"] } }
 //
-// Nothing of the game is loaded in this mode; it only forwards to the debug server of a
-// running mwx.exe (client: 127.0.0.1:27099, dedicated server: 127.0.0.1:27098).
+// Nothing of the game is loaded in this mode; it only forwards to the debug server of running
+// mwx.exe instances (client: 127.0.0.1:27099, dedicated server: 127.0.0.1:27098) and starts or
+// stops instances. Every tool takes an optional "target": an instance id from start_client /
+// start_server, a debug port, or "client" / "server" (the default instance of that kind).
 
 namespace mcp
 {
@@ -26,13 +30,19 @@ namespace mcp
 
 		std::mutex output_mutex;
 
-		struct launched_process
+		struct instance_t
 		{
+			std::string id;
+			bool dedicated = false;
+			std::uint16_t port = 0;
 			PROCESS_INFORMATION info{};
-			std::string args;
+			std::string command_line;
 		};
 
-		std::unordered_map<std::string, launched_process> launched; // "client" / "server"
+		std::mutex instance_mutex;
+		std::vector<instance_t> instances;
+		std::uint32_t next_client = 1;
+		std::uint32_t next_server = 1;
 
 		void send(const json& message)
 		{
@@ -49,21 +59,80 @@ namespace mcp
 			return path;
 		}
 
+		bool process_running(const instance_t& instance)
+		{
+			if (!instance.info.hProcess)
+			{
+				return false;
+			}
+
+			DWORD code{};
+			return GetExitCodeProcess(instance.info.hProcess, &code) && code == STILL_ACTIVE;
+		}
+
+		std::optional<instance_t> find_instance(const std::string& target)
+		{
+			std::lock_guard _(instance_mutex);
+
+			for (const auto& instance : instances)
+			{
+				if (instance.id == target)
+				{
+					return instance;
+				}
+			}
+
+			const auto is_server_target = target == "server";
+			if (target == "client" || is_server_target)
+			{
+				for (const auto& instance : instances)
+				{
+					if (instance.dedicated == is_server_target && process_running(instance))
+					{
+						return instance;
+					}
+				}
+			}
+
+			return {};
+		}
+
 		std::uint16_t port_for(const std::string& target)
 		{
+			if (const auto instance = find_instance(target))
+			{
+				return instance->port;
+			}
+
+			if (!target.empty() && std::all_of(target.begin(), target.end(), [](const char c) { return std::isdigit(static_cast<unsigned char>(c)); }))
+			{
+				return static_cast<std::uint16_t>(std::atoi(target.data()));
+			}
+
 			return target == "server" ? debug_server::default_server_port : debug_server::default_client_port;
+		}
+
+		std::string describe_target(const std::string& target)
+		{
+			if (const auto instance = find_instance(target))
+			{
+				return instance->id + " (" + std::to_string(instance->port) + ")";
+			}
+
+			return target + " (" + std::to_string(port_for(target)) + ")";
 		}
 
 		json rpc(const std::string& target, const std::string& method, const json& params = json::object(), const int timeout_s = 5)
 		{
-			const auto url = utils::string::va("http://127.0.0.1:%u/rpc", port_for(target));
+			const auto port = port_for(target);
+			const auto url = utils::string::va("http://127.0.0.1:%u/rpc", port);
 			const json request{{"method", method}, {"params", params}};
 
 			const auto result = utils::http::get_data(url, request.dump(), {{"Content-Type", "application/json"}}, {}, timeout_s);
 			if (!result.has_value() || result->code != CURLE_OK)
 			{
 				return json{{"error", utils::string::va("mwx %s is not running (no answer on 127.0.0.1:%u)",
-					target.data(), port_for(target))}, {"not_running", true}};
+					describe_target(target).data(), port)}, {"not_running", true}};
 			}
 
 			try
@@ -76,114 +145,262 @@ namespace mcp
 			}
 		}
 
-		bool is_running(const std::string& target)
+		std::uint16_t allocate_port(const bool dedicated)
 		{
-			const auto it = launched.find(target);
-			if (it == launched.end())
+			std::lock_guard _(instance_mutex);
+
+			const auto first = dedicated ? static_cast<std::uint16_t>(debug_server::default_server_port + 10)
+				: debug_server::default_client_port;
+			const auto limit = dedicated ? 27200 : 27100;
+
+			for (auto candidate = first; candidate <= limit; ++candidate)
 			{
-				return false;
+				auto used = false;
+				for (const auto& instance : instances)
+				{
+					if (instance.port == candidate && process_running(instance))
+					{
+						used = true;
+						break;
+					}
+				}
+
+				if (!used)
+				{
+					return candidate;
+				}
 			}
 
-			DWORD code{};
-			return GetExitCodeProcess(it->second.info.hProcess, &code) && code == STILL_ACTIVE;
+			return first;
 		}
 
-		json start_game(const json& args)
+		std::string quote_arg(const std::string& value)
 		{
-			const auto dedicated = args.value("dedicated", false);
-			const std::string target = dedicated ? "server" : "client";
+			return "\"" + value + "\"";
+		}
 
-			if (!rpc(target, "status", json::object(), 2).contains("not_running"))
-			{
-				return json{{"error", "mwx " + target + " is already running"}};
-			}
-
-			std::string extra = args.value("args", "");
-			if (dedicated && extra.empty())
-			{
-				extra = "+exec server_default.cfg +set net_port 27016 +map_rotate";
-			}
+		json start_instance(const bool dedicated, const json& args)
+		{
+			const auto port = static_cast<std::uint16_t>(args.value("port", 0)) != 0
+				? static_cast<std::uint16_t>(args.value("port", 0)) : allocate_port(dedicated);
 
 			const auto exe = get_exe_path();
 			const auto dir = exe.parent_path();
-			std::string command_line = utils::string::va("\"%s\" %s%s", exe.string().data(),
-				dedicated ? "-dedicated -memoryfix " : "", extra.data());
+
+			std::string command_line = utils::string::va("\"%s\" %s-debugport %u", exe.string().data(),
+				dedicated ? "-dedicated -memoryfix " : "", port);
+
+			// test mode: windowed 960x540, muted, no mouse capture (see test_mode.cpp)
+			if (args.value("test_mode", true))
+			{
+				command_line += " +set mwx_test_mode 1";
+			}
+
+			const auto resolution = args.value("resolution", "");
+			if (!resolution.empty())
+			{
+				command_line += " +set r_mode -1 +set r_customwidth " + resolution.substr(0, resolution.find('x')) +
+					" +set r_customheight " + resolution.substr(resolution.find('x') + 1);
+			}
+
+			if (args.contains("dvars") && args["dvars"].is_object())
+			{
+				for (const auto& [name, value] : args["dvars"].items())
+				{
+					command_line += " +set " + name + " " + quote_arg(value.is_string() ? value.get<std::string>() : value.dump());
+				}
+			}
+
+			if (args.contains("mod") && args["mod"].is_string() && !args["mod"].get<std::string>().empty())
+			{
+				command_line += " -mod " + quote_arg(args["mod"].get<std::string>());
+			}
+
+			const auto gametype = args.value("gametype", "");
+			if (!gametype.empty())
+			{
+				command_line += " +set g_gametype " + quote_arg(gametype);
+			}
+
+			const auto map = args.value("map", "");
+			if (!map.empty())
+			{
+				command_line += " +map " + quote_arg(map);
+			}
+			else if (dedicated)
+			{
+				command_line += " +exec server_default.cfg +set net_port 27016 +map_rotate";
+			}
+
+			const auto extra = args.value("args", "");
+			if (!extra.empty())
+			{
+				command_line += " " + extra;
+			}
 
 			STARTUPINFOA startup{};
 			startup.cb = sizeof(startup);
-			launched_process process{};
-			process.args = command_line;
 
-			// own console for the game (it must not write into our stdout, that's the MCP channel)
+			PROCESS_INFORMATION info{};
 			if (!CreateProcessA(nullptr, command_line.data(), nullptr, nullptr, FALSE, CREATE_NEW_CONSOLE,
-				nullptr, dir.string().data(), &startup, &process.info))
+				nullptr, dir.string().data(), &startup, &info))
 			{
 				return json{{"error", utils::string::va("CreateProcess failed (%lu)", GetLastError())}};
 			}
 
-			if (const auto old = launched.find(target); old != launched.end())
+			instance_t instance{};
+			instance.command_line = command_line;
+			instance.dedicated = dedicated;
+			instance.port = port;
+
 			{
-				CloseHandle(old->second.info.hProcess);
-				CloseHandle(old->second.info.hThread);
+				std::lock_guard _(instance_mutex);
+				instance.id = dedicated ? "s" + std::to_string(next_server++) : "c" + std::to_string(next_client++);
+				instance.info = info;
+				instances.push_back(instance);
 			}
 
-			launched[target] = process;
-			return json{{"result", {{"started", target}, {"pid", process.info.dwProcessId}, {"command_line", command_line}}}};
+			return json{{"id", instance.id}, {"pid", info.dwProcessId}, {"port", port},
+				{"dedicated", dedicated}, {"command_line", command_line}};
 		}
 
-		json stop_game(const json& args)
+		json stop_instance(const std::string& target)
 		{
-			const auto target = args.value("target", "client");
+			std::string id;
+			std::uint16_t port = 0;
+			PROCESS_INFORMATION info{};
 
-			const auto answer = rpc(target, "command", {{"command", "quit"}}, 2);
-			if (const auto it = launched.find(target); it != launched.end())
 			{
-				if (WaitForSingleObject(it->second.info.hProcess, 10000) == WAIT_TIMEOUT)
+				std::lock_guard _(instance_mutex);
+				for (auto& instance : instances)
 				{
-					TerminateProcess(it->second.info.hProcess, 1);
-					return json{{"result", "did not quit within 10 s, terminated"}};
+					if (instance.id == target)
+					{
+						id = instance.id;
+						port = instance.port;
+						info = instance.info;
+						instance.info = {};
+						break;
+					}
 				}
-				return json{{"result", "quit"}};
 			}
 
-			if (answer.contains("error"))
+			if (id.empty())
 			{
-				return answer;
+				return json{{"error", "no instance with id " + target}};
 			}
-			return json{{"result", "quit command sent"}};
+
+			const auto url = utils::string::va("http://127.0.0.1:%u/rpc", port);
+			const json request{{"method", "command"}, {"params", {{"command", "quit"}}}};
+			const auto answer = utils::http::get_data(url, request.dump(), {{"Content-Type", "application/json"}}, {}, 2);
+
+			if (info.hProcess)
+			{
+				if (WaitForSingleObject(info.hProcess, 10000) == WAIT_TIMEOUT)
+				{
+					TerminateProcess(info.hProcess, 1);
+					CloseHandle(info.hProcess);
+					CloseHandle(info.hThread);
+					return json{{"result", "did not quit within 10 s, terminated"}, {"id", id}};
+				}
+
+				CloseHandle(info.hProcess);
+				CloseHandle(info.hThread);
+			}
+
+			return json{{"result", "quit"}, {"id", id}};
+		}
+
+		json list_instances()
+		{
+			std::vector<instance_t> copy;
+			{
+				std::lock_guard _(instance_mutex);
+				copy = instances;
+			}
+
+			json result = json::array();
+			for (const auto& instance : copy)
+			{
+				const auto running = process_running(instance);
+				json status{};
+				if (running)
+				{
+					const auto url = utils::string::va("http://127.0.0.1:%u/rpc", instance.port);
+					const json request{{"method", "status"}, {"params", json::object()}};
+					const auto answer = utils::http::get_data(url, request.dump(), {{"Content-Type", "application/json"}}, {}, 2);
+					if (answer.has_value() && answer->code == CURLE_OK)
+					{
+						try
+						{
+							status = json::parse(answer->buffer);
+						}
+						catch (...)
+						{
+						}
+					}
+				}
+
+				result.emplace_back(json{
+					{"id", instance.id},
+					{"dedicated", instance.dedicated},
+					{"port", instance.port},
+					{"pid", instance.info.dwProcessId},
+					{"running", running},
+					{"command_line", instance.command_line},
+					{"status", status}
+				});
+			}
+
+			return json{{"instances", result}};
 		}
 
 		json wait_for(const json& args)
 		{
 			const auto target = args.value("target", "client");
 			const auto state = args.value("state", "main_menu");
-			const auto timeout = std::clamp(args.value("timeout_s", 120), 1, 600);
+			const auto timeout = std::clamp(args.value("timeout_s", args.value("timeout", 120)), 1, 3600);
+
+			json params{{"state", state}, {"timeout_s", timeout}};
+			for (const auto& [key, value] : args.items())
+			{
+				if (key != "target" && key != "timeout_s" && key != "timeout")
+				{
+					params[key] = value;
+				}
+			}
 
 			const auto start = std::chrono::steady_clock::now();
+			const auto deadline = start + std::chrono::seconds(timeout);
 			json last{};
-			while (std::chrono::steady_clock::now() - start < std::chrono::seconds(timeout))
-			{
-				last = rpc(target, "status", json::object(), 2);
-				if (state == "running" && !last.contains("not_running"))
-				{
-					return json{{"result", {{"reached", state}, {"status", last}}}};
-				}
 
-				if (last.contains("result"))
+			while (std::chrono::steady_clock::now() < deadline)
+			{
+				const auto remaining = std::chrono::duration_cast<std::chrono::seconds>(deadline - std::chrono::steady_clock::now()).count();
+				params["timeout_s"] = std::max<std::int64_t>(1, std::min<std::int64_t>(remaining, 10));
+
+				const auto answer = rpc(target, "wait", params, static_cast<int>(params["timeout_s"].get<std::int64_t>()) + 15);
+				last = answer;
+
+				if (!answer.contains("not_running"))
 				{
-					const auto& status = last["result"];
-					const auto reached =
-						(state == "main_menu" && status.value("main_menu", false)) ||
-						(state == "in_game" && status.value("in_game", false)) ||
-						(state == "server_running" && status.value("sv_running", false) && !status.value("main_menu", false));
-					if (reached)
+					if (answer.contains("result"))
 					{
-						const auto took = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
-						return json{{"result", {{"reached", state}, {"waited_ms", took}, {"status", status}}}};
+						auto reached = answer;
+						reached["result"]["waited_ms"] = std::chrono::duration_cast<std::chrono::milliseconds>(
+							std::chrono::steady_clock::now() - start).count();
+						return reached;
+					}
+
+					// an error other than a timeout (unknown state, busy) is final
+					const auto error = answer.value("error", "");
+					if (error.find("timeout") == std::string::npos && error.find("busy") == std::string::npos)
+					{
+						return answer;
 					}
 				}
-
-				if (!is_running(target) && launched.contains(target))
+				else if (const auto instance = find_instance(target); instance.has_value() && instance->info.hProcess &&
+					!process_running(instance.value()))
 				{
 					return json{{"error", "the game process exited"}, {"last", last}};
 				}
@@ -196,8 +413,8 @@ namespace mcp
 
 		json target_schema()
 		{
-			return {{"type", "string"}, {"enum", {"client", "server"}},
-				{"description", "client = the game (port 27099), server = dedicated server (port 27098). Default client."}};
+			return {{"type", "string"},
+				{"description", "Instance id from start_client/start_server (e.g. c1, s1), a debug port, or 'client'/'server' (default instance of that kind)."}};
 		}
 
 		json tools()
@@ -205,7 +422,7 @@ namespace mcp
 			return json::array({
 				{
 					{"name", "game_status"},
-					{"description", "State of a running mwx instance: map, game type, main menu / in game, connected server, players (name, team, score, ping, bot, position; only where the server runs)."},
+					{"description", "State of a running mwx instance: map, game type, main menu / in game, connected server, players (name, team, score, ping, bot, position)."},
 					{"inputSchema", {{"type", "object"}, {"properties", {{"target", target_schema()}}}}},
 				},
 				{
@@ -235,20 +452,134 @@ namespace mcp
 				},
 				{
 					{"name", "start_game"},
-					{"description", "Starts mwx.exe (the game, or a dedicated server with dedicated=true). Optional extra command line args, e.g. '+set net_port 27017 +map mp_crash'. Default server args: +exec server_default.cfg +set net_port 27016 +map_rotate."},
+					{"description", "Starts mwx.exe (dedicated=true for a dedicated server). Older alias of start_client/start_server; returns an instance id."},
 					{"inputSchema", {{"type", "object"}, {"properties", {{"dedicated", {{"type", "boolean"}}}, {"args", {{"type", "string"}}}}}}},
 				},
 				{
+					{"name", "start_client"},
+					{"description", "Starts a game client. Optional: map, gametype, mod ('mods/<name>'), dvars {name: value}, resolution ('960x540'), args, port. Test mode (windowed, muted, no mouse capture) is on by default."},
+					{"inputSchema", {{"type", "object"}, {"properties", {
+						{"map", {{"type", "string"}}}, {"gametype", {{"type", "string"}}}, {"mod", {{"type", "string"}}},
+						{"dvars", {{"type", "object"}}}, {"resolution", {{"type", "string"}}}, {"args", {{"type", "string"}}},
+						{"test_mode", {{"type", "boolean"}}}, {"port", {{"type", "integer"}}}}}}},
+				},
+				{
+					{"name", "start_server"},
+					{"description", "Starts a dedicated server. Optional: map, gametype, mod, dvars, args, port. Map defaults to map_rotate with server_default.cfg."},
+					{"inputSchema", {{"type", "object"}, {"properties", {
+						{"map", {{"type", "string"}}}, {"gametype", {{"type", "string"}}}, {"mod", {{"type", "string"}}},
+						{"dvars", {{"type", "object"}}}, {"args", {{"type", "string"}}}, {"port", {{"type", "integer"}}}}}}},
+				},
+				{
+					{"name", "list_instances"},
+					{"description", "The instances this MCP server started: id, port, pid, running, command line, status."},
+					{"inputSchema", {{"type", "object"}, {"properties", json::object()}}},
+				},
+				{
+					{"name", "stop_instance"},
+					{"description", "Stops an instance this MCP server started (id from start_client/start_server). Terminates it after 10 s if it doesn't quit."},
+					{"inputSchema", {{"type", "object"}, {"properties", {{"id", {{"type", "string"}}}}}, {"required", {"id"}}}},
+				},
+				{
 					{"name", "stop_game"},
-					{"description", "Quits a running mwx instance (terminates it after 10 s if it was started by start_game and doesn't quit)."},
+					{"description", "Quits a running mwx instance (target 'client'/'server' or an instance id)."},
 					{"inputSchema", {{"type", "object"}, {"properties", {{"target", target_schema()}}}}},
 				},
 				{
+					{"name", "connect_client_to_server"},
+					{"description", "Connects a client to a dedicated server or host on 127.0.0.1 (uses the server's net_port)."},
+					{"inputSchema", {{"type", "object"}, {"properties", {{"client", target_schema()}, {"server", target_schema()}}}}},
+				},
+				{
 					{"name", "wait_for"},
-					{"description", "Waits until an instance reaches a state: running (debug server answers), main_menu, in_game, server_running. Returns how long it took."},
+					{"description", "Waits (inside the game, no polling by the client) until a condition is true. state: main_menu, in_game, server_running, map_loaded (value = map name), menu_open (name), player_count (count, op '>=' or '=='), dvar (name, value), event (type, filter). Returns {reached, waited_ms, details}."},
 					{"inputSchema", {{"type", "object"}, {"properties", {
-						{"state", {{"type", "string"}, {"enum", {"running", "main_menu", "in_game", "server_running"}}}},
-						{"timeout_s", {{"type", "integer"}}}, {"target", target_schema()}}}, {"required", {"state"}}}},
+						{"state", {{"type", "string"}}}, {"timeout_s", {{"type", "integer"}}},
+						{"value", {{"type", "string"}}}, {"name", {{"type", "string"}}}, {"type", {{"type", "string"}}},
+						{"filter", {{"type", "string"}}}, {"count", {{"type", "integer"}}}, {"op", {{"type", "string"}}},
+						{"target", target_schema()}}}, {"required", {"state"}}}},
+				},
+				{
+					{"name", "screenshot"},
+					{"description", "Native screenshot of the rendered frame (also while the window is not focused). Returns the PNG as an image and saves it to mwx-screenshots/<timestamp>.png. Optional scale (0.5) and region {x,y,width,height}."},
+					{"inputSchema", {{"type", "object"}, {"properties", {
+						{"scale", {{"type", "number"}}}, {"region", {{"type", "object"}}}, {"path", {{"type", "string"}}},
+						{"target", target_schema()}}}}},
+				},
+				{
+					{"name", "ui_snapshot"},
+					{"description", "Tree of the visible LUI menu elements: menu stack, and per element id, type, text, visible, focused, disabled, position/size."},
+					{"inputSchema", {{"type", "object"}, {"properties", {{"target", target_schema()}}}}},
+				},
+				{
+					{"name", "ui_click"},
+					{"description", "Clicks a menu element through the normal button path: by id or by visible text (and optional index). Returns what was clicked."},
+					{"inputSchema", {{"type", "object"}, {"properties", {{"id", {{"type", "string"}}}, {"text", {{"type", "string"}}}, {"index", {{"type", "integer"}}}, {"target", target_schema()}}}}},
+				},
+				{
+					{"name", "ui_back"},
+					{"description", "Leaves the top menu (LUI.FlowManager.RequestLeaveMenuByName of the top menu)."},
+					{"inputSchema", {{"type", "object"}, {"properties", {{"target", target_schema()}}}}},
+				},
+				{
+					{"name", "ui_open"},
+					{"description", "Opens a LUI menu by name (LUI.FlowManager.RequestAddMenu)."},
+					{"inputSchema", {{"type", "object"}, {"properties", {{"name", {{"type", "string"}}}, {"target", target_schema()}}}, {"required", {"name"}}}},
+				},
+				{
+					{"name", "lua_eval"},
+					{"description", "Runs Lua in the LUI state and returns the result as JSON. Debug only."},
+					{"inputSchema", {{"type", "object"}, {"properties", {{"code", {{"type", "string"}}}, {"target", target_schema()}}}, {"required", {"code"}}}},
+				},
+				{
+					{"name", "gsc_eval"},
+					{"description", "Runs a GSC snippet in the running server script VM and returns its result (e.g. 'return level.gametype;'). Errors come back as text."},
+					{"inputSchema", {{"type", "object"}, {"properties", {{"code", {{"type", "string"}}}, {"target", target_schema()}}}, {"required", {"code"}}}},
+				},
+				{
+					{"name", "input"},
+					{"description", "Input without OS focus. action: press|hold|move|release|look|stop; command ('+attack', 'weapnext', '-forward'); ms; for look: pitch/yaw or look_at [x,y,z]. Works through the engine commands."},
+					{"inputSchema", {{"type", "object"}, {"properties", {
+						{"action", {{"type", "string"}}}, {"command", {{"type", "string"}}}, {"ms", {{"type", "integer"}}},
+						{"pitch", {{"type", "number"}}}, {"yaw", {{"type", "number"}}},
+						{"look_at", {{"type", "array"}, {"items", {{"type", "number"}}}}}, {"target", target_schema()}}}, {"required", {"action"}}}},
+				},
+				{
+					{"name", "players"},
+					{"description", "Server-side player list: name, num, bot, team, alive, health, score, kills, deaths, origin, angles, current weapon, weapons with clip/stock, perks, class."},
+					{"inputSchema", {{"type", "object"}, {"properties", {{"target", target_schema()}}}}},
+				},
+				{
+					{"name", "entities"},
+					{"description", "Entities by classname, targetname, or near a point. Returns classname, origin, model, targetname."},
+					{"inputSchema", {{"type", "object"}, {"properties", {
+						{"classname", {{"type", "string"}}}, {"targetname", {{"type", "string"}}},
+						{"origin", {{"type", "array"}}}, {"radius", {{"type", "number"}}}, {"limit", {{"type", "integer"}}},
+						{"target", target_schema()}}}}},
+				},
+				{
+					{"name", "bots"},
+					{"description", "Bots: action spawn (count), kick (num), team (num, team), freeze / unfreeze (num)."},
+					{"inputSchema", {{"type", "object"}, {"properties", {
+						{"action", {{"type", "string"}}}, {"count", {{"type", "integer"}}}, {"num", {{"type", "integer"}}},
+						{"team", {{"type", "string"}}}, {"target", target_schema()}}}, {"required", {"action"}}}},
+				},
+				{
+					{"name", "events"},
+					{"description", "Server-side event stream with a cursor: since = last id. Types: kill, damage, join, quit, spawn, team_change, match_end, script_error, console_error, console_warning, test_assert, test_done. 5000 events are kept."},
+					{"inputSchema", {{"type", "object"}, {"properties", {
+						{"since", {{"type", "integer"}}}, {"type", {{"type", "string"}}}, {"limit", {{"type", "integer"}}},
+						{"target", target_schema()}}}}},
+				},
+				{
+					{"name", "perf"},
+					{"description", "fps, frame time, uptime, memory, map/gametype, players, and the zone load times of this start."},
+					{"inputSchema", {{"type", "object"}, {"properties", {{"target", target_schema()}}}}},
+				},
+				{
+					{"name", "last_crash"},
+					{"description", "The newest minidump: file name, time, size and the info.txt content."},
+					{"inputSchema", {{"type", "object"}, {"properties", {{"target", target_schema()}}}}},
 				},
 			});
 		}
@@ -258,14 +589,82 @@ namespace mcp
 			const auto target = args.value("target", "client");
 
 			if (name == "game_status") return rpc(target, "status");
-			if (name == "run_command") return rpc(target, "command", {{"command", args.value("command", "")}});
+			if (name == "run_command") return rpc(target, "command", {{"command", args.value("command", "")}}, 10);
 			if (name == "get_dvar") return rpc(target, "get_dvar", {{"name", args.value("name", "")}});
 			if (name == "set_dvar") return rpc(target, "set_dvar", {{"name", args.value("name", "")}, {"value", args.value("value", "")}});
 			if (name == "console_log") return rpc(target, "console", {{"lines", args.value("lines", 100)}, {"filter", args.value("filter", "")}});
 			if (name == "load_times") return rpc(target, "load_times");
-			if (name == "start_game") return start_game(args);
-			if (name == "stop_game") return stop_game(args);
+			if (name == "perf") return rpc(target, "perf", json::object(), 10);
+			if (name == "last_crash") return rpc(target, "last_crash");
+			if (name == "events") return rpc(target, "events", {{"since", args.value("since", 0)}, {"type", args.value("type", "")}, {"limit", args.value("limit", 0)}});
+
+			if (name == "start_game")
+			{
+				return start_instance(args.value("dedicated", false), args);
+			}
+			if (name == "start_client") return start_instance(false, args);
+			if (name == "start_server") return start_instance(true, args);
+			if (name == "list_instances") return list_instances();
+			if (name == "stop_instance") return stop_instance(args.value("id", ""));
+			if (name == "stop_game")
+			{
+				if (const auto instance = find_instance(target))
+				{
+					return stop_instance(instance->id);
+				}
+
+				const auto answer = rpc(target, "command", {{"command", "quit"}}, 2);
+				return answer.contains("error") ? answer : json{{"result", "quit command sent"}};
+			}
+
+			if (name == "connect_client_to_server")
+			{
+				const auto client = args.value("client", "client");
+				const auto server = args.value("server", "server");
+				const auto status = rpc(server, "status");
+				if (!status.contains("result"))
+				{
+					return status;
+				}
+
+				const auto port = status["result"].value("net_port", "27016");
+				const auto command = "connect 127.0.0.1:" + port;
+				auto answer = rpc(client, "command", {{"command", command}}, 10);
+				if (answer.contains("error"))
+				{
+					return answer;
+				}
+
+				return json{{"result", command}, {"server", server}};
+			}
+
 			if (name == "wait_for") return wait_for(args);
+
+			if (name == "screenshot")
+			{
+				json params{};
+				if (args.contains("scale")) params["scale"] = args["scale"];
+				if (args.contains("region")) params["region"] = args["region"];
+				if (args.contains("path")) params["path"] = args["path"];
+				return rpc(target, "screenshot", params, 30);
+			}
+
+			if (name == "ui_snapshot") return rpc(target, "ui_snapshot", json::object(), 20);
+			if (name == "ui_click") return rpc(target, "ui_click", args, 20);
+			if (name == "ui_back") return rpc(target, "ui_back", json::object(), 20);
+			if (name == "ui_open") return rpc(target, "ui_open", {{"name", args.value("name", "")}}, 20);
+			if (name == "lua_eval") return rpc(target, "lua_eval", {{"code", args.value("code", "")}}, 30);
+			if (name == "gsc_eval") return rpc(target, "gsc_eval", {{"code", args.value("code", "")}}, 40);
+			if (name == "players") return rpc(target, "players", json::object(), 30);
+			if (name == "entities") return rpc(target, "entities", args, 30);
+			if (name == "bots") return rpc(target, "bots", args, 30);
+
+			if (name == "input")
+			{
+				json params = args;
+				params.erase("target");
+				return rpc(target, "input", params, 15);
+			}
 
 			return json{{"error", "unknown tool: " + name}};
 		}
@@ -291,7 +690,7 @@ namespace mcp
 					{"protocolVersion", requested},
 					{"capabilities", {{"tools", json::object()}}},
 					{"serverInfo", {{"name", "mwx"}, {"version", VERSION}}},
-					{"instructions", "Debug interface of MWX (HorizonMW-based Call of Duty: MWR LAN client). start_game / wait_for / game_status / run_command / console_log / load_times. target 'server' = dedicated server."},
+					{"instructions", "MWX (HorizonMW-based CoD:MWR LAN client) test interface. Instances: start_client/start_server/list_instances/stop_instance. Inspect and drive: game_status, players, events, ui_snapshot/ui_click, screenshot, gsc_eval, lua_eval, input, bots, wait_for. target = instance id, port, or client/server."},
 				});
 				return;
 			}
@@ -326,6 +725,18 @@ namespace mcp
 
 				const auto is_error = result.contains("error");
 				const auto& payload = is_error ? result : (result.contains("result") ? result["result"] : result);
+
+				// screenshots: return the PNG as an MCP image content block
+				if (name == "screenshot" && !is_error && payload.is_object() && payload.contains("png_base64"))
+				{
+					json content = json::array();
+					content.emplace_back(json{{"type", "image"}, {"data", payload["png_base64"]}, {"mimeType", "image/png"}});
+					content.emplace_back(json{{"type", "text"}, {"text", "saved to " + payload.value("path", "") +
+						" (" + std::to_string(payload.value("width", 0)) + "x" + std::to_string(payload.value("height", 0)) + ")"}});
+					reply({{"content", content}, {"isError", false}});
+					return;
+				}
+
 				const auto text = payload.is_string() ? payload.get<std::string>() : payload.dump(2, ' ', false, json::error_handler_t::replace);
 
 				reply({{"content", json::array({{{"type", "text"}, {"text", text}}})}, {"isError", is_error}});
@@ -371,11 +782,18 @@ namespace mcp
 			}
 		}
 
-		for (auto& [_, process] : launched)
 		{
-			CloseHandle(process.info.hProcess);
-			CloseHandle(process.info.hThread);
+			std::lock_guard _(instance_mutex);
+			for (auto& instance : instances)
+			{
+				if (instance.info.hProcess)
+				{
+					CloseHandle(instance.info.hProcess);
+					CloseHandle(instance.info.hThread);
+				}
+			}
 		}
+
 		return 0;
 	}
 }

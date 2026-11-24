@@ -15,6 +15,11 @@ namespace console
 	// MWX: the last `count` lines printed to the console (newest last)
 	std::vector<std::string> get_recent_lines(std::size_t count);
 
+	// MWX: called for every console line (also from game threads). Used by the debug
+	// interface for the event stream (errors, warnings, script errors). Must not print.
+	using sink = std::function<void(int type, const std::string& message)>;
+	void add_sink(sink callback);
+
 	template <typename... Args>
 	void error(const char* fmt, Args&&... args)
 	{
