@@ -70,13 +70,20 @@ main()
 
     test_assert(kills > 0, "a player scored a kill", ">0", kills);
 
-    test_step("wait for the round end");
+    test_step("end the round");
+
+    // deterministic end through the gametype's own endgame path (a natural time limit would make
+    // the test take minutes)
+    if (!level.gameended)
+    {
+        level thread maps\mp\gametypes\_gamelogic::endgame("allies", game["end_reason"]["time_limit_reached"]);
+    }
 
     waited = 0;
-    while (waited < 150 && !level.gameended)
+    while (waited < 30 && !level.gameended)
     {
-        wait 0.5;
-        waited = waited + 0.5;
+        wait 0.25;
+        waited = waited + 0.25;
     }
 
     ended = 0;

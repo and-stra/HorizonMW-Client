@@ -371,7 +371,10 @@ namespace mcp
 			}
 
 			const auto start = std::chrono::steady_clock::now();
-			const auto deadline = start + std::chrono::seconds(timeout);
+			// one tool call has to stay well under the MCP client's request timeout (~60 s), so a
+			// longer wait is split: it returns still_waiting and the caller calls again
+			const auto budget = std::min<std::int64_t>(timeout, 45);
+			const auto deadline = start + std::chrono::seconds(budget);
 			json last{};
 
 			while (std::chrono::steady_clock::now() < deadline)
@@ -408,6 +411,13 @@ namespace mcp
 				std::this_thread::sleep_for(1s);
 			}
 
+			if (budget < timeout)
+			{
+				return json{{"result", {{"reached", false}, {"still_waiting", true}, {"state", state},
+					{"waited_ms", std::chrono::duration_cast<std::chrono::milliseconds>(
+						std::chrono::steady_clock::now() - start).count()}, {"status", last}}}};
+			}
+
 			return json{{"error", "timeout waiting for " + state}, {"last", last}};
 		}
 
@@ -421,6 +431,7 @@ namespace mcp
 			std::string gametype;
 			json dvars = json::object();
 			int timeout_s = 300;
+			bool listen = false;
 		};
 
 		json load_test_manifest()
@@ -460,6 +471,7 @@ namespace mcp
 				test.gametype = entry.value("gametype", test.script);
 				test.dvars = entry.value("dvars", json::object());
 				test.timeout_s = entry.value("timeout_s", 300);
+				test.listen = entry.value("listen", false);
 				return test;
 			}
 
@@ -476,18 +488,162 @@ namespace mcp
 			return names;
 		}
 
-		json run_one_test(const test_case& test)
+		// A test run takes minutes (map load + match), far longer than MCP clients wait for one
+		// tool call (opencode closes the server after ~60 s). run_test / run_all_tests therefore
+		// start a background job and return at once; test_status reports the result.
+		struct test_job
+		{
+			std::string id;
+			std::string name;
+			std::string state = "running";
+			json result;
+			std::atomic_bool cancel{false};
+			std::chrono::steady_clock::time_point started = std::chrono::steady_clock::now();
+		};
+
+		std::mutex jobs_mutex;
+		std::vector<std::shared_ptr<test_job>> test_jobs;
+		std::uint32_t next_job = 0;
+
+		json run_one_test(const test_case& test, const std::shared_ptr<test_job>& job = {});
+
+		json job_summary(const std::shared_ptr<test_job>& job)
+		{
+			json entry{{"job", job->id}, {"name", job->name}, {"state", job->state},
+				{"elapsed_s", std::chrono::duration_cast<std::chrono::seconds>(
+					std::chrono::steady_clock::now() - job->started).count()}};
+			if (!job->result.is_null())
+			{
+				entry["result"] = job->result;
+			}
+			return entry;
+		}
+
+		json start_test_job(const std::string& name, const bool all)
+		{
+			auto job = std::make_shared<test_job>();
+			job->id = "t" + std::to_string(++next_job);
+			job->name = name;
+
+			{
+				std::lock_guard _(jobs_mutex);
+				test_jobs.push_back(job);
+			}
+
+			std::thread([job, all]()
+			{
+				json result{};
+				try
+				{
+					if (!all)
+					{
+						const auto test = find_test(job->name);
+						result = test.has_value() ? run_one_test(test.value(), job) : json{{"error", "unknown test"}};
+					}
+					else
+					{
+						json tests = json::array();
+						auto passed = 0;
+						auto failed = 0;
+						for (const auto& name : list_tests())
+						{
+							if (job->name != "all" && name != job->name)
+							{
+								continue;
+							}
+							if (job->cancel)
+							{
+								break;
+							}
+
+							const auto test = find_test(name);
+							if (!test.has_value())
+							{
+								continue;
+							}
+
+							const auto one = run_one_test(test.value(), job);
+							const auto ok = !one.contains("error") && one.value("failed", 1) == 0 &&
+								one.value("script_errors", 1) == 0;
+							ok ? ++passed : ++failed;
+							tests.emplace_back(one);
+							fprintf(stderr, "mwx mcp: test %s %s\n", name.data(), ok ? "green" : "failed");
+						}
+						result = json{{"tests", tests}, {"passed", passed}, {"failed", failed}};
+					}
+				}
+				catch (const std::exception& e)
+				{
+					result = json{{"error", std::string("test job failed: ") + e.what()}};
+				}
+
+				std::lock_guard _(jobs_mutex);
+				job->result = result;
+				job->state = "done";
+				fprintf(stderr, "mwx mcp: job %s (%s) done\n", job->id.data(), job->name.data());
+			}).detach();
+
+			return json{{"job", job->id}, {"name", name}, {"state", "running"},
+				{"hint", "poll test_status (job '" + job->id + "'); a full run takes minutes"}};
+		}
+
+		json test_status(const json& args)
+		{
+			const auto id = args.value("job", "");
+
+			std::lock_guard _(jobs_mutex);
+			json jobs = json::array();
+			for (auto it = test_jobs.rbegin(); it != test_jobs.rend(); ++it)
+			{
+				if (!id.empty() && (*it)->id != id)
+				{
+					continue;
+				}
+				jobs.emplace_back(job_summary(*it));
+			}
+
+			if (!id.empty() && jobs.empty())
+			{
+				return json{{"error", "no job with id " + id}};
+			}
+
+			return json{{"jobs", jobs}};
+		}
+
+		json cancel_test(const json& args)
+		{
+			const auto id = args.value("job", "");
+			std::lock_guard _(jobs_mutex);
+			for (auto& job : test_jobs)
+			{
+				if (id.empty() || job->id == id)
+				{
+					job->cancel = true;
+					return json{{"result", "cancelling " + job->id}};
+				}
+			}
+			return json{{"error", "no job with id " + id}};
+		}
+
+		json run_one_test(const test_case& test, const std::shared_ptr<test_job>& job)
 		{
 			const auto start = std::chrono::steady_clock::now();
 
-			// The map goes on the command line: a `map` command after boot hangs the dedicated
-			// server in this build. The test script itself is loaded by the normal script pass
-			// because mwx_test is set (see gsc::load_gametype_script_stub).
-			auto test_dvars = test.dvars;
-			test_dvars["mwx_test"] = test.script;
-
-			json start_args{{"map", test.map}, {"gametype", test.gametype}, {"dvars", test_dvars}, {"test_mode", true}};
-			auto started = start_instance(true, start_args);
+			// The map goes on the command line: a `map` command after boot hangs a dedicated
+			// server that was started without one. A listen client boots to the menu and then
+			// loads the map over the RPC (that works, and AW ported usermaps only load there).
+			json started{};
+			if (test.listen)
+			{
+				started = start_instance(false, json{{"test_mode", true}, {"resolution", "960x540"}});
+			}
+			else
+			{
+				auto test_dvars = test.dvars;
+				test_dvars["mwx_test"] = test.script;
+				started = start_instance(true, json{{"map", test.map}, {"gametype", test.gametype},
+					{"dvars", test_dvars}, {"test_mode", true}});
+			}
 			if (started.contains("error"))
 			{
 				return started;
@@ -496,16 +652,55 @@ namespace mcp
 			const auto id = started["id"].get<std::string>();
 			const auto stop = gsl::finally([&] { stop_instance(id); });
 
+			if (test.listen)
+			{
+				// wait for the debug server
+				json status{};
+				for (auto i = 0; i < 180; ++i)
+				{
+					status = rpc(id, "status", json::object(), 2);
+					if (status.contains("result"))
+					{
+						break;
+					}
+					std::this_thread::sleep_for(1s);
+				}
+
+				if (!status.contains("result"))
+				{
+					return json{{"error", "the client did not come up"}, {"test", test.name}, {"status", status}};
+				}
+
+				rpc(id, "set_dvar", {{"name", "g_gametype"}, {"value", test.gametype}});
+				rpc(id, "set_dvar", {{"name", "mwx_test"}, {"value", test.script}});
+				for (const auto& [name, value] : test.dvars.items())
+				{
+					rpc(id, "set_dvar", {{"name", name}, {"value", value.is_string() ? value.get<std::string>() : value.dump()}});
+				}
+
+				rpc(id, "command", {{"command", "map " + test.map}}, 10);
+			}
+
 			// wait until the server runs the map
 			json status{};
 			auto running = false;
 			for (auto i = 0; i < 180; ++i)
 			{
-				status = rpc(id, "status", json::object(), 2);
-				if (status.contains("result") && status["result"].value("sv_running", false))
+				if (job && job->cancel)
 				{
-					running = true;
-					break;
+					stop_instance(id);
+					return json{{"error", "cancelled"}, {"test", test.name}};
+				}
+
+				status = rpc(id, "status", json::object(), 2);
+				if (status.contains("result"))
+				{
+					const auto& st = status["result"];
+					if (st.value("sv_running", false) && (!test.listen || st.value("in_game", false)))
+					{
+						running = true;
+						break;
+					}
 				}
 				std::this_thread::sleep_for(1s);
 			}
@@ -529,6 +724,11 @@ namespace mcp
 
 			while (std::chrono::steady_clock::now() < deadline)
 			{
+				if (job && job->cancel)
+				{
+					break;
+				}
+
 				events = rpc(id, "events", {{"since", 0}, {"limit", 5000}}, 20);
 				if (events.contains("result"))
 				{
@@ -616,6 +816,7 @@ namespace mcp
 			result["test"] = test.name;
 			result["script"] = test.script;
 			result["map"] = test.map;
+			result["listen"] = test.listen;
 			result["passed"] = passed;
 			result["failed"] = failed;
 			result["failures"] = failures;
@@ -642,50 +843,23 @@ namespace mcp
 				return json{{"error", "name is required"}, {"tests", list_tests()}};
 			}
 
-			const auto test = find_test(name);
-			if (!test.has_value())
+			if (!find_test(name).has_value())
 			{
 				return json{{"error", "unknown test: " + name}, {"tests", list_tests()}};
 			}
 
-			return run_one_test(test.value());
+			return start_test_job(name, false);
 		}
 
 		json run_all_tests(const json& args)
 		{
 			const auto only = args.value("name", "");
-			json results = json::array();
-			auto passed = 0;
-			auto failed = 0;
-
-			for (const auto& name : list_tests())
+			if (!only.empty() && !find_test(only).has_value())
 			{
-				if (!only.empty() && name != only)
-				{
-					continue;
-				}
-
-				const auto test = find_test(name);
-				if (!test.has_value())
-				{
-					continue;
-				}
-
-				const auto result = run_one_test(test.value());
-				const auto ok = !result.contains("error") && result.value("failed", 1) == 0 && result.value("script_errors", 1) == 0;
-				if (ok)
-				{
-					++passed;
-				}
-				else
-				{
-					++failed;
-				}
-
-				results.emplace_back(result);
+				return json{{"error", "unknown test: " + only}, {"tests", list_tests()}};
 			}
 
-			return json{{"tests", results}, {"passed", passed}, {"failed", failed}};
+			return start_test_job(only.empty() ? "all" : only, true);
 		}
 
 		json target_schema()
@@ -865,13 +1039,23 @@ namespace mcp
 				},
 				{
 					{"name", "run_test"},
-					{"description", "Runs one game mode test on a dedicated server (starts it, sets mwx_test=<name> and the test dvars, loads the map, waits for test_done, stops the server). Returns passed/failed/failures/duration."},
+					{"description", "Starts one game mode test in the background (dedicated server with mwx_test=<name>, the test dvars and bots). Returns a job id at once; poll test_status for the result (a run takes minutes)."},
 					{"inputSchema", {{"type", "object"}, {"properties", {{"name", {{"type", "string"}}}}}, {"required", {"name"}}}},
 				},
 				{
 					{"name", "run_all_tests"},
-					{"description", "Runs every test from tests.json in a row (or only the one given as name) and returns the summary."},
+					{"description", "Starts every test from tests.json in a row in the background (or only the one given as name). Returns a job id; poll test_status."},
 					{"inputSchema", {{"type", "object"}, {"properties", {{"name", {{"type", "string"}}}}}}},
+				},
+				{
+					{"name", "test_status"},
+					{"description", "State and result of test jobs: job id, name, running/done, passed/failed/failures/steps/script_errors/duration. Without a job id: all jobs, newest first."},
+					{"inputSchema", {{"type", "object"}, {"properties", {{"job", {{"type", "string"}}}}}}},
+				},
+				{
+					{"name", "cancel_test"},
+					{"description", "Cancels a running test job (stops its server)."},
+					{"inputSchema", {{"type", "object"}, {"properties", {{"job", {{"type", "string"}}}}}}},
 				},
 			});
 		}
@@ -891,6 +1075,8 @@ namespace mcp
 			if (name == "list_tests") return json{{"tests", list_tests()}};
 			if (name == "run_test") return run_test(args);
 			if (name == "run_all_tests") return run_all_tests(args);
+			if (name == "test_status") return test_status(args);
+			if (name == "cancel_test") return cancel_test(args);
 			if (name == "events") return rpc(target, "events", {{"since", args.value("since", 0)}, {"type", args.value("type", "")}, {"limit", args.value("limit", 0)}});
 
 			if (name == "start_game")

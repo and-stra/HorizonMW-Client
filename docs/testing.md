@@ -78,12 +78,29 @@ Rules:
 | `gametype` | `g_gametype` for the run |
 | `dvars` | extra dvars (also `mwx_test_bots`, the number of bots to spawn) |
 | `timeout_s` | how long the bridge waits for `test_done` |
+| `listen` | `true` = run on a client that hosts (listen server) instead of a dedicated server |
 
 The extra runs (`infect_rust`, `war_rust`, `war_terrace`) reuse the scripts on other maps: HMW
 usermap loading (`mp_rust`) and an AW map port (`mp_terrace`, factions + helicopter).
 
 Objective modes (`sd`, `dom`, `dz`) check that the objective entities spawn; they use `mp_crash`
 because their objectives are map-placed.
+
+`listen: true` is used for AW ported maps: `mp_terrace` loads on a client but not on a dedicated
+server (the DS hangs during the map load, see the report).
+
+### Round ends
+
+`war.gsc`/`objective.gsc` end the round through the gametype's own path
+(`maps\mp\gametypes\_gamelogic::endgame`) instead of waiting for a time limit, so a test takes
+~85 s instead of several minutes. The real end path is still what runs.
+
+### Damage in tests
+
+H1's `dodamage` only works with the 2 argument form (`entity dodamage(amount, origin)`); the
+7 argument form used by HMW scripts does nothing in this build (probed). A death caused this way
+is attributed to the world, which the gametypes treat like a suicide - fine for the infected
+tests, but a "killed by player X" check needs a real weapon kill.
 
 ## Tools
 
