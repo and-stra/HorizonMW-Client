@@ -35,7 +35,6 @@ namespace gamemodes
 			{"ph", "war", 9, 0, "MWX_GAMETYPE_PH", "MWX_GAMETYPE_PH_DESC"},
 			{"mprops", "war", 9, 1, "MWX_GAMETYPE_MPROPS", "MWX_GAMETYPE_MPROPS_DESC"},
 			{"slasher", "war", 2, 0, "MWX_GAMETYPE_SLASHER", "MWX_GAMETYPE_SLASHER_DESC"},
-			{"snipers", "war", 4, 0, "MWX_GAMETYPE_SNIPERS", "MWX_GAMETYPE_SNIPERS_DESC"},
 			{"rpg", "war", 6, 0, "MWX_GAMETYPE_RPG", "MWX_GAMETYPE_RPG_DESC"},
 		};
 
@@ -84,7 +83,6 @@ namespace gamemodes
 			{"ph", "Props hide, hunters seek. Survive the round or find every prop."},
 			{"mprops", "Props hunt the soldiers. Eliminate every soldier to win."},
 			{"slasher", "Survive the Slasher, or take the Slasher down."},
-			{"snipers", "Gain points by eliminating enemy players. Sniper rifles only."},
 			{"rpg", "Gain points by eliminating enemy players. RPGs only."},
 			{"oic", "Gain points by eliminating enemy players. Every kill gives one round. Three lives."},
 			{"aon", "Empty pistol and a throwing knife. Reach 20 kills without dying for the bonus."},
@@ -439,243 +437,6 @@ namespace gamemodes
 
 			apply_gametype(value->string);
 		}
-
-		// ---------------------------------------------------------------- GSC getdvar override
-		// M4: the party ref stays in g_gametype (loading screen, scoreboard, menus show it), while the
-		// shipped GSC compares getdvar("g_gametype") with the base gametype ("war"). The H1 builtin
-		// table is an array of { const char* name; void (*func)(); int type; }; the entry for getdvar is
-		// found by looking for the name string and a pointer to it followed by a code pointer, then its
-		// function is detoured. Only the "g_gametype" name is rewritten.
-		struct memory_range
-		{
-			uintptr_t begin = 0;
-			uintptr_t end = 0;
-			bool executable = false;
-		};
-
-		std::vector<memory_range> module_ranges()
-		{
-			std::vector<memory_range> ranges;
-			const auto* base = reinterpret_cast<const std::uint8_t*>(GetModuleHandleA(nullptr));
-			if (!base)
-			{
-				return ranges;
-			}
-
-			const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
-			if (dos->e_magic != IMAGE_DOS_SIGNATURE)
-			{
-				return ranges;
-			}
-
-			const auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS*>(base + dos->e_lfanew);
-			if (nt->Signature != IMAGE_NT_SIGNATURE)
-			{
-				return ranges;
-			}
-
-			const auto* section = IMAGE_FIRST_SECTION(nt);
-			for (unsigned i = 0; i < nt->FileHeader.NumberOfSections; ++i)
-			{
-				const auto size = static_cast<uintptr_t>(std::max(section[i].Misc.VirtualSize, section[i].SizeOfRawData));
-				if (size == 0)
-				{
-					continue;
-				}
-
-				memory_range range{};
-				range.begin = reinterpret_cast<uintptr_t>(base + section[i].VirtualAddress);
-				range.end = range.begin + size;
-				range.executable = (section[i].Characteristics & IMAGE_SCN_MEM_EXECUTE) != 0;
-				ranges.push_back(range);
-			}
-
-			return ranges;
-		}
-
-		bool range_executable(const std::vector<memory_range>& ranges, const uintptr_t address)
-		{
-			for (const auto& range : ranges)
-			{
-				if (range.executable && address >= range.begin && address + 1 <= range.end)
-				{
-					return true;
-				}
-			}
-			return false;
-		}
-
-		utils::hook::detour getdvar_hook;
-		bool getdvar_hooked = false;
-
-		// H1's builtin function table: an array of function pointers, indexed by the compiler's builtin
-		// id (xsk's h1_func.cpp: getdvar = 0x39). The names are not in the exe, so the table is found by
-		// its shape: a run of ~778 code pointers, with getdvar/getdvarint/getdvarfloat (0x39..0x3B) all
-		// valid. If that is not unique the override stays off.
-		constexpr auto h1_builtin_count = 778;
-		constexpr auto h1_getdvar_id = 0x39;
-
-		void getdvar_stub()
-		{
-			const auto* name = game::Scr_GetString(0);
-			if (name && std::strcmp(name, "g_gametype") == 0)
-			{
-				const auto* gametype = game::Dvar_FindVar("g_gametype");
-				if (gametype && gametype->current.string && find(gametype->current.string))
-				{
-					game::Scr_AddString(find(gametype->current.string)->base);
-					return;
-				}
-			}
-
-			if (getdvar_hooked)
-			{
-				getdvar_hook.invoke<void>();
-			}
-		}
-
-		void install_getdvar_override()
-		{
-			const auto ranges = module_ranges();
-			if (ranges.empty())
-			{
-				console::warn("[gamemodes] cannot find the module ranges, GSC getdvar override off\n");
-				return;
-			}
-
-			std::vector<uintptr_t> tables;
-
-			for (const auto& range : ranges)
-			{
-				if (range.executable)
-				{
-					continue;
-				}
-
-				auto start = range.begin;
-				auto count = 0u;
-
-				for (auto addr = range.begin; addr + sizeof(uintptr_t) <= range.end; addr += sizeof(uintptr_t))
-				{
-					const auto value = *reinterpret_cast<const uintptr_t*>(addr);
-					const auto valid = value == 0 || range_executable(ranges, value);
-
-					if (valid)
-					{
-						if (count == 0)
-						{
-							start = addr;
-						}
-						count++;
-						continue;
-					}
-
-
-					if (count == h1_builtin_count &&
-						range_executable(ranges, *reinterpret_cast<const uintptr_t*>(start + (h1_getdvar_id + 1) * sizeof(uintptr_t))) &&
-						range_executable(ranges, *reinterpret_cast<const uintptr_t*>(start + (h1_getdvar_id + 2) * sizeof(uintptr_t))))
-					{
-						tables.push_back(start);
-					}
-
-					count = 0;
-				}
-
-				if (count == h1_builtin_count &&
-					range_executable(ranges, *reinterpret_cast<const uintptr_t*>(start + (h1_getdvar_id + 1) * sizeof(uintptr_t))) &&
-					range_executable(ranges, *reinterpret_cast<const uintptr_t*>(start + (h1_getdvar_id + 2) * sizeof(uintptr_t))))
-				{
-					tables.push_back(start);
-				}
-			}
-
-			if (tables.size() != 1)
-			{
-				// H1 may store { u32 name-hash, u32 type, void (*func)(); } (16 bytes per entry): then only
-				// every second qword is a code pointer and the 8-byte scan above finds nothing.
-				std::vector<uintptr_t> stride_tables;
-				std::vector<int> stride_offsets;
-
-				for (const auto& range : ranges)
-				{
-					if (range.executable)
-					{
-						continue;
-					}
-
-					for (auto func_offset = 0; func_offset <= 8; func_offset += 8)
-					{
-						auto start = range.begin;
-						auto count = 0u;
-
-						for (auto addr = range.begin; addr + 16 <= range.end; addr += 16)
-						{
-							const auto function = *reinterpret_cast<const uintptr_t*>(addr + func_offset);
-							const auto other = *reinterpret_cast<const uintptr_t*>(addr + (func_offset == 0 ? 8 : 0));
-							const auto valid = range_executable(ranges, function) && !range_executable(ranges, other);
-
-							if (valid)
-							{
-								if (count == 0)
-								{
-									start = addr;
-								}
-								count++;
-								continue;
-							}
-
-							if (count == h1_builtin_count)
-							{
-								stride_tables.push_back(start);
-								stride_offsets.push_back(func_offset);
-							}
-
-							count = 0;
-						}
-
-						if (count == h1_builtin_count)
-						{
-							stride_tables.push_back(start);
-							stride_offsets.push_back(func_offset);
-						}
-					}
-				}
-
-				if (stride_tables.size() != 1)
-				{
-					console::warn("[gamemodes] %zu/%zu builtin tables, GSC getdvar override off\n",
-						tables.size(), stride_tables.size());
-					return;
-				}
-
-				const auto function = *reinterpret_cast<const uintptr_t*>(
-					stride_tables.front() + h1_getdvar_id * 16 + stride_offsets.front());
-				if (!range_executable(ranges, function))
-				{
-					console::warn("[gamemodes] stride getdvar slot is not code, GSC getdvar override off\n");
-					return;
-				}
-
-				getdvar_hook.create(reinterpret_cast<void*>(function), getdvar_stub);
-				getdvar_hooked = true;
-				console::info("[gamemodes] GSC getdvar(g_gametype) override on (stride table 0x%llX, getdvar 0x%llX)\n",
-					static_cast<unsigned long long>(stride_tables.front()),
-					static_cast<unsigned long long>(function));
-				return;
-			}
-
-			const auto function = *reinterpret_cast<const uintptr_t*>(tables.front() + h1_getdvar_id * sizeof(uintptr_t));
-			if (!range_executable(ranges, function))
-			{
-				console::warn("[gamemodes] getdvar slot is not code, GSC getdvar override off\n");
-				return;
-			}
-
-			getdvar_hook.create(reinterpret_cast<void*>(function), getdvar_stub);
-			getdvar_hooked = true;
-			console::info("[gamemodes] GSC getdvar(g_gametype) override on (table 0x%llX, getdvar 0x%llX)\n",
-				static_cast<unsigned long long>(tables.front()), static_cast<unsigned long long>(function));
-		}
 	}
 
 	game::RawFile* patch_rawfile(game::RawFile* original)
@@ -733,8 +494,6 @@ namespace gamemodes
 			localized_strings::override("MWX_GAMETYPE_SLASHER", "Slasher");
 			localized_strings::override("MWX_GAMETYPE_SLASHER_DESC",
 				"One player is the Slasher with a shovel and a pistol. Survive until time runs out or take the Slasher down.");
-			localized_strings::override("MWX_GAMETYPE_SNIPERS", "Snipers Only");
-			localized_strings::override("MWX_GAMETYPE_SNIPERS_DESC", "Team Deathmatch with sniper rifles only.");
 			localized_strings::override("MWX_GAMETYPE_RPG", "RPGs Only");
 			localized_strings::override("MWX_GAMETYPE_RPG_DESC", "Team Deathmatch with RPGs only.");
 			localized_strings::override("MWX_GAMETYPE_OIC", "One in the Chamber");
@@ -764,7 +523,6 @@ namespace gamemodes
 			localized_strings::override("MWX_GAMETYPE_PH_CAPS", "PROP HUNT");
 			localized_strings::override("MWX_GAMETYPE_MPROPS_CAPS", "MAD PROPS");
 			localized_strings::override("MWX_GAMETYPE_SLASHER_CAPS", "SLASHER");
-			localized_strings::override("MWX_GAMETYPE_SNIPERS_CAPS", "SNIPERS ONLY");
 			localized_strings::override("MWX_GAMETYPE_RPG_CAPS", "RPGS ONLY");
 			localized_strings::override("MWX_GAMETYPE_OIC_CAPS", "ONE IN THE CHAMBER");
 			localized_strings::override("MWX_GAMETYPE_AON_CAPS", "ALL OR NOTHING");
@@ -774,7 +532,6 @@ namespace gamemodes
 			localized_strings::override("PH", "PROP HUNT");
 			localized_strings::override("MPROPS", "MAD PROPS");
 			localized_strings::override("SLASHER", "SLASHER");
-			localized_strings::override("SNIPERS", "SNIPERS ONLY");
 			localized_strings::override("RPG", "RPGS ONLY");
 			localized_strings::override("OIC", "ONE IN THE CHAMBER");
 			localized_strings::override("AON", "ALL OR NOTHING");
@@ -807,7 +564,6 @@ namespace gamemodes
 			// M4: the party ref is the gametype; the mode dvars follow it (both on the server and on a
 			// listen host/client, so a dedicated server with +set g_gametype slasher works too)
 			dvars::callback::on_new_value("g_gametype", on_g_gametype);
-			install_getdvar_override();
 			scheduler::once([]()
 			{
 				// the command line (+set g_gametype ...) is applied before the callback exists

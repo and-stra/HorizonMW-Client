@@ -179,6 +179,11 @@ aonspawnfinished()
         self setweaponammostock(weapon, 0);
     }
 
+    // all three are perk-1 perks in HMW, only one fits the loadout (see setspecialloadouts)
+    maps\mp\_utility::giveperk("specialty_scavenger", 0);
+    maps\mp\_utility::giveperk("specialty_fastreload", 0);
+    maps\mp\_utility::giveperk("specialty_longersprint", 0);
+
     // bots only throw offhands (the knife) when encouraged
     if (isbot(self))
         self botsetflag("encourage_grenade_use", 1);
@@ -288,7 +293,7 @@ setspecialloadouts()
     level.aon_loadout["loadoutEquipment"] = AON_LETHAL;
     level.aon_loadout["loadoutOffhand"] = "none";
     level.aon_loadout["loadoutMelee"] = "none";
+    // HMW perk slots are MW2's: scavenger, sleight of hand and marathon are all perk-1 perks, so
+    // _perks::validateperk turns slots 1/2 into specialty_null. The perks are given on spawn instead.
     level.aon_loadout["loadoutPerks"][0] = "specialty_scavenger";
-    level.aon_loadout["loadoutPerks"][1] = "specialty_fastreload";
-    level.aon_loadout["loadoutPerks"][2] = "specialty_longersprint";
 }
