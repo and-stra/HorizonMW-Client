@@ -137,7 +137,11 @@ attacker the gametypes treat the death as a suicide.
 | `cancel_test` | `job` | stops the running job's server |
 
 A single test result: `{test, script, map, gametype, mod, passed, failed, failures, steps,
-script_errors, done, duration_s, total_s}`.
+script_errors, done, kills, kill_weapons, duration_s, total_s}`. `kills` / `kill_weapons` come from
+the event stream (the weapons the match was actually fought with).
+
+Only one test job runs at a time (a second `run_test` answers with an error): two game instances on
+one PC block each other's map load.
 
 ## Without the MCP
 
@@ -151,6 +155,12 @@ check uses.
 The mode scripts register their dvars (`scr_<mode>_scorelimit`, `scr_<mode>_timelimit`, ...) and
 the test can set them in `dvars`. Values the script hard-codes as `#define` (e.g. the 15 s
 first-infected countdown in `infect.gsc`) can only be shortened by changing that define.
+
+`timescale` is deliberately **not** used: it speeds the whole simulation (physics, bot AI, network
+snapshots) and makes raw numbers (move speed, distances) meaningless. Instead a test shortens the
+match dvars, calls the gametype's end handler (`_gamelogic::endgame`, `[[level.ontimelimit]]`) where
+the clock itself is the thing under test, or sets a state field to its last step (cranked:
+`cranked_end_time = gettime() + 300` instead of waiting 30 s).
 
 ## Test list
 

@@ -39,7 +39,8 @@ local function rename_play_button(menu)
             local inner = child:getFirstChild()
             while inner ~= nil do
                 if tostring(inner.id) == "text_label" then
-                    inner:setText("Play")
+                    -- the stock labels are all caps ("OPTIONS", "MODS", ...); keep it consistent
+                    inner:setText("PLAY")
                 end
                 inner = inner:getNextSibling()
             end

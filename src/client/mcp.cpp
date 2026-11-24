@@ -524,6 +524,20 @@ namespace mcp
 
 		json start_test_job(const std::string& name, const bool all)
 		{
+			{
+				// two game instances on one PC block each other's map load (seen with a stale client:
+				// the next server hung right after post_load), so only one test job at a time
+				std::lock_guard _(jobs_mutex);
+				for (const auto& running : test_jobs)
+				{
+					if (running->state == "running")
+					{
+						return json{{"error", "a test job is already running (" + running->id + ", " + running->name +
+							"); poll test_status or cancel_test"}};
+					}
+				}
+			}
+
 			auto job = std::make_shared<test_job>();
 			job->id = "t" + std::to_string(++next_job);
 			job->name = name;
@@ -772,6 +786,8 @@ namespace mcp
 			auto passed = 0;
 			auto failed = 0;
 			auto script_errors = 0;
+			auto kills = 0;
+			std::set<std::string> kill_weapons;
 			std::int64_t started_ms = 0;
 			std::int64_t done_ms = 0;
 
@@ -822,6 +838,17 @@ namespace mcp
 					{
 						steps.emplace_back(event["data"]);
 					}
+					else if (event["type"] == "kill")
+					{
+						// the weapons of every kill in the run, so a test result also shows what the
+						// match was fought with (no killstreak weapons in Infected, ...)
+						const auto& data = event["data"];
+						if (data.contains("weapon") && data["weapon"].is_string())
+						{
+							kill_weapons.insert(data["weapon"].get<std::string>());
+						}
+						kills++;
+					}
 				}
 			}
 
@@ -833,12 +860,16 @@ namespace mcp
 			result["test"] = test.name;
 			result["script"] = test.script;
 			result["map"] = test.map;
+			result["gametype"] = test.gametype;
+			result["mod"] = test.mod;
 			result["listen"] = test.listen;
 			result["passed"] = passed;
 			result["failed"] = failed;
 			result["failures"] = failures;
 			result["steps"] = steps;
 			result["script_errors"] = script_errors;
+			result["kills"] = kills;
+			result["kill_weapons"] = kill_weapons;
 			result["done"] = !done.is_null() && done["data"].contains("ok") && done["data"]["ok"].is_number() &&
 				done["data"]["ok"].get<double>() != 0.0;
 			result["duration_s"] = duration;

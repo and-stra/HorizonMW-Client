@@ -135,6 +135,8 @@ function Run-Test($test) {
         $startedMs = 0; $doneMs = 0
         $failures = New-Object System.Collections.ArrayList
         $steps = New-Object System.Collections.ArrayList
+        $killWeapons = New-Object System.Collections.Generic.HashSet[string]
+        $killCount = 0
 
         foreach ($e in $events) {
             switch ($e.type) {
@@ -142,6 +144,10 @@ function Run-Test($test) {
                 "test_started" { $startedMs = [int64]$e.time_ms }
                 "test_step" { [void]$steps.Add($e.data) }
                 "test_done" { $doneMs = [int64]$e.time_ms; $result.done = ($e.data.ok -ne 0) }
+                "kill" {
+                    $killCount++
+                    if ($e.data.weapon) { [void]$killWeapons.Add([string]$e.data.weapon) }
+                }
                 "test_assert" {
                     $ok = $false
                     if ($null -ne $e.data.ok) { $ok = ([double]$e.data.ok -ne 0) }
@@ -149,6 +155,9 @@ function Run-Test($test) {
                 }
             }
         }
+
+        $result.kills = $killCount
+        $result.kill_weapons = @($killWeapons)
 
         $result.failures = $failures.ToArray()
         $result.steps = $steps.ToArray()
