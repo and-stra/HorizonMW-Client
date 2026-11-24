@@ -926,8 +926,6 @@ namespace debug_api
 		return json{{"ok", true}, {"result", value}};
 	}
 
-	// -------------------------------------------------------------------- perf / crash
-
 	json perf()
 	{
 		json result{};
@@ -1229,6 +1227,9 @@ namespace debug_api
 
 			scheduler::once([]
 			{
+				dvars::register_string("mwx_test", "", game::DVAR_FLAG_NONE,
+					"Run the test script mwx/tests/<name>.gsc at map start (see docs/testing.md)");
+
 				for (auto i = 0; i < 6; ++i)
 				{
 					const auto name = "mwx_debug_arg" + std::to_string(i);

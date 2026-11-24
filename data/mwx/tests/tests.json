@@ -1,0 +1,94 @@
+[
+  {
+    "name": "infect",
+    "script": "infect",
+    "gametype": "infect",
+    "map": "mp_shipment",
+    "timeout_s": 300,
+    "dvars": {
+      "scr_infect_timelimit": "2",
+      "mwx_test_bots": 3
+    }
+  },
+  {
+    "name": "war",
+    "script": "war",
+    "gametype": "war",
+    "map": "mp_shipment",
+    "timeout_s": 300,
+    "dvars": {
+      "scr_war_scorelimit": 20,
+      "scr_war_timelimit": 2,
+      "mwx_test_bots": 4
+    }
+  },
+  {
+    "name": "sd",
+    "script": "objective",
+    "gametype": "sd",
+    "map": "mp_crash",
+    "timeout_s": 300,
+    "dvars": {
+      "scr_sd_timelimit": 2,
+      "mwx_test_bots": 4
+    }
+  },
+  {
+    "name": "dom",
+    "script": "objective",
+    "gametype": "dom",
+    "map": "mp_crash",
+    "timeout_s": 300,
+    "dvars": {
+      "scr_dom_scorelimit": 50,
+      "scr_dom_timelimit": 2,
+      "mwx_test_bots": 4
+    }
+  },
+  {
+    "name": "dz",
+    "script": "objective",
+    "gametype": "dz",
+    "map": "mp_crash",
+    "timeout_s": 300,
+    "dvars": {
+      "scr_dz_timelimit": 2,
+      "mwx_test_bots": 4
+    }
+  },
+  {
+    "name": "infect_rust",
+    "script": "infect",
+    "gametype": "infect",
+    "map": "mp_rust",
+    "timeout_s": 300,
+    "dvars": {
+      "scr_infect_timelimit": "2",
+      "mwx_test_bots": 3
+    }
+  },
+  {
+    "name": "war_rust",
+    "script": "war",
+    "gametype": "war",
+    "map": "mp_rust",
+    "timeout_s": 300,
+    "dvars": {
+      "scr_war_scorelimit": 20,
+      "scr_war_timelimit": 2,
+      "mwx_test_bots": 4
+    }
+  },
+  {
+    "name": "war_terrace",
+    "script": "war",
+    "gametype": "war",
+    "map": "mp_terrace",
+    "timeout_s": 300,
+    "dvars": {
+      "scr_war_scorelimit": 20,
+      "scr_war_timelimit": 2,
+      "mwx_test_bots": 4
+    }
+  }
+]

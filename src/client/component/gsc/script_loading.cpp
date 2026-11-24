@@ -494,6 +494,14 @@ namespace gsc
 
 			// find scripts from zone
 			load_scripts_wrapper("zone");
+
+			// MWX: test scripts are loaded (compiled) with the normal script load when mwx_test is
+			// set; their main() is executed by load_main_handles() like any other script.
+			const auto* test_dvar = game::Dvar_FindVar("mwx_test");
+			if (test_dvar && test_dvar->current.string && *test_dvar->current.string)
+			{
+				load_script("mwx/tests/" + std::string(test_dvar->current.string));
+			}
 		}
 
 		void db_get_raw_buffer_stub(const game::RawFile* rawfile, char* buf, const int size)

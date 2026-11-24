@@ -227,7 +227,7 @@ namespace mcp
 			{
 				command_line += " +map " + quote_arg(map);
 			}
-			else if (dedicated)
+			else if (dedicated && args.value("args", "").empty())
 			{
 				command_line += " +exec server_default.cfg +set net_port 27016 +map_rotate";
 			}
@@ -411,6 +411,268 @@ namespace mcp
 			return json{{"error", "timeout waiting for " + state}, {"last", last}};
 		}
 
+		// ---------------------------------------------------------------- game mode tests
+
+		struct test_case
+		{
+			std::string name;
+			std::string script;
+			std::string map;
+			std::string gametype;
+			json dvars = json::object();
+			int timeout_s = 300;
+		};
+
+		json load_test_manifest()
+		{
+			const auto path = get_exe_path().parent_path() / "mwx" / "tests" / "tests.json";
+			std::ifstream file(path);
+			if (!file)
+			{
+				return json::array();
+			}
+
+			try
+			{
+				return json::parse(file);
+			}
+			catch (const std::exception& e)
+			{
+				fprintf(stderr, "mwx mcp: bad tests.json: %s\n", e.what());
+				return json::array();
+			}
+		}
+
+		std::optional<test_case> find_test(const std::string& name)
+		{
+			const auto manifest = load_test_manifest();
+			for (const auto& entry : manifest)
+			{
+				if (entry.value("name", "") != name)
+				{
+					continue;
+				}
+
+				test_case test{};
+				test.name = name;
+				test.script = entry.value("script", name);
+				test.map = entry.value("map", "mp_shipment");
+				test.gametype = entry.value("gametype", test.script);
+				test.dvars = entry.value("dvars", json::object());
+				test.timeout_s = entry.value("timeout_s", 300);
+				return test;
+			}
+
+			return {};
+		}
+
+		std::vector<std::string> list_tests()
+		{
+			std::vector<std::string> names;
+			for (const auto& entry : load_test_manifest())
+			{
+				names.push_back(entry.value("name", ""));
+			}
+			return names;
+		}
+
+		json run_one_test(const test_case& test)
+		{
+			const auto start = std::chrono::steady_clock::now();
+
+			// The map goes on the command line: a `map` command after boot hangs the dedicated
+			// server in this build. The test script itself is loaded by the normal script pass
+			// because mwx_test is set (see gsc::load_gametype_script_stub).
+			auto test_dvars = test.dvars;
+			test_dvars["mwx_test"] = test.script;
+
+			json start_args{{"map", test.map}, {"gametype", test.gametype}, {"dvars", test_dvars}, {"test_mode", true}};
+			auto started = start_instance(true, start_args);
+			if (started.contains("error"))
+			{
+				return started;
+			}
+
+			const auto id = started["id"].get<std::string>();
+			const auto stop = gsl::finally([&] { stop_instance(id); });
+
+			// wait until the server runs the map
+			json status{};
+			auto running = false;
+			for (auto i = 0; i < 180; ++i)
+			{
+				status = rpc(id, "status", json::object(), 2);
+				if (status.contains("result") && status["result"].value("sv_running", false))
+				{
+					running = true;
+					break;
+				}
+				std::this_thread::sleep_for(1s);
+			}
+
+			if (!running)
+			{
+				return json{{"error", "the dedicated server did not start the map"}, {"test", test.name}, {"status", status}};
+			}
+
+			// bots: spawnBot uses the normal bot path (name, class, team)
+			const auto bots = test.dvars.value("mwx_test_bots", 0);
+			if (bots > 0)
+			{
+				rpc(id, "command", {{"command", "spawnBot " + std::to_string(bots)}}, 10);
+				std::this_thread::sleep_for(3s);
+			}
+
+			const auto deadline = start + std::chrono::seconds(test.timeout_s);
+			json done{};
+			json events{};
+
+			while (std::chrono::steady_clock::now() < deadline)
+			{
+				events = rpc(id, "events", {{"since", 0}, {"limit", 5000}}, 20);
+				if (events.contains("result"))
+				{
+					for (const auto& event : events["result"]["events"])
+					{
+						if (event["type"] == "test_done")
+						{
+							done = event;
+							break;
+						}
+					}
+				}
+
+				if (!done.is_null())
+				{
+					break;
+				}
+
+				std::this_thread::sleep_for(1s);
+			}
+
+			json failures = json::array();
+			json steps = json::array();
+			auto passed = 0;
+			auto failed = 0;
+			auto script_errors = 0;
+			std::int64_t started_ms = 0;
+			std::int64_t done_ms = 0;
+
+			if (events.contains("result"))
+			{
+				for (const auto& event : events["result"]["events"])
+				{
+					if (event["type"] == "script_error")
+					{
+						script_errors++;
+					}
+					else if (event["type"] == "test_started")
+					{
+						started_ms = event.value("time_ms", 0);
+					}
+					else if (event["type"] == "test_assert")
+					{
+						const auto& data = event["data"];
+						if (data.value("ok", data.value("passed", false)))
+						{
+							passed++;
+						}
+						else
+						{
+							failed++;
+							failures.emplace_back(data);
+						}
+					}
+					else if (event["type"] == "test_done")
+					{
+						done_ms = event.value("time_ms", 0);
+					}
+					else if (event["type"] == "test_step")
+					{
+						steps.emplace_back(event["data"]);
+					}
+				}
+			}
+
+			const auto duration = done_ms > started_ms ? (done_ms - started_ms) / 1000.0 : 0.0;
+			const auto total_wait = std::chrono::duration_cast<std::chrono::milliseconds>(
+				std::chrono::steady_clock::now() - start).count() / 1000.0;
+
+			json result{};
+			result["test"] = test.name;
+			result["script"] = test.script;
+			result["map"] = test.map;
+			result["passed"] = passed;
+			result["failed"] = failed;
+			result["failures"] = failures;
+			result["steps"] = steps;
+			result["script_errors"] = script_errors;
+			result["done"] = done.is_null() ? false : done["data"].value("ok", true);
+			result["duration_s"] = duration;
+			result["total_s"] = total_wait;
+
+			if (done.is_null())
+			{
+				result["error"] = "timeout waiting for test_done";
+			}
+
+			return result;
+		}
+
+		json run_test(const json& args)
+		{
+			const auto name = args.value("name", "");
+			if (name.empty())
+			{
+				return json{{"error", "name is required"}, {"tests", list_tests()}};
+			}
+
+			const auto test = find_test(name);
+			if (!test.has_value())
+			{
+				return json{{"error", "unknown test: " + name}, {"tests", list_tests()}};
+			}
+
+			return run_one_test(test.value());
+		}
+
+		json run_all_tests(const json& args)
+		{
+			const auto only = args.value("name", "");
+			json results = json::array();
+			auto passed = 0;
+			auto failed = 0;
+
+			for (const auto& name : list_tests())
+			{
+				if (!only.empty() && name != only)
+				{
+					continue;
+				}
+
+				const auto test = find_test(name);
+				if (!test.has_value())
+				{
+					continue;
+				}
+
+				const auto result = run_one_test(test.value());
+				const auto ok = !result.contains("error") && result.value("failed", 1) == 0 && result.value("script_errors", 1) == 0;
+				if (ok)
+				{
+					++passed;
+				}
+				else
+				{
+					++failed;
+				}
+
+				results.emplace_back(result);
+			}
+
+			return json{{"tests", results}, {"passed", passed}, {"failed", failed}};
+		}
+
 		json target_schema()
 		{
 			return {{"type", "string"},
@@ -581,6 +843,21 @@ namespace mcp
 					{"description", "The newest minidump: file name, time, size and the info.txt content."},
 					{"inputSchema", {{"type", "object"}, {"properties", {{"target", target_schema()}}}}},
 				},
+				{
+					{"name", "list_tests"},
+					{"description", "Game mode tests from GAME\\mwx\\tests\\tests.json."},
+					{"inputSchema", {{"type", "object"}, {"properties", json::object()}}},
+				},
+				{
+					{"name", "run_test"},
+					{"description", "Runs one game mode test on a dedicated server (starts it, sets mwx_test=<name> and the test dvars, loads the map, waits for test_done, stops the server). Returns passed/failed/failures/duration."},
+					{"inputSchema", {{"type", "object"}, {"properties", {{"name", {{"type", "string"}}}}}, {"required", {"name"}}}},
+				},
+				{
+					{"name", "run_all_tests"},
+					{"description", "Runs every test from tests.json in a row (or only the one given as name) and returns the summary."},
+					{"inputSchema", {{"type", "object"}, {"properties", {{"name", {{"type", "string"}}}}}}},
+				},
 			});
 		}
 
@@ -596,6 +873,9 @@ namespace mcp
 			if (name == "load_times") return rpc(target, "load_times");
 			if (name == "perf") return rpc(target, "perf", json::object(), 10);
 			if (name == "last_crash") return rpc(target, "last_crash");
+			if (name == "list_tests") return json{{"tests", list_tests()}};
+			if (name == "run_test") return run_test(args);
+			if (name == "run_all_tests") return run_all_tests(args);
 			if (name == "events") return rpc(target, "events", {{"since", args.value("since", 0)}, {"type", args.value("type", "")}, {"limit", args.value("limit", 0)}});
 
 			if (name == "start_game")
