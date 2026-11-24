@@ -83,22 +83,20 @@
   {
     "name": "slasher",
     "script": "slasher",
-    "gametype": "war",
+    "gametype": "slasher",
     "map": "mp_shipment",
     "timeout_s": 300,
     "dvars": {
-      "scr_game_hodgepodgeMode": 2,
       "mwx_test_bots": 4
     }
   },
   {
     "name": "rpg",
     "script": "rpg",
-    "gametype": "war",
+    "gametype": "rpg",
     "map": "mp_shipment",
     "timeout_s": 300,
     "dvars": {
-      "scr_game_hodgepodgeMode": 6,
       "mwx_test_bots": 4
     }
   },
@@ -172,6 +170,7 @@
     "gametype": "war",
     "map": "mp_terrace",
     "timeout_s": 300,
+    "listen": true,
     "dvars": {
       "scr_war_scorelimit": 20,
       "scr_war_timelimit": 2,

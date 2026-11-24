@@ -8,23 +8,55 @@
 //   detected. The kill handler now recounts the living players of each team.
 // - survivor bots: MWR disables firing for all bots (allowfire 0) and makes them flee while the slasher
 //   looks at them. Survivor bots may now shoot, and flee only while the slasher is still far away.
+//
+// The mode is only known after the gametype main() ran (level.hodgepodgemode is set by
+// _hodgepodge::init inside war.gsc); this script's init() runs before that in the load pass, so the
+// fixes are installed from a thread that waits for the mode.
 
 #define SLASHER_FIGHT_DIST 600
 
-main()
-{
-    replacefunc(maps\mp\gametypes\_hodgepodge::botslasheristargetingme, ::botslasheristargetingme_stub);
-    replacefunc(maps\mp\gametypes\_hodgepodge::onmmplayerkilled, ::onmmplayerkilled_stub);
-}
-
 init()
 {
+    level thread install();
+}
+
+install()
+{
+    waited = 0;
+    while (waited < 60 && (!isdefined(level.hodgepodgemode) || level.hodgepodgemode != 2))
+    {
+        wait 0.1;
+        waited = waited + 0.1;
+    }
+
     if (!isdefined(level.hodgepodgemode) || level.hodgepodgemode != 2)
         return;
 
+    // initmmmode() runs in onstartgametype, after the mode is known; it assigns the stock kill
+    // handler, so the stub is installed after it
+    waited = 0;
+    while (waited < 10 && !isdefined(level.mm_chooseslasher))
+    {
+        wait 0.1;
+        waited = waited + 0.1;
+    }
+
+    // now that the gametype script is loaded and running, patch its kill/targeting functions
+    replacefunc(maps\mp\gametypes\_hodgepodge::botslasheristargetingme, ::botslasheristargetingme_stub);
+    replacefunc(maps\mp\gametypes\_hodgepodge::onmmplayerkilled, ::onmmplayerkilled_stub);
+    level.onplayerkilled = ::onmmplayerkilled_stub;
+
     level.numlives = 1;
     setdynamicdvar("scr_war_numlives", 1);
+    level.mwx_slasher_fix = 1;
     level thread slasher_onconnect();
+
+    // bots that are already connected
+    foreach (player in level.players)
+    {
+        if (isai(player))
+            player thread slasher_botfire();
+    }
 }
 
 slasher_onconnect()
@@ -43,13 +75,19 @@ slasher_botfire()
 
     for (;;)
     {
+        // onmmspawnplayer ran allowfire(0) for every bot; survivors may shoot. Record it: GSC has
+        // no allowfire getter, the game mode test checks mwx_botfire.
+        if (self.team == "allies")
+        {
+            self allowfire(1);
+            self.mwx_botfire = 1;
+        }
+
         self waittill("spawned_player");
-        // onmmspawnplayer ran allowfire(0) for every bot
         waittillframeend;
         if (self.team == "allies")
         {
             self allowfire(1);
-            // visible for the game mode tests (GSC has no allowfire getter)
             self.mwx_botfire = 1;
         }
     }

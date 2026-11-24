@@ -542,49 +542,61 @@ namespace mcp
 			job->id = "t" + std::to_string(++next_job);
 			job->name = name;
 
+			// read the manifest once: a build that mirrors data\mwx into the game folder while the
+			// job runs did shorten the list once (find_test() on a missing file returns nothing and
+			// the remaining tests were skipped silently)
+			std::vector<test_case> cases;
+			for (const auto& entry_name : list_tests())
+			{
+				if (!all && entry_name != name)
+				{
+					continue;
+				}
+
+				const auto test = find_test(entry_name);
+				if (test.has_value())
+				{
+					cases.push_back(test.value());
+				}
+			}
+
+			if (cases.empty())
+			{
+				return json{{"error", "no tests to run"}, {"tests", list_tests()}};
+			}
+
 			{
 				std::lock_guard _(jobs_mutex);
 				test_jobs.push_back(job);
 			}
 
-			std::thread([job, all]()
+			std::thread([job, cases, all]()
 			{
 				json result{};
 				try
 				{
 					if (!all)
 					{
-						const auto test = find_test(job->name);
-						result = test.has_value() ? run_one_test(test.value(), job) : json{{"error", "unknown test"}};
+						result = run_one_test(cases.front(), job);
 					}
 					else
 					{
 						json tests = json::array();
 						auto passed = 0;
 						auto failed = 0;
-						for (const auto& name : list_tests())
+						for (const auto& test : cases)
 						{
-							if (job->name != "all" && name != job->name)
-							{
-								continue;
-							}
 							if (job->cancel)
 							{
 								break;
 							}
 
-							const auto test = find_test(name);
-							if (!test.has_value())
-							{
-								continue;
-							}
-
-							const auto one = run_one_test(test.value(), job);
+							const auto one = run_one_test(test, job);
 							const auto ok = !one.contains("error") && one.value("failed", 1) == 0 &&
 								one.value("script_errors", 1) == 0;
 							ok ? ++passed : ++failed;
 							tests.emplace_back(one);
-							fprintf(stderr, "mwx mcp: test %s %s\n", name.data(), ok ? "green" : "failed");
+							fprintf(stderr, "mwx mcp: test %s %s\n", test.name.data(), ok ? "green" : "failed");
 						}
 						result = json{{"tests", tests}, {"passed", passed}, {"failed", failed}};
 					}

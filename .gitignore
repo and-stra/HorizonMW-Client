@@ -6,3 +6,4 @@ mwx-screenshots/
 refs/
 test-results-*.json
 last-run-*.log
+build-vsenv.log
