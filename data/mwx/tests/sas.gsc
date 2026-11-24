@@ -112,8 +112,9 @@ main()
         startscore = set_score(victim, 50);
         test_assert(startscore == 50, "victim score set", "50", startscore);
 
-        // no attacker: the gametype treats it as a suicide
-        test_kill(victim, undefined, "none");
+        // no attacker: the gametype treats it as a suicide. test_kill would substitute the victim
+        // as the attacker, so use the 2 argument dodamage (credits the world).
+        victim dodamage(1000, victim.origin);
 
         waited = 0;
         while (waited < 10 && victim.pers["score"] > 0)
