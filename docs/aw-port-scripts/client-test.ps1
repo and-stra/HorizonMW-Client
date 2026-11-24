@@ -20,7 +20,7 @@ function ShotFast($path) {
     $bmp.Dispose()
     return $true
 }
-$ps = Start-Process -FilePath "$game\mwx.exe" -WorkingDirectory $game -ArgumentList @('+set','mwx_autoplay','1','+set','mwx_gsc_print','1') -PassThru -RedirectStandardOutput (Join-Path $out 'client2-console.txt') -RedirectStandardError (Join-Path $out 'client2-console.err.txt')
+$ps = Start-Process -FilePath "$game\mwx.exe" -WorkingDirectory $game -ArgumentList @('+set','mwx_gsc_print','1') -PassThru -RedirectStandardOutput (Join-Path $out 'client2-console.txt') -RedirectStandardError (Join-Path $out 'client2-console.err.txt')
 "client pid=$($ps.Id)"
 $ready = $false
 for ($i = 0; $i -lt 60; $i++) { Start-Sleep -Seconds 3; $d = RpcC 'get_dvar' @{ name = 'ui_gametype' }; if ($d -and $d.result -and $d.result.value) { $ready = $true; "ready after $($i*3)s"; break } }
