@@ -22,6 +22,8 @@
 	4. For HMW internal dev's anticheat related pipelines do not use for anything else, timing matters alot there
 */
 
+#include <source_location>
+
 namespace scheduler
 {
 	enum pipeline
@@ -52,11 +54,11 @@ namespace scheduler
 	static const bool cond_end = true;
 
 	void schedule(const std::function<bool()>& callback, pipeline type = pipeline::async,
-		std::chrono::milliseconds delay = 0ms);
+		std::chrono::milliseconds delay = 0ms, const std::source_location& location = std::source_location::current());
 	void loop(const std::function<void()>& callback, pipeline type = pipeline::async,
-		std::chrono::milliseconds delay = 0ms);
+		std::chrono::milliseconds delay = 0ms, const std::source_location& location = std::source_location::current());
 	void once(const std::function<void()>& callback, pipeline type = pipeline::async,
-		std::chrono::milliseconds delay = 0ms);
+		std::chrono::milliseconds delay = 0ms, const std::source_location& location = std::source_location::current());
 	void on_game_initialized(const std::function<void()>& callback, pipeline type = pipeline::async,
-		std::chrono::milliseconds delay = 0ms);
+		std::chrono::milliseconds delay = 0ms, const std::source_location& location = std::source_location::current());
 }
