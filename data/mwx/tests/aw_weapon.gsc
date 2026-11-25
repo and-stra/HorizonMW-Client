@@ -116,7 +116,7 @@ aw_combat_checks(ref)
 
     foreach (player in level.players)
     {
-        if (!isdefined(player.team) || !isalive(player) || !player hasweapon(base))
+        if (!isdefined(player.team) || !isbot(player) || !isalive(player) || !player hasweapon(base))
             continue;
 
         if (!isdefined(attacker))
