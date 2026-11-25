@@ -180,12 +180,15 @@ aw_weapon_test()
     attachments = aw_param("mwx_aw_attachments", "");
     camo = int(aw_param("mwx_aw_camo", "0"));
 
-    test_step("CAC and statstable");
-    base = aw_check_names(ref, class, attachments, camo);
-
     test_step("wait for the players");
     players = test_wait_players(4, 120);
     test_assert(players >= 4, "players spawned", ">=4", players);
+
+    // The aw_weapons.gsc replacefunc hooks are installed in init() at scr_load_level; the
+    // test's main() runs earlier, so check the CAC/name functions only after the players
+    // have spawned (level load is complete).
+    test_step("CAC and statstable");
+    base = aw_check_names(ref, class, attachments, camo);
 
     player = aw_first_player();
     if (!isdefined(player))
