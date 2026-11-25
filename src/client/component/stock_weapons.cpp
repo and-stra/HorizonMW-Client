@@ -2,6 +2,7 @@
 #include "loader/component_loader.hpp"
 
 #include "console.hpp"
+#include "filesystem.hpp"
 #include "game/game.hpp"
 #include "localized_strings.hpp"
 
@@ -148,8 +149,8 @@ namespace stock_weapons
 				if (!dumped)
 				{
 					dumped = true;
-					CreateDirectoryA("mwx-logs", nullptr);
-					if (FILE* f = fopen("mwx-logs/statstable_dump.csv", "w"))
+					CreateDirectoryA(filesystem::get_log_dir().data(), nullptr);
+					if (FILE* f = fopen((filesystem::get_log_dir() + "/statstable_dump.csv").data(), "w"))
 					{
 						for (auto r = 0; r < original->rowCount; ++r)
 						{

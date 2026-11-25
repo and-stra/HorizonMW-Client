@@ -2,6 +2,7 @@
 #include "loader/component_loader.hpp"
 
 #include "console.hpp"
+#include "filesystem.hpp"
 #include "load_timing.hpp"
 #include "scheduler.hpp"
 
@@ -39,7 +40,7 @@ namespace load_timing
 			{
 				console::info("[load_timing] %s\n", line.data());
 			}
-			utils::io::write_file("mwx-logs/load_times.log", line + "\n", true);
+			utils::io::write_file(filesystem::get_log_dir() + "/load_times.log", line + "\n", true);
 		}
 
 		// closes the running zone (if any); mutex must be held
@@ -71,7 +72,7 @@ namespace load_timing
 
 	void begin(const bool dedicated)
 	{
-		utils::io::write_file("mwx-logs/load_times.log",
+		utils::io::write_file(filesystem::get_log_dir() + "/load_times.log",
 			utils::string::va("\n==== MWX start (%s) ====\n", dedicated ? "dedicated" : "client"), true);
 	}
 

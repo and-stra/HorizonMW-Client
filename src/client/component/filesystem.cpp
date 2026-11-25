@@ -64,8 +64,9 @@ namespace filesystem
 			filesystem::register_path(L"raw_shared");
 			filesystem::register_path(L"raw");
 			filesystem::register_path(L"main");
-			// MWX: our own data (images, scripts, ui_scripts) from GAME\mwx, highest priority
-			filesystem::register_path(L"mwx");
+			// MWX: our own data (images, scripts, ui_scripts), highest priority. The folder name can be
+			// overridden for a second (test) client: -datadir <dir> (default "mwx").
+			filesystem::register_path(filesystem::get_data_dir());
 
 			// MWX: mods are loaded by relaunching with -mod "mods/<name>" (see mods.cpp)
 			const auto mod_path = utils::flags::get_flag("mod");
@@ -228,6 +229,18 @@ namespace filesystem
 				}
 			}
 		}
+	}
+
+	std::string get_data_dir()
+	{
+		const auto dir = utils::flags::get_flag("datadir");
+		return (dir.has_value() && !dir->empty()) ? dir.value() : std::string{default_data_dir};
+	}
+
+	std::string get_log_dir()
+	{
+		const auto dir = utils::flags::get_flag("logdir");
+		return (dir.has_value() && !dir->empty()) ? dir.value() : std::string{default_log_dir};
 	}
 
 	std::vector<std::string> get_search_paths()
