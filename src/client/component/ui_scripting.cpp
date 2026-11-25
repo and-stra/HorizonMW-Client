@@ -639,7 +639,7 @@ namespace ui_scripting
 
 #ifndef DEBUG
 			// MWX: load our own LUI scripts from the game folder after HMW's zone scripts
-			load_scripts((utils::nt::library{}.get_folder() / "mwx" / "ui_scripts").string());
+			load_scripts((utils::nt::library{}.get_folder() / filesystem::get_data_dir() / "ui_scripts").string());
 #endif
 		}
 

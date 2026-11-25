@@ -382,7 +382,7 @@ namespace gsc
 
 #ifndef DEBUG
 			const auto mod = mods::get_mod();
-			if (game::environment::is_dedi() || root_dir.filename() == "mwx" ||
+			if (game::environment::is_dedi() || root_dir.filename() == filesystem::get_data_dir() ||
 				(mod.has_value() && root_dir.generic_string() == mod.value()))
 			{
 #endif

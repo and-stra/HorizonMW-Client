@@ -2,7 +2,9 @@
 #include "loader/component_loader.hpp"
 
 #include "console.hpp"
+#include "filesystem.hpp"
 #include "game/game.hpp"
+#include "localized_strings.hpp"
 
 #include "stock_weapons.hpp"
 #include "stock_weapons_data.hpp"
@@ -60,6 +62,26 @@ namespace stock_weapons
 			unsigned int h = 0;
 			for (; *s; ++s) h = h * 31 + static_cast<unsigned char>(std::tolower(static_cast<unsigned char>(*s)));
 			return h;
+		}
+
+		// mp/customweapons.csv has three columns (ref, class, type); create_a_class\__init__.lua reads all three
+		// and inserts the item into Cac.Weapons[type][class]. The type is derived from the statstable class so the
+		// row data stays the same as the MWR/HMW statstable rows.
+		const char* customweapons_type(const char* weapon_class)
+		{
+			const std::string cls = weapon_class ? weapon_class : "";
+			if (cls == "weapon_assault" || cls == "weapon_smg" || cls == "weapon_sniper" ||
+				cls == "weapon_heavy" || cls == "weapon_shotgun")
+			{
+				return "Primary";
+			}
+			if (cls == "weapon_pistol" || cls == "weapon_secondary_machine_pistol" ||
+				cls == "weapon_secondary_shotgun" || cls == "weapon_projectile" ||
+				cls == "weapon_melee")
+			{
+				return "Secondary";
+			}
+			return "";
 		}
 
 		// The cell hash the engine uses is found by checking candidates against
@@ -127,8 +149,8 @@ namespace stock_weapons
 				if (!dumped)
 				{
 					dumped = true;
-					CreateDirectoryA("mwx-logs", nullptr);
-					if (FILE* f = fopen("mwx-logs/statstable_dump.csv", "w"))
+					CreateDirectoryA(filesystem::get_log_dir().data(), nullptr);
+					if (FILE* f = fopen((filesystem::get_log_dir() + "/statstable_dump.csv").data(), "w"))
 					{
 						for (auto r = 0; r < original->rowCount; ++r)
 						{
@@ -211,6 +233,10 @@ namespace stock_weapons
 					{
 						text = src[2]; // its class (weapon_assault, ...)
 					}
+					else if (c == 2)
+					{
+						text = customweapons_type(src[2]); // Primary/Secondary, read by create_a_class\__init__.lua
+					}
 					auto& cell = result->values[static_cast<size_t>(old_rows + n) * cols + c];
 					cell.string = allocator.duplicate_string(text);
 					cell.hash = static_cast<int>(hash(text));
@@ -269,4 +295,19 @@ namespace stock_weapons
 		}
 		return original;
 	}
+
+	class component final : public component_interface
+	{
+	public:
+		void post_unpack() override
+		{
+			// AW weapons: display name and description for the ported weapons (the statstable name column
+			// points at these keys; HMW has no strings for AW assets).
+			localized_strings::override("WEAPON_EXPLOSIVE_EXO_CROSSBOW", "Crossbow");
+			localized_strings::override("WEAPON_EXPLOSIVE_EXO_CROSSBOW_DESC",
+				"Bolt-action crossbow. Fires explosive bolts that stick and detonate.");
+		}
+	};
 }
+
+REGISTER_COMPONENT(stock_weapons::component)

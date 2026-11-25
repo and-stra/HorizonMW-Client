@@ -5,6 +5,7 @@
 #include "console.hpp"
 #include "debug_api.hpp"
 #include "debug_server.hpp"
+#include "filesystem.hpp"
 #include "party.hpp"
 #include "scheduler.hpp"
 #include "screenshot.hpp"
@@ -231,7 +232,7 @@ namespace debug_server
 			if (method == "load_times")
 			{
 				std::string data{};
-				utils::io::read_file("mwx-logs/load_times.log", &data);
+				utils::io::read_file(filesystem::get_log_dir() + "/load_times.log", &data);
 				// only the latest start
 				if (const auto pos = data.rfind("==== MWX start"); pos != std::string::npos)
 				{
