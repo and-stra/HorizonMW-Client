@@ -681,6 +681,15 @@ namespace party
 			{
 				dvars::register_bool("mwx_ignore_version", false, game::DVAR_FLAG_NONE,
 					"Allow joining a LAN server that runs a different MWX version");
+				// R7: the local player card (patch/backing/background ids). The lobby card reads
+				// them through the MWX ui_script wrapper; the getInfo answer carries the host's
+				// values so a LAN client can show the host's card too.
+				dvars::register_int("mwx_card_patch", 0, 0, 1000000, game::DVAR_FLAG_NONE,
+					"Player card patch (emblem) id");
+				dvars::register_int("mwx_card_backing", 0, 0, 1000000, game::DVAR_FLAG_NONE,
+					"Player card patch backing id");
+				dvars::register_int("mwx_card_background", 0, 0, 1000000, game::DVAR_FLAG_NONE,
+					"Player card background id");
 			}, scheduler::pipeline::main);
 
 			// clear motd & usermap
@@ -968,6 +977,16 @@ namespace party
 					info.set("sv_running", utils::string::va("%i", get_dvar_bool("sv_running") && !game::VirtualLobby_Loaded()));
 					info.set("dedicated", utils::string::va("%i", get_dvar_bool("dedicated")));
 					info.set("sv_wwwBaseUrl", get_dvar_string("sv_wwwBaseUrl"));
+
+					// R7: the host's player card ids (the client-side lobby wrapper reads them)
+					const auto card_int = [](const char* name)
+					{
+						const auto* dvar = game::Dvar_FindVar(name);
+						return dvar ? std::to_string(dvar->current.integer) : std::string("0");
+					};
+					info.set("mwx_card_patch", card_int("mwx_card_patch"));
+					info.set("mwx_card_backing", card_int("mwx_card_backing"));
+					info.set("mwx_card_background", card_int("mwx_card_background"));
 
 					if (!fastfiles::is_stock_map(mapname))
 					{

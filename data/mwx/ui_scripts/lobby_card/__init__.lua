@@ -12,7 +12,44 @@ local function hide(element)
     if not ok then pcall(function() element:hide() end) end
 end
 
+-- R7: the local card comes from the MWX profile dvars (the retail party member data is empty on
+-- LAN). The lobby wrappers below answer for member 0 (the local player) only; remote members still
+-- use the engine's data. Host -> client is carried in the getInfo answer (next step: a per-player
+-- wire format, see docs/todo-callsigns.md).
+local function dvar_int(name)
+    local ok, value = pcall(function() return Engine.GetDvarString(name) end)
+    if not ok or value == nil then return nil end
+    local number = tonumber(value)
+    if number == nil then return nil end
+    return number
+end
+
+local function local_card(name)
+    local value = dvar_int("mwx_card_" .. name)
+    if value ~= nil and value ~= 0 then return value end
+    return nil
+end
+
+local function wrap_card(name, api)
+    local original = Lobby[api]
+    if type(original) ~= "function" then return end
+
+    Lobby[api] = function(member, ...)
+        if member == nil or member == 0 then
+            local card = local_card(name)
+            if card ~= nil then return card end
+        end
+        return original(member, ...)
+    end
+end
+
+wrap_card("patch", "GetMemberPatch")
+wrap_card("backing", "GetMemberPatchbacking")
+wrap_card("background", "GetMemberBackground")
+
 local function has_patch()
+    local card = local_card("patch")
+    if card ~= nil then return true end
     local ok, patch = pcall(function() return Lobby.GetMemberPatch(0) end)
     if not ok then return false end -- the call is not available here: treat it as "no patch"
     return patch ~= nil and patch ~= 0 and patch ~= ""

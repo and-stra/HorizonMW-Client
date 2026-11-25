@@ -139,9 +139,9 @@ usercmds at all. `mwx_test_mode` (see below) does not set it.
 
 **Focus independence (verified 2026-11-25).** Nothing in this path asks Windows for the foreground
 window or the raw mouse/keyboard: `CL_KeyEvent` is the client's own key handler and the view angles
-are written into the player state, both on the game's main thread. A client whose window is behind
-the terminal (never clicked, no focus) still moved 190 units with `hold +forward 800` and fired
-(headless clip count dropped) through `input`. `mwx_test_mode 1` starts the client windowed
+are written into the player state, both on the game's main thread. A client whose window was behind
+the terminal (never clicked, not the foreground window) still moved with `hold +forward` and fired
+through `input` (measured: see the report's R5 numbers). `mwx_test_mode 1` starts the client windowed
 (960x540), muted and with `cl_paused 0`; it deliberately leaves `in_mouse` alone. Screenshots come
 from the swap chain at `Present`, so they work unfocused too.
 

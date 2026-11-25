@@ -62,3 +62,27 @@ functions to prefer it.
 - A second PC on the LAN sees the host's (and every other client's) card, and vice versa.
 - CAC / personalization still open without errors; the emblem/background selected there is what
   the other players see.
+
+## R7 status (2026-11-25)
+
+Implemented (plumbing, not visually verified):
+
+- Local profile dvars mwx_card_patch, mwx_card_backing, mwx_card_background (ints, default 0).
+- The host's values are part of the MWX getInfo answer (mwx_card_*).
+- data/mwx/ui_scripts/lobby_card/__init__.lua wraps Lobby.GetMemberPatch,
+  GetMemberPatchbacking and GetMemberBackground for member 0 (the local player) and returns the
+  dvar value when it is non-zero; the existing white-box hiding still applies when everything is 0.
+
+Still open:
+
+1. Per-player wire format: every client must send its three ids to the host, and the host must
+   broadcast 
+ame -> ids to the other clients (a mwxCard UDP message through 
+etwork::send or
+   an extra connect userinfo field). The lobby wrapper then keys the card by member name/XUID
+   instead of only member 0. Without this the host's card works on a client, but not a client's card
+   on the host/other clients.
+2. The emblem/patch id semantics: playerCardPatch looks like an int into the emblem icon list
+   (see hmw_patch_common_mp/mp/default_emblems.cfg, emblemIcon 198); a valid default id has not
+   been confirmed in the lobby yet.
+3. Visual check with two clients and a screenshot of menu_xboxlive_privatelobby.

@@ -5,7 +5,7 @@ Cac.GameModes.Data.Party = {
     Image = "h1_ui_icon_playlist_weekend",
     -- ph/mprops hidden until the prop lists exist (props got the default weapon and kept the player model);
     -- snipers dropped: use preset classes in the game setup instead
-    List = { "infect", "gun", "slasher", "rpg", "oic", "aon", "cranked", "sharpshooter", "reinforce", "srescue", "mugger", "arena" }
+    List = { "infect", "gun", "slasher", "rpg", "oic", "aon", "cranked", "sharpshooter", "reinforce", "srescue", "mugger", "arena", "ph", "mprops" }
 }
 
 -- gametypes of the loaded mod (mod.json "gametypes", registered in C++ by mods.cpp / gamemodes.cpp)
