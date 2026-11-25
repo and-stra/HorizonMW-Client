@@ -505,7 +505,7 @@ namespace gsc
 			const auto* test_dvar = game::Dvar_FindVar("mwx_test");
 			if (test_dvar && test_dvar->current.string && *test_dvar->current.string)
 			{
-				load_script("mwx/tests/" + std::string(test_dvar->current.string));
+				load_script(std::string(filesystem::get_data_dir()) + "/tests/" + std::string(test_dvar->current.string));
 			}
 		}
 
