@@ -139,11 +139,13 @@ usercmds at all. `mwx_test_mode` (see below) does not set it.
 
 **Focus independence (verified 2026-11-25).** Nothing in this path asks Windows for the foreground
 window or the raw mouse/keyboard: `CL_KeyEvent` is the client's own key handler and the view angles
-are written into the player state, both on the game's main thread. A client whose window was behind
-the terminal (never clicked, not the foreground window) still moved with `hold +forward` and fired
-through `input` (measured: see the report's R5 numbers). `mwx_test_mode 1` starts the client windowed
-(960x540), muted and with `cl_paused 0`; it deliberately leaves `in_mouse` alone. Screenshots come
-from the swap chain at `Present`, so they work unfocused too.
+are written into the player state, both on the game's main thread. During the verification run the
+game window was confirmed not to be the foreground window (the opencode window was) and `input`
+accepted and applied commands on that client; the numeric pawn movement/ammo measurement on a
+*connected* client was blocked by the client's on-demand debug script failing to load after the
+connect (listen hosts and dedicated servers are unaffected - see the run report). `mwx_test_mode 1`
+starts the client windowed (960x540), muted and with `cl_paused 0`; it deliberately leaves
+`in_mouse` alone. Screenshots come from the swap chain at `Present`, so they work unfocused too.
 
 The test runner never needs focus at all: `run_test` / `run_all_tests` start dedicated servers with
 their console `CREATE_NEW_CONSOLE` and no window of their own; tests drive the game through GSC
