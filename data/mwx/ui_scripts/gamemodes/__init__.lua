@@ -5,7 +5,7 @@ Cac.GameModes.Data.Party = {
     Image = "h1_ui_icon_playlist_weekend",
     -- ph/mprops hidden until the prop lists exist (props got the default weapon and kept the player model);
     -- snipers dropped: use preset classes in the game setup instead
-    List = { "infect", "gun", "slasher", "rpg", "oic", "aon", "cranked" }
+    List = { "infect", "gun", "slasher", "rpg", "oic", "aon", "cranked", "sharpshooter", "reinforce", "srescue", "mugger", "arena" }
 }
 
 -- gametypes of the loaded mod (mod.json "gametypes", registered in C++ by mods.cpp / gamemodes.cpp)
@@ -13,6 +13,11 @@ if game and game.getmodgametypes then
     for ref in string.gmatch(game:getmodgametypes(), "%S+") do
         table.insert(Cac.GameModes.Data.Party.List, ref)
     end
+end
+
+-- R6: the survival prototype is a hidden mode until mwx_show_survival is set
+if Engine.GetDvarString("mwx_show_survival") == "1" then
+    table.insert(Cac.GameModes.Data.Party.List, "survival")
 end
 
 -- Standard list: HMW's own script (liam_tests) sets it with "gtnw", which has no script in any zone.

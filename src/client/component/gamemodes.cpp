@@ -58,6 +58,14 @@ namespace gamemodes
 			{"oic", "dm", "MWX_GAMETYPE_OIC", "MWX_GAMETYPE_OIC_DESC", "0"},
 			{"aon", "dm", "MWX_GAMETYPE_AON", "MWX_GAMETYPE_AON_DESC", "0"},
 			{"cranked", "war", "MWX_GAMETYPE_CRANKED", "MWX_GAMETYPE_CRANKED_DESC"},
+			// R4: the five new party modes (own scripts in data/mwx/maps/mp/gametypes)
+			{"sharpshooter", "war", "MWX_GAMETYPE_SHRP", "MWX_GAMETYPE_SHRP_DESC", "0"},
+			{"reinforce", "dom", "MWX_GAMETYPE_REINFORCE", "MWX_GAMETYPE_REINFORCE_DESC"},
+			{"srescue", "sd", "MWX_GAMETYPE_SRESCUE", "MWX_GAMETYPE_SRESCUE_DESC"},
+			{"mugger", "dm", "MWX_GAMETYPE_MUGGER", "MWX_GAMETYPE_MUGGER_DESC"},
+			{"arena", "war", "MWX_GAMETYPE_ARENA", "MWX_GAMETYPE_ARENA_DESC"},
+			// R6: survival prototype, hidden unless mwx_show_survival is 1
+			{"survival", "war", "MWX_GAMETYPE_SURVIVAL", "MWX_GAMETYPE_SURVIVAL_DESC", "0"},
 		};
 
 		// built-in extra gametypes + the ones the loaded mod declares in its mod.json
@@ -87,6 +95,12 @@ namespace gamemodes
 			{"oic", "Gain points by eliminating enemy players. Every kill gives one round. Three lives."},
 			{"aon", "Empty pistol and a throwing knife. Reach 20 kills without dying for the bonus."},
 			{"cranked", "Gain points by eliminating enemy players. Kills make you Cranked: keep killing to stay alive."},
+			{"sharpshooter", "Team deathmatch. Everyone carries the same weapon; it rotates every 45 seconds. Kills at 5, 10 and 15 give a perk."},
+			{"reinforce", "Rounds, one life. Capture the point to respawn your dead teammates, or eliminate the enemy team."},
+			{"srescue", "Rounds, one life. A dead player drops a tag: a teammate revives by taking it, an enemy confirms the kill. Eliminate the enemy team."},
+			{"mugger", "Free-for-all. Kills drop tags: grab them to bank them. Melee kills steal the victim's banked tags. 30 tags."},
+			{"arena", "Rounds, one life. A neutral flag appears when the clock runs down or a team is down to one: capture it to win the round."},
+			{"survival", "Prototype: hold out against waves of agents. (mwx_show_survival 1)"},
 		};
 
 		constexpr auto gametype_list = "maps/mp/gametypes/_gametypes.txt";
@@ -643,6 +657,24 @@ namespace gamemodes
 			localized_strings::override("MWX_GAMETYPE_CRANKED", "Cranked");
 			localized_strings::override("MWX_GAMETYPE_CRANKED_DESC",
 				"Team Deathmatch. A kill starts a 30 second fuse; keep killing to reset it, or explode.");
+			localized_strings::override("MWX_GAMETYPE_SHRP", "Sharpshooter");
+			localized_strings::override("MWX_GAMETYPE_SHRP_DESC",
+				"Team Deathmatch. Everyone carries the same weapon, rotating every 45 seconds. Killstreak perks at 5, 10 and 15 kills.");
+			localized_strings::override("MWX_GAMETYPE_REINFORCE", "Reinforce");
+			localized_strings::override("MWX_GAMETYPE_REINFORCE_DESC",
+				"Rounds with one life. Capture the point to bring your dead teammates back, or eliminate the enemy team.");
+			localized_strings::override("MWX_GAMETYPE_SRESCUE", "Search & Rescue");
+			localized_strings::override("MWX_GAMETYPE_SRESCUE_DESC",
+				"Search & Destroy with tags. A dead player drops a tag; a teammate can revive them, an enemy confirms the kill.");
+			localized_strings::override("MWX_GAMETYPE_MUGGER", "Mugger");
+			localized_strings::override("MWX_GAMETYPE_MUGGER_DESC",
+				"Free-for-all. Kills drop tags, grab them to bank them. Melee kills steal the victim's tags.");
+			localized_strings::override("MWX_GAMETYPE_ARENA", "Arena");
+			localized_strings::override("MWX_GAMETYPE_ARENA_DESC",
+				"Rounds with one life. A neutral flag appears late in the round or when a team is down to one; capture it to win.");
+			localized_strings::override("MWX_GAMETYPE_SURVIVAL", "Survival (prototype)");
+			localized_strings::override("MWX_GAMETYPE_SURVIVAL_DESC",
+				"Prototype for the survival spike: waves of H1 agents on mp_crash. Hidden unless mwx_show_survival 1.");
 			localized_strings::override("MWX_PARTY_CAPS", "PARTY");
 
 			// real extra gametypes: Infected (our port), Drop Zone (HMW's dz.gsc)
@@ -665,6 +697,12 @@ namespace gamemodes
 			localized_strings::override("MWX_GAMETYPE_OIC_CAPS", "ONE IN THE CHAMBER");
 			localized_strings::override("MWX_GAMETYPE_AON_CAPS", "ALL OR NOTHING");
 			localized_strings::override("MWX_GAMETYPE_CRANKED_CAPS", "CRANKED");
+			localized_strings::override("MWX_GAMETYPE_SHRP_CAPS", "SHARPSHOOTER");
+			localized_strings::override("MWX_GAMETYPE_REINFORCE_CAPS", "REINFORCE");
+			localized_strings::override("MWX_GAMETYPE_SRESCUE_CAPS", "SEARCH & RESCUE");
+			localized_strings::override("MWX_GAMETYPE_MUGGER_CAPS", "MUGGER");
+			localized_strings::override("MWX_GAMETYPE_ARENA_CAPS", "ARENA");
+			localized_strings::override("MWX_GAMETYPE_SURVIVAL_CAPS", "SURVIVAL");
 
 			// loadscreen names ("@" .. upper(ui_gametype))
 			localized_strings::override("PH", "PROP HUNT");
@@ -674,6 +712,12 @@ namespace gamemodes
 			localized_strings::override("OIC", "ONE IN THE CHAMBER");
 			localized_strings::override("AON", "ALL OR NOTHING");
 			localized_strings::override("CRANKED", "CRANKED");
+			localized_strings::override("SHARPSHOOTER", "SHARPSHOOTER");
+			localized_strings::override("REINFORCE", "REINFORCE");
+			localized_strings::override("SRESCUE", "SEARCH & RESCUE");
+			localized_strings::override("MUGGER", "MUGGER");
+			localized_strings::override("ARENA", "ARENA");
+			localized_strings::override("SURVIVAL", "SURVIVAL");
 
 			// HUD and splash strings of the One in the Chamber / All or Nothing / Cranked scripts
 			localized_strings::override("MWX_OIC_LIVES_3", "LIVES: 3");
@@ -683,6 +727,9 @@ namespace gamemodes
 			localized_strings::override("MWX_AON_ONE_KILL", "1 KILL LEFT");
 			localized_strings::override("MWX_AON_BONUS", "ALL OR NOTHING!");
 			localized_strings::override("MWX_CRANKED", "CRANKED!");
+			localized_strings::override("MWX_SHRP_WEAPON", "WEAPON");
+			localized_strings::override("MWX_SURVIVAL_WAVE", "WAVE");
+			localized_strings::override("MWX_ARENA_FLAG_SPAWNED", "ARENA FLAG SPAWNED");
 
 			// objective strings: the UI builds OBJECTIVES_<ref>(_SCORE|_HINT) with the ref as it is
 			for (const auto& objective : objectives)
@@ -722,6 +769,8 @@ namespace gamemodes
 				dvars::register_bool("mwx_gsc_print", false, game::DVAR_FLAG_NONE, "Print GSC print()/println() output to the console (release builds)");
 				dvars::register_bool("mwx_debug_gamemodes", false, game::DVAR_FLAG_NONE,
 					"Log gamemode dvar writes and the loading screen menu");
+				dvars::register_bool("mwx_show_survival", false, game::DVAR_FLAG_NONE,
+					"Show the Survival prototype in the Party list");
 			}, scheduler::pipeline::main);
 		}
 	};

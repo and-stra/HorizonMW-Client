@@ -198,6 +198,72 @@
     }
   },
   {
+    "name": "sharpshooter",
+    "script": "sharpshooter",
+    "gametype": "sharpshooter",
+    "map": "mp_shipment",
+    "timeout_s": 300,
+    "dvars": {
+      "scr_sharpshooter_rotatetime": "6",
+      "mwx_test_bots": 4
+    }
+  },
+  {
+    "name": "reinforce",
+    "script": "reinforce",
+    "gametype": "reinforce",
+    "map": "mp_crash",
+    "timeout_s": 300,
+    "dvars": {
+      "scr_reinforce_timelimit": "3",
+      "mwx_test_bots": 4
+    }
+  },
+  {
+    "name": "srescue",
+    "script": "srescue",
+    "gametype": "srescue",
+    "map": "mp_crash",
+    "timeout_s": 300,
+    "dvars": {
+      "scr_srescue_timelimit": "3",
+      "mwx_test_bots": 4
+    }
+  },
+  {
+    "name": "mugger",
+    "script": "mugger",
+    "gametype": "mugger",
+    "map": "mp_shipment",
+    "timeout_s": 300,
+    "dvars": {
+      "mwx_test_bots": 4
+    }
+  },
+  {
+    "name": "arena",
+    "script": "arena",
+    "gametype": "arena",
+    "map": "mp_crash",
+    "timeout_s": 300,
+    "dvars": {
+      "scr_arena_flagtime": "8",
+      "scr_arena_timelimit": "4",
+      "mwx_test_bots": 4
+    }
+  },
+  {
+    "name": "survival",
+    "script": "survival",
+    "gametype": "survival",
+    "map": "mp_crash",
+    "timeout_s": 420,
+    "dvars": {
+      "mwx_show_survival": 1,
+      "mwx_test_bots": 1
+    }
+  },
+  {
     "name": "war_rust",
     "script": "war",
     "gametype": "war",

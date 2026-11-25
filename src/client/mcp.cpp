@@ -725,6 +725,10 @@ namespace mcp
 				}
 
 				rpc(id, "set_dvar", {{"name", "g_gametype"}, {"value", test.gametype}});
+				// a listen host's `map` command takes the gametype from ui_gametype (the private
+				// lobby flow writes it); without it the map comes up as the default war
+				rpc(id, "set_dvar", {{"name", "ui_gametype"}, {"value", test.gametype}});
+				rpc(id, "set_dvar", {{"name", "ui_mapname"}, {"value", test.map}});
 				rpc(id, "set_dvar", {{"name", "mwx_test"}, {"value", test.script}});
 				for (const auto& [name, value] : test.dvars.items())
 				{

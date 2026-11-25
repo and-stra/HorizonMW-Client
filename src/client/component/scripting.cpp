@@ -148,7 +148,23 @@ namespace scripting
 				callback(free_scripts, false);
 			}
 
-			scripting::notify(*game::levelEntityId, "shutdownGame_called", { 1 });
+			// R3: the `map` command path calls G_ShutdownGame before/without a script VM (a
+			// dedicated server started without a map has none at all). Notifying GSC there
+			// dereferences a dead entity/script pool (crash at g_shutdown_game_stub, dump
+			// hmw-mod-crash-2-2026-11-24-23-37-05). Only notify while a game is loaded and the
+			// level entity is valid; the same condition guards the shutdown callbacks below.
+			const auto vm_alive = game::SV_Loaded() || game::CL_IsCgameInitialized();
+			if (vm_alive && *game::levelEntityId != 0)
+			{
+				try
+				{
+					scripting::notify(*game::levelEntityId, "shutdownGame_called", { 1 });
+				}
+				catch (...)
+				{
+					console::warn("shutdownGame_called notify failed\n");
+				}
+			}
 
 			game::G_LogPrintf("ShutdownGame:\n");
 			game::G_LogPrintf("------------------------------------------------------------\n");

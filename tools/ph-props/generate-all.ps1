@@ -53,6 +53,7 @@ foreach ($dir in (Get-ChildItem $refsMaps -Directory)) {
     $todo += $dir.Name
 }
 if ($Maps.Count -gt 0) {
+    $Maps = $Maps | ForEach-Object { $_ -split "," } | Where-Object { $_ }
     $todo = $todo | Where-Object { $Maps -contains $_ }
 }
 

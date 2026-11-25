@@ -317,25 +317,63 @@ namespace fastfiles
 
 		HANDLE find_usermap(const std::string& mapname)
 		{
-			const auto usermap = fastfiles::get_current_usermap();
-			if (!usermap.has_value())
+			const auto open = [&](const std::string& base, const std::string& file) -> HANDLE
 			{
-				return INVALID_HANDLE_VALUE;
-			}
-
-			const auto& usermap_value = usermap.value();
-			const std::string usermap_file = utils::string::va("%s.ff", usermap_value.data());
-			const std::string usermap_load_file = utils::string::va("%s_load.ff", usermap_value.data());
-			const std::string usermap_pak_file = utils::string::va("%s.pak", usermap_value.data());
-
-			if (mapname == usermap_file || mapname == usermap_load_file || mapname == usermap_pak_file)
-			{
-				const auto path = utils::string::va("hmw-usermaps\\%s\\%s",
-					usermap_value.data(), mapname.data());
+				const auto path = utils::string::va("hmw-usermaps\\%s\\%s", base.data(), file.data());
 				if (utils::io::file_exists(path))
 				{
+					fastfiles::set_usermap(base);
 					return CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
 						FILE_FLAG_OVERLAPPED | FILE_FLAG_NO_BUFFERING, nullptr);
+				}
+
+				return INVALID_HANDLE_VALUE;
+			};
+
+			const auto usermap = fastfiles::get_current_usermap();
+			if (usermap.has_value())
+			{
+				const auto& usermap_value = usermap.value();
+				const std::string usermap_file = utils::string::va("%s.ff", usermap_value.data());
+				const std::string usermap_load_file = utils::string::va("%s_load.ff", usermap_value.data());
+				const std::string usermap_pak_file = utils::string::va("%s.pak", usermap_value.data());
+
+				if (mapname == usermap_file || mapname == usermap_load_file || mapname == usermap_pak_file)
+				{
+					const auto handle = open(usermap_value, mapname);
+					if (handle != INVALID_HANDLE_VALUE)
+					{
+						return handle;
+					}
+				}
+			}
+
+			// R3: the `map <usermap>` command checks the zone name with db_file_exists before it
+			// opens it, but the command path does not tell us which usermap it means (only the
+			// party/startup flow called set_usermap). Without this fallback Sys_CreateFile looked in
+			// zone\ and the async zone load waited forever (DS hang after `map mp_terminal`).
+			// "<map>.ff", "<map>_load.ff" and "<map>.pak" resolve to hmw-usermaps\<map>\<file>.
+			std::string base{};
+			if (mapname.ends_with("_load.ff"))
+			{
+				base = mapname.substr(0, mapname.size() - 8);
+			}
+			else if (mapname.ends_with(".ff"))
+			{
+				base = mapname.substr(0, mapname.size() - 3);
+			}
+			else if (mapname.ends_with(".pak"))
+			{
+				base = mapname.substr(0, mapname.size() - 4);
+			}
+
+			if (!base.empty() && !fastfiles::is_stock_map(base))
+			{
+				const auto handle = open(base, mapname);
+				if (handle != INVALID_HANDLE_VALUE)
+				{
+					console::info("fastfiles: %s -> usermap %s\n", mapname.data(), base.data());
+					return handle;
 				}
 			}
 

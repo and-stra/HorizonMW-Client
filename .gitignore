@@ -7,3 +7,5 @@ refs/
 test-results-*.json
 last-run-*.log
 build-vsenv.log
+tools/ph-props/generate-all.log
+tools/ph-props/*.run.log

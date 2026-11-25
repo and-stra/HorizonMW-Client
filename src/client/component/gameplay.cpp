@@ -332,8 +332,16 @@ namespace gameplay
 			utils::hook::nop(0x2D6F03_b, 2); // PM_UpdateAimDownSightLerp
 			utils::hook::nop(0x2DD64D_b, 2); // PM_Weapon_StartFiring
 
-			// Influence PM_JitterPoint code flow so the trace->startsolid checks are 'ignored'
-			pm_player_trace_hook.create(0x2D14C0_b, &pm_player_trace_stub);
+			// R2: the PM_JitterPoint trace detour (startsolid=false for elevators) crashes a listen
+			// host with Prop Hunt props. Keep it available for the modes that need elevators, but do
+			// not install it by default; the assembly hook below stays for normal modes.
+			const auto* elevator_trace = dvars::register_bool("mwx_elevator_trace", false,
+				game::DVAR_FLAG_CHEAT | game::DVAR_FLAG_REPLICATED,
+				"Influence PM_JitterPoint's startsolid checks (elevators on custom maps); off by default (listen-host crash with props)");
+			if (elevator_trace->current.enabled)
+			{
+				pm_player_trace_hook.create(0x2D14C0_b, &pm_player_trace_stub);
+			}
 
 			// flags for dvars that ARE cheat commands BUT are harmless most times
 			auto dvar_flags = game::DVAR_FLAG_CHEAT | game::DVAR_FLAG_REPLICATED;

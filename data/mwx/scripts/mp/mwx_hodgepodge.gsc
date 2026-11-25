@@ -78,7 +78,10 @@ install_ph()
     level thread ph_onconnect();
 
     foreach (player in level.players)
+    {
         player thread ph_bridge();
+        player thread ph_spawn_kick();
+    }
 
     logprint("mwx ph: install done (bridge + limits), proplist=" + level.proplist.size +
         " madprops=" + level.madpropsmode + " debug=" + getdvarint("mwx_debug_gamemodes", 0));
@@ -231,6 +234,23 @@ ph_onconnect()
     {
         level waittill("connected", player);
         player thread ph_bridge();
+        player thread ph_spawn_kick();
+    }
+}
+
+// The engine's first "applyloadout" of a spawn is notified before onspawnplayer's handleprop()
+// thread reaches its waittill on this build (measured: bridge=1, prop undefined). One notify after
+// the spawn - when handleprop is definitely waiting - gives the initial prop its loadout event.
+ph_spawn_kick()
+{
+    self endon("disconnect");
+    level endon("game_ended");
+
+    for (;;)
+    {
+        self waittill("spawned_player");
+        waittillframeend;
+        self notify("applyLoadout");
     }
 }
 
