@@ -3,7 +3,7 @@
 // The mod's sas gametype gives iw5_exocrossbow_mp; the mod.ff only references the weapon, so
 // this test fails if the mod or the zone reference is broken.
 
-#include mwx\tests\aw_weapon;
+#include tests\aw_weapon;
 
 main()
 {
