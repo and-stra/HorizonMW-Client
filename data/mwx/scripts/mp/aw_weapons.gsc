@@ -8,6 +8,11 @@
 //   undefined weapon name. AW/H1 assets are named "<ref>_mp[_<attachment>]" and attachment variants
 //   are resolved by the engine from the weapon def, so the name is built directly here.
 //
+// Camos (W1.1): HMW hands the engine the full name "<ref>_mp[_<attachment>]_camoNNN" and the camo
+// index; the engine strips the suffix and applies the mp/camoTable.csv design to the weapon's
+// camo-ready material. The suffix is exactly what HMW's own _class::buildweaponnamecamo() builds
+// (_camo00N / _camo0NN / _camoNNN), so iw5_* weapons delegate to it too.
+//
 // Both replacefunc calls run in init(): the loader executes every script's main() first (that is
 // where HMW installs its replacements) and init() afterwards, so ours wins.
 
@@ -34,8 +39,10 @@ aw_buildweaponname(ref, attachment1, attachment2, camo, perks, unused)
 		return scripts\mp_patches\custom_weapons::buildweaponname(ref, attachment1, attachment2, camo, perks);
 
 	// AW naming: <ref>_mp, then _<attachment>. The attachment is only appended when the weapon's
-	// statstable attachment list allows it (the same list isvalidattachment checks). AW weapons have
-	// no _camoNN variants yet, so a selected camo is ignored instead of giving an unknown weapon.
+	// statstable attachment list allows it (the same list isvalidattachment checks). Then the camo
+	// suffix (_camoNNN) HMW's own weapons use, so a selected camo reaches the engine instead of
+	// being dropped. buildweaponnamecamo() ignores an undefined/none camo, so a class without a
+	// camo keeps the plain name.
 	name = ref + "_mp";
 
 	if (isdefined(attachment1) && attachment1 != "" && attachment1 != "none")
@@ -44,6 +51,9 @@ aw_buildweaponname(ref, attachment1, attachment2, camo, perks, unused)
 		if (common_scripts\utility::array_contains(allowed, attachment1))
 			name = name + "_" + attachment1;
 	}
+
+	if (isdefined(camo) && camo > 0)
+		name = maps\mp\gametypes\_class::buildweaponnamecamo(name, camo);
 
 	return name;
 }
