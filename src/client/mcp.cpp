@@ -8,7 +8,10 @@
 #include <utils/string.hpp>
 
 #include <algorithm>
+#include <atomic>
+#include <mutex>
 #include <set>
+#include <thread>
 
 // MWX MCP bridge (stdio, newline-delimited JSON-RPC 2.0).
 //
@@ -41,6 +44,7 @@ namespace mcp
 		};
 
 		std::mutex instance_mutex;
+		std::mutex instance_start_mutex;
 		std::vector<instance_t> instances;
 		std::uint32_t next_client = 1;
 		std::uint32_t next_server = 1;
@@ -193,6 +197,11 @@ namespace mcp
 
 		json start_instance(const bool dedicated, const json& args)
 		{
+			// port allocation and process creation have to be one step: with -Parallel N two
+			// test threads can otherwise allocate the same free port before either instance is
+			// registered (the scan only sees instances that are already in the list).
+			std::lock_guard start_lock(instance_start_mutex);
+
 			const auto port = static_cast<std::uint16_t>(args.value("port", 0)) != 0
 				? static_cast<std::uint16_t>(args.value("port", 0)) : allocate_port(dedicated);
 
@@ -544,7 +553,7 @@ namespace mcp
 			return entry;
 		}
 
-		json start_test_job(const std::string& name, const bool all)
+		json start_test_job(const std::string& name, const bool all, const int parallel = 1)
 		{
 			{
 				// two game instances on one PC block each other's map load (seen with a stale client:
@@ -592,7 +601,7 @@ namespace mcp
 				test_jobs.push_back(job);
 			}
 
-			std::thread([job, cases, all]()
+			std::thread([job, cases, all, parallel]()
 			{
 				json result{};
 				try
@@ -601,7 +610,7 @@ namespace mcp
 					{
 						result = run_one_test(cases.front(), job);
 					}
-					else
+					else if (parallel <= 1)
 					{
 						json tests = json::array();
 						auto passed = 0;
@@ -621,6 +630,65 @@ namespace mcp
 							fprintf(stderr, "mwx mcp: test %s %s\n", test.name.data(), ok ? "green" : "failed");
 						}
 						result = json{{"tests", tests}, {"passed", passed}, {"failed", failed}};
+					}
+					else
+					{
+						// N dedicated servers at once. Every test keeps its own debug/net port
+						// (start_instance serialises allocation) and its own console; the result
+						// array is merged in manifest order.
+						const auto threads = static_cast<std::size_t>(std::min<int>(parallel, cases.size()));
+						std::vector<json> slots(cases.size());
+						std::atomic_size_t next{0};
+
+						std::vector<std::thread> workers;
+						workers.reserve(threads);
+						for (std::size_t t = 0; t < threads; ++t)
+						{
+							workers.emplace_back([&]()
+							{
+								for (;;)
+								{
+									if (job->cancel)
+									{
+										break;
+									}
+
+									const auto i = next.fetch_add(1);
+									if (i >= cases.size())
+									{
+										break;
+									}
+
+									const auto one = run_one_test(cases[i], job);
+									const auto ok = !one.contains("error") && one.value("failed", 1) == 0 &&
+										one.value("script_errors", 1) == 0;
+									fprintf(stderr, "mwx mcp: test %s %s (parallel %d)\n", cases[i].name.data(),
+										ok ? "green" : "failed", parallel);
+									slots[i] = one;
+								}
+							});
+						}
+						for (auto& worker : workers)
+						{
+							worker.join();
+						}
+
+						json tests = json::array();
+						auto passed = 0;
+						auto failed = 0;
+						for (auto& one : slots)
+						{
+							if (one.is_null())
+							{
+								continue;
+							}
+							const auto ok = !one.contains("error") && one.value("failed", 1) == 0 &&
+								one.value("script_errors", 1) == 0;
+							ok ? ++passed : ++failed;
+							tests.emplace_back(one);
+						}
+						result = json{{"tests", tests}, {"passed", passed}, {"failed", failed},
+							{"parallel", parallel}};
 					}
 				}
 				catch (const std::exception& e)
@@ -679,6 +747,25 @@ namespace mcp
 		json run_one_test(const test_case& test, const std::shared_ptr<test_job>& job)
 		{
 			const auto start = std::chrono::steady_clock::now();
+
+			// Two mwx processes started close together race in the engine's early startup: the
+			// second one exits with no output (measured with run-tests.ps1 -Parallel). 30 s apart
+			// they both run, so the parallel job serialises the process starts.
+			{
+				static std::mutex start_mutex;
+				static std::chrono::steady_clock::time_point last_start{};
+
+				std::lock_guard _(start_mutex);
+				if (last_start != std::chrono::steady_clock::time_point{})
+				{
+					const auto elapsed = std::chrono::steady_clock::now() - last_start;
+					if (elapsed < 30s)
+					{
+						std::this_thread::sleep_for(30s - elapsed);
+					}
+				}
+				last_start = std::chrono::steady_clock::now();
+			}
 
 			// The map goes on the command line: a `map` command after boot hangs a dedicated
 			// server that was started without one. A listen client boots to the menu and then
@@ -968,7 +1055,17 @@ namespace mcp
 				return json{{"error", "unknown test: " + only}, {"tests", list_tests()}};
 			}
 
-			return start_test_job(only.empty() ? "all" : only, true);
+			auto parallel = args.value("parallel", 4);
+			if (parallel < 1)
+			{
+				parallel = 1;
+			}
+			if (parallel > 8)
+			{
+				parallel = 8;
+			}
+
+			return start_test_job(only.empty() ? "all" : only, true, parallel);
 		}
 
 		json target_schema()
@@ -1161,8 +1258,8 @@ namespace mcp
 				},
 				{
 					{"name", "run_all_tests"},
-					{"description", "Starts every test from tests.json in a row in the background (or only the one given as name). Returns a job id; poll test_status."},
-					{"inputSchema", {{"type", "object"}, {"properties", {{"name", {{"type", "string"}}}}}}},
+					{"description", "Starts every test from tests.json in the background (or only the one given as name). parallel N runs N dedicated servers at once (default 4, max 8); every test keeps its own debug/net port and its own console. Returns a job id; poll test_status."},
+					{"inputSchema", {{"type", "object"}, {"properties", {{"name", {{"type", "string"}}}, {"parallel", {{"type", "integer"}}}}}}},
 				},
 				{
 					{"name", "test_status"},

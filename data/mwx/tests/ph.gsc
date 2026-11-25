@@ -32,6 +32,15 @@ main()
 
     test_assert(spawned >= 2, "players spawned", ">=2", spawned);
     test_assert(level.hodgepodgemode == 9, "hodgepodge mode is prop hunt", "9", level.hodgepodgemode);
+
+    // B2: the mp_shipment branch lives in ph_setupdvars_stub (getmapname), not in the C++ code
+    if (maps\mp\_utility::getmapname() == "mp_shipment")
+    {
+        timelimit = getdvarfloat("scr_ph_timelimit", -1);
+        oldschool = getdvarint("g_oldschool", -1);
+        test_assert(timelimit > 2.15 && timelimit < 2.25, "mp_shipment: ph timelimit 2.2", "2.2", timelimit);
+        test_assert(oldschool == 1, "mp_shipment: oldschool on", "1", oldschool);
+    }
     proplistsize = -1;
     if (isdefined(level.proplist))
         proplistsize = level.proplist.size;

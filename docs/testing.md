@@ -18,6 +18,29 @@ A run takes ~1.5 min per test (most of it is the map load), so the full set is ~
 `run_test` / `run_all_tests` return a job id at once; a single MCP tool call must stay under the
 client's request timeout (~60 s), so the result is polled with `test_status`.
 
+## Parallel runs (`-Parallel N`)
+
+`tools\test\run-tests.ps1 -Parallel N` (and `run_all_tests {parallel: N}`) runs up to N dedicated
+servers at the same time. Every test keeps its own debug port, its own net port and its own log
+file; the per-test result JSONs are merged into the one `test-results-<time>.json` in manifest
+order. `-Parallel 1` is the default.
+
+Two processes must **not** start in the same seconds: the engine's early startup races on files in
+the game folder and the second process exits with no output. Both runners therefore serialise the
+process starts with a 30 s gap (measured: a 6 s gap is not enough, 30 s works). The parent also
+waits for a free net port before each start.
+
+Measured full runs (26 tests, commit `1ca2854e` + the parallel runner):
+
+| N | wall time | green | notes |
+|---|---|---|---|
+| 1 | 38:04 | 24/26 | `srescue` hit net port 27036 (Steam holds it); `survival` known (pre-B5) |
+| 4 | **15:10** | 24/26 | same two: `srescue` port 27036, `survival` known |
+
+N=4 is the default: 2.5x faster with the identical result. `-Parallel 1` stays available for
+load-time-sensitive runs. The net-port picker skips ports that another program owns (Steam's
+27036), so a fixed conflict cannot fail a test.
+
 ## Writing a test
 
 A test is a GSC script in `data/mwx/tests/<name>.gsc` with a `main()` function:

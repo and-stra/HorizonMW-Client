@@ -253,6 +253,41 @@
     }
   },
   {
+    "name": "ph_listen",
+    "script": "ph",
+    "gametype": "ph",
+    "map": "mp_crash",
+    "timeout_s": 300,
+    "listen": true,
+    "dvars": {
+      "scr_ph_propHideTime": "8",
+      "mwx_debug_gamemodes": 1,
+      "mwx_test_bots": 4
+    }
+  },
+  {
+    "name": "ph_shipment",
+    "script": "ph",
+    "gametype": "ph",
+    "map": "mp_shipment",
+    "timeout_s": 300,
+    "dvars": {
+      "scr_ph_propHideTime": "8",
+      "mwx_test_bots": 4
+    }
+  },
+  {
+    "name": "mode_reset",
+    "script": "mode_reset",
+    "gametype": "war",
+    "map": "mp_crash",
+    "timeout_s": 300,
+    "listen": true,
+    "dvars": {
+      "mwx_test_bots": 1
+    }
+  },
+  {
     "name": "survival",
     "script": "survival",
     "gametype": "survival",
@@ -260,6 +295,7 @@
     "timeout_s": 420,
     "dvars": {
       "mwx_show_survival": 1,
+      "mwx_gsc_print": 1,
       "mwx_test_bots": 1
     }
   },

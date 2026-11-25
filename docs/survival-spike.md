@@ -31,18 +31,24 @@ live HMW measurements on a dedicated `mp_crash` server (2026-11-25).
 | `scr_horde_maxagents` / `scr_default_maxagents` | 18 / 0 (changing them does not change `getmaxagents()`) |
 
 So **no agent slots are allocated in a multiplayer match**: `add_humanoid_agent` returns
-`undefined`, and the wave loop cannot spawn anything through H1's framework. The agent path is
-blocked by an engine-side allocation, not by assets or scripts. MWR never shipped a mode that used
-the framework (it is the AW/CoD4-style agent code), which explains why the MP engine leaves the pool
-at zero.
+`undefined`, and the wave loop cannot spawn anything through H1's framework. The agent path was
+blocked by an engine-side allocation, not by assets or scripts.
 
-**Prototype fallback:** the spike spawns the wave with `executecommand("spawnBot <n>")` (engine
-`SV_AddBot` bots on team axis) when `add_humanoid_agent` returns undefined. With 5 bots on mp_crash
-(a dedicated server, 18 slots, 60 Hz default) the server keeps up without any frame-time symptoms in
-the test runs; the test completes in the normal ~2 minutes. A frame-time figure from the server is
-not available (dedicated `perf.frame_ms` is 0/no renderer); the honest measurement is "5-7 bots
-work, more is untested". Next measurement for the real port: `sv_fps`/round-trip timing with
-10/20/40 bots on a listen host.
+**B5 root cause and fix (2026-11-25):** `getmaxagents()` builds the name `scr_<g_gametype>_maxagents`
+(format string `scr_%s_maxagents`) and reads the **string** value with `atoi`, capped at **24**. The
+spike set `scr_horde_maxagents` and `scr_default_maxagents` (wrong names) and at runtime (too late).
+`gamemodes.cpp::apply_survival_dvars()` now registers/sets `scr_survival_maxagents = "24"` **before
+the map load** (string dvar; an int dvar is read as a char pointer). The getter is at RVA
+**`0x44C980`** in the unpacked engine (`h1_mp64_zt.exe`; the format string is at RVA `0x85F0B0`),
+which caps the accepted value at 24. It is correct for survival to use the same
+`scr_<g_gametype>_maxagents` convention as the horde mode. No engine hook is needed while the dvar
+is present; if a future build returns 0, hook `0x44C980` to return `mwx_survival_maxagents`.
+
+**Prototype fallback (removed in B5):** the spike spawned the wave with
+`executecommand("spawnBot <n>")` when `add_humanoid_agent` returned undefined. B5 removes that
+fallback: the wave now uses agents only (the test asserts `isagent()` enemies). The old fallback
+spawned engine bots that the wave counter could not distinguish from the test's own bot, which was
+the wave 1 -> 2 problem.
 
 ## b. Bot path nodes on HMW maps
 

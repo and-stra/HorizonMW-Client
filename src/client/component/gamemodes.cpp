@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <cstring>
 #include <cctype>
+#include <map>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -66,6 +67,9 @@ namespace gamemodes
 			{"arena", "war", "MWX_GAMETYPE_ARENA", "MWX_GAMETYPE_ARENA_DESC"},
 			// R6: survival prototype, hidden unless mwx_show_survival is 1
 			{"survival", "war", "MWX_GAMETYPE_SURVIVAL", "MWX_GAMETYPE_SURVIVAL_DESC", "0"},
+			// Sticks and Stones: native gametype (was the mods/sticksandstones PoC). Added in part C,
+			// when the mod is no longer loaded; while the mod is loaded its mod.json declares sas.
+			// {"sas", "dm", "MWX_GAMETYPE_SAS", "MWX_GAMETYPE_SAS_DESC", "0"},
 		};
 
 		// built-in extra gametypes + the ones the loaded mod declares in its mod.json
@@ -416,14 +420,91 @@ namespace gamemodes
 			game::Dvar_SetFromStringByNameFromSource(name, value ? "1" : "0", game::DVAR_SOURCE_INTERNAL);
 		}
 
+		// string rule dvar (scr_<gametype>_maxagents is a string the exe parses with atoi; an int
+		// dvar would be read as a char pointer). Only called from the main pipeline: string dvars
+		// cannot be registered in post_unpack (AGENTS.md).
+		void set_rule_string(const char* name, const char* value)
+		{
+			if (game::Dvar_FindVar(name) == nullptr)
+			{
+				game::Dvar_RegisterString(game::generateHashValue(name), name, value, game::DVAR_FLAG_NONE);
+				console::info("[gamemodes] registered %s = %s\n", name, value);
+				return;
+			}
+
+			game::Dvar_SetFromStringByNameFromSource(name, value, game::DVAR_SOURCE_INTERNAL);
+		}
+
+		// B1: the party modes change global (non scr_<ref>_) rule dvars that the stock engine
+		// registered once, e.g. scr_player_healthregen, scr_game_hardpoints, scr_game_mmUavTime
+		// and g_oldschool. Those keep their party value after the match, so the next normal match
+		// had no health regen and no killstreaks. Remember the value the dvar had before the first
+		// party mode touched it and restore it in reset_mode_dvars().
+		std::map<std::string, std::string> saved_globals;
+
+		std::string dvar_value_string(const game::dvar_t* dvar)
+		{
+			switch (dvar->type)
+			{
+			case game::dvar_type::boolean:
+			case game::dvar_type::boolean_hashed:
+				return dvar->current.enabled ? "1" : "0";
+			case game::dvar_type::integer:
+			case game::dvar_type::integer_hashed:
+			case game::dvar_type::enumeration:
+				return std::to_string(dvar->current.integer);
+			case game::dvar_type::value:
+			case game::dvar_type::value_hashed:
+				return std::to_string(dvar->current.value);
+			default:
+				return dvar->current.string ? dvar->current.string : "";
+			}
+		}
+
+		void remember_global(const char* name, const char* fallback = nullptr)
+		{
+			if (saved_globals.contains(name))
+			{
+				return;
+			}
+
+			const auto* dvar = game::Dvar_FindVar(name);
+			if (!dvar)
+			{
+				// the engine owns these normally; a party mode may create one that did not exist
+				// before (scr_player_healthregen is created by the Prop Hunt GSC). Without a
+				// fallback there is nothing to restore; with one, restore the normal value.
+				if (fallback)
+				{
+					saved_globals[name] = fallback;
+				}
+				return;
+			}
+
+			saved_globals[name] = dvar_value_string(dvar);
+		}
+
+		void restore_globals()
+		{
+			for (const auto& [name, value] : saved_globals)
+			{
+				game::Dvar_SetFromStringByNameFromSource(name.data(), value.data(), game::DVAR_SOURCE_INTERNAL);
+			}
+
+			saved_globals.clear();
+		}
+
 		// maps/mp/gametypes/_hodgepodge_ph.gsc setupdvars(), with the mode's own dvar prefix.
+		// B2: the map-specific branch (mp_shipment: timelimit 2.2, g_oldschool 1) is done in GSC
+		// (ph_setupdvars_stub uses getmapname()); on_map() in the g_gametype callback still sees
+		// the PREVIOUS map.
 		void apply_prop_hunt_dvars(const bool madprops)
 		{
 			const auto prefix = std::string("scr_") + (madprops ? "mprops" : "ph") + "_";
-			const auto shipment = !madprops && on_map("mp_shipment");
 
+			remember_global("scr_game_hardpoints");
 			set_rule_int("scr_game_hardpoints", 0, 0, 10);
-			set_rule_float((prefix + "timelimit").data(), shipment ? 2.2f : 4.0f, 0.0f, 60.0f);
+			set_rule_float((prefix + "timelimit").data(), 4.0f, 0.0f, 60.0f);
 			set_rule_int((prefix + "scorelimit").data(), 0, 0, 10000);
 			set_rule_int((prefix + "roundlimit").data(), 4, 0, 20);
 			set_rule_int((prefix + "winlimit").data(), 3, 0, 20);
@@ -434,20 +515,28 @@ namespace gamemodes
 			// the H1 script only does this for the non-madprops round
 			if (!madprops)
 			{
+				// not registered in a normal match; the normal value is regen on (the dvar is
+				// only created by the Prop Hunt GSC, so the pre-ph state is "absent" = on)
+				remember_global("scr_player_healthregen", "1");
 				set_rule_int("scr_player_healthregen", 0, 0, 100);
 			}
 
-			// a later party mode must not inherit the oldschool rule from the previous one
-			set_rule_bool("g_oldschool", shipment);
+			// a later party mode must not inherit the oldschool rule from the previous one; the GSC
+			// stub switches it back on for mp_shipment
+			remember_global("g_oldschool");
+			set_rule_bool("g_oldschool", false);
 		}
 
 		// maps/mp/gametypes/_hodgepodge.gsc setupdvarsmm()
 		void apply_slasher_dvars()
 		{
+			remember_global("scr_game_hardpoints");
 			set_rule_int("scr_game_hardpoints", 0, 0, 10);
 			set_rule_float("scr_slasher_timelimit", 10.0f, 0.0f, 60.0f);
 			set_rule_int("scr_slasher_numlives", 1, 0, 20);
+			remember_global("scr_game_mmUavTime");
 			set_rule_float("scr_game_mmUavTime", 30.0f, 0.0f, 600.0f);
+			remember_global("g_oldschool");
 			set_rule_bool("g_oldschool", true);
 		}
 
@@ -455,7 +544,28 @@ namespace gamemodes
 		// in place before the map load too (_gamelogic::init reads it)
 		void apply_rpg_dvars()
 		{
+			remember_global("g_oldschool");
 			set_rule_bool("g_oldschool", true);
+		}
+
+		// B5a: the exe reads "scr_<g_gametype>_maxagents" for the agent pool (format string
+		// scr_%s_maxagents; the getter caps at 24), so survival needs scr_survival_maxagents before
+		// the map load. The R6 spike only set scr_horde/scr_default and at runtime, too late. The
+		// dvar is a *string* (the exe does atoi on current.string).
+		void apply_survival_dvars()
+		{
+			auto slots = 24;
+			if (const auto* dvar = game::Dvar_FindVar("mwx_survival_maxagents"))
+			{
+				slots = std::clamp(dvar->current.integer, 0, 24);
+			}
+
+			const auto text = std::to_string(slots);
+
+			remember_global("scr_survival_maxagents");
+			set_rule_string("scr_survival_maxagents", text.data());
+			remember_global("scr_default_maxagents");
+			set_rule_string("scr_default_maxagents", text.data());
 		}
 
 		void reset_mode_dvars()
@@ -467,10 +577,12 @@ namespace gamemodes
 			game::Dvar_SetFromStringByNameFromSource("scr_game_madprops", "0", game::DVAR_SOURCE_INTERNAL);
 			game::Dvar_SetFromStringByNameFromSource("mwx_gamemode", "", game::DVAR_SOURCE_INTERNAL);
 
-			// only the party modes switch the oldschool rule on; do not leak it into a normal match
-			if (had_mode)
+			// the global rule dvars a party mode changed go back to the value the normal game had
+			// before the party mode (B1). restore also when the mode flag is already empty, so a
+			// leaked value from an earlier match is cleaned up on the next normal gametype.
+			if (had_mode || !saved_globals.empty())
 			{
-				set_rule_bool("g_oldschool", false);
+				restore_globals();
 			}
 		}
 	}
@@ -479,6 +591,14 @@ namespace gamemodes
 	{
 		if (!gametype)
 		{
+			return;
+		}
+
+		// B5a: survival is an extra gametype (not in the party `modes` table); its agent pool is
+		// read from scr_survival_maxagents by the engine's getmaxagents() during the map load.
+		if (std::strcmp(gametype, "survival") == 0)
+		{
+			apply_survival_dvars();
 			return;
 		}
 
@@ -506,6 +626,10 @@ namespace gamemodes
 			else if (std::strcmp(mode->ref, "rpg") == 0)
 			{
 				apply_rpg_dvars();
+			}
+			else if (std::strcmp(mode->ref, "survival") == 0)
+			{
+				apply_survival_dvars();
 			}
 
 			return;
@@ -675,6 +799,16 @@ namespace gamemodes
 			localized_strings::override("MWX_GAMETYPE_SURVIVAL", "Survival (prototype)");
 			localized_strings::override("MWX_GAMETYPE_SURVIVAL_DESC",
 				"Prototype for the survival spike: waves of H1 agents on mp_crash. Hidden unless mwx_show_survival 1.");
+			localized_strings::override("MWX_GAMETYPE_SAS", "Sticks and Stones");
+			localized_strings::override("MWX_GAMETYPE_SAS_DESC",
+				"Free-for-all with the crossbow, a knife and a throwing knife. A throwing knife kill or a suicide bankrupts the victim.");
+			localized_strings::override("MWX_GAMETYPE_SAS_CAPS", "STICKS AND STONES");
+			localized_strings::override("SAS", "STICKS AND STONES");
+			localized_strings::override("OBJECTIVES_SAS", "Get kills with the crossbow and the knife.");
+			localized_strings::override("OBJECTIVES_SAS_SCORE", "Highest score when the time runs out wins.");
+			localized_strings::override("OBJECTIVES_SAS_HINT", "A throwing knife kill or a suicide resets the score to 0.");
+			localized_strings::override("MWX_SAS_BANKRUPTED", "BANKRUPTED!");
+			localized_strings::override("MWX_SAS_BANKRUPT_ENEMY", "BANKRUPTED AN ENEMY!");
 			localized_strings::override("MWX_PARTY_CAPS", "PARTY");
 
 			// real extra gametypes: Infected (our port), Drop Zone (HMW's dz.gsc)
@@ -771,6 +905,8 @@ namespace gamemodes
 					"Log gamemode dvar writes and the loading screen menu");
 				dvars::register_bool("mwx_show_survival", false, game::DVAR_FLAG_NONE,
 					"Show the Survival prototype in the Party list");
+				dvars::register_int("mwx_survival_maxagents", 24, 0, 24, game::DVAR_FLAG_NONE,
+					"Agent slots the survival prototype requests (engine cap 24)");
 			}, scheduler::pipeline::main);
 		}
 	};

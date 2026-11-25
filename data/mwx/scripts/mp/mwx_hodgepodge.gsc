@@ -67,13 +67,17 @@ install_ph()
 
     level.mwx_ph_fix = 1;
 
-    // log the notify case behaviour of this build once per match
-    level thread ph_notify_probe();
+    // notify-case and undefined-truthiness probes only with mwx_debug_gamemodes 1
+    if (getdvarint("mwx_debug_gamemodes", 0))
+        level thread ph_notify_probe();
 
     // Lives/limits: gamemodes.cpp sets the scr_<ref>_* defaults before the map loads (war.gsc
     // registers its watched dvars from them). Keep the host migration path working: the stock
     // setupdvars() hard-codes scr_war_*, this copy writes scr_<level.gametype>_*.
+    // The first setupdvars() call already happened in onstartgametype (before this replacement),
+    // so run the stub once here: it applies the map-specific values (mp_shipment timer/oldschool).
     replacefunc(maps\mp\gametypes\_hodgepodge_ph::setupdvars, ::ph_setupdvars_stub);
+    ph_setupdvars_stub();
 
     level thread ph_onconnect();
 
@@ -197,6 +201,12 @@ ph_notify_probe()
 
     logprint("mwx ph: notify case probe: notify camel -> camelWait=" + level.mwx_ph_case_camel +
         " lowerWait=" + level.mwx_ph_case_lower);
+
+    // B7: is a plain `undefined` truthy in this GSC VM? One probe per match, logged.
+    if (undefined)
+        logprint("mwx ph: probe undefined -> truthy");
+    else
+        logprint("mwx ph: probe undefined -> falsy");
 }
 
 ph_case_wait_camel()
@@ -222,7 +232,11 @@ ph_bridge()
     {
         self waittill("applyloadout");
         self notify("applyLoadout");
+        self.mwx_ph_forwarded = 1;
         level.mwx_ph_bridge = 1;
+
+        if (getdvarint("mwx_debug_gamemodes", 0))
+            logprint("mwx ph: bridge forwarded applyLoadout for " + self.name);
     }
 }
 
@@ -241,6 +255,8 @@ ph_onconnect()
 // The engine's first "applyloadout" of a spawn is notified before onspawnplayer's handleprop()
 // thread reaches its waittill on this build (measured: bridge=1, prop undefined). One notify after
 // the spawn - when handleprop is definitely waiting - gives the initial prop its loadout event.
+// B3: only send that extra notify when ph_bridge has not already forwarded one for this spawn
+// (flag set in ph_bridge, cleared on "spawned_player"), so a spawn gets one loadout event, not two.
 ph_spawn_kick()
 {
     self endon("disconnect");
@@ -249,8 +265,19 @@ ph_spawn_kick()
     for (;;)
     {
         self waittill("spawned_player");
+        self.mwx_ph_forwarded = 0;
         waittillframeend;
-        self notify("applyLoadout");
+
+        if (!isdefined(self.mwx_ph_forwarded) || !self.mwx_ph_forwarded)
+        {
+            self notify("applyLoadout");
+            if (getdvarint("mwx_debug_gamemodes", 0))
+                logprint("mwx ph: spawn kick sent applyLoadout for " + self.name);
+        }
+        else if (getdvarint("mwx_debug_gamemodes", 0))
+        {
+            logprint("mwx ph: spawn kick skipped (bridge forwarded) for " + self.name);
+        }
     }
 }
 

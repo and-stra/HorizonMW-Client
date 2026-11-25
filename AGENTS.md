@@ -36,6 +36,15 @@ friends on LAN, short loading times. No master server, accounts or anti-cheat.
 - String dvars can't be registered in `post_unpack` (crash: `MT_AllocIndex ... script string`).
   Register them in `scheduler::once(..., scheduler::pipeline::main)`.
 - Game files are CRLF on Windows (`core.autocrlf=true`); keep line endings.
+- HMW notifies **`applyloadout`** (lower case); H1 scripts (`handleprop`,
+  `givecustomloadout`) wait for **`applyLoadout`**, and GSC notifies are case-sensitive.
+- H1's hodgepodge code writes `scr_war_*`, while `war.gsc` reads `scr_<level.gametype>_*`.
+  Party modes need their own prefix, seeded before the map load (a `g_gametype` change is too
+  late), and every global dvar they change (`scr_player_healthregen`, `scr_game_hardpoints`,
+  `scr_game_mmUavTime`, `g_oldschool`) must be saved on first change and restored in
+  `reset_mode_dvars`.
+- HMW perk slots are MW2's (perk1/perk2/perk3 + equipment). Give extra perks with
+  `giveperk(perk, 0)` **after** the spawn; the class table does not carry them.
 
 ## MWX parts (src/client)
 
@@ -59,8 +68,16 @@ friends on LAN, short loading times. No master server, accounts or anti-cheat.
   `console_log`), see [docs/mcp.md](docs/mcp.md) and [docs/testing.md](docs/testing.md).
 - Game mode tests: `data/mwx/tests/<name>.gsc` + an entry in `data/mwx/tests/tests.json`. Run them
   with `run_all_tests` (a background job, poll `test_status`) or, without the MCP,
-  `powershell -File tools\test\run-tests.ps1 [-Name <test>]`. A full run is ~20-25 minutes.
+  `powershell -File tools\test\run-tests.ps1 [-Name <test>] [-Parallel N]`. A full run is ~15
+  minutes with `-Parallel 4` (the default) and ~38 minutes serially. `-Parallel N` (MCP:
+  `run_all_tests {parallel: N}`) starts N dedicated servers at once; each test keeps its own
+  debug/net port and its own log, and the results are merged into the one summary. `-Parallel 1`
+  forces a serial run (used when a load-time comparison matters).
   Weapons, perks, loadouts and spawn timing for new modes: [docs/hmw-weapons-perks.md](docs/hmw-weapons-perks.md).
+- **Test rule**: while working, run only the tests affected by the change, **3x each**; at the end of
+  a work part run **one** full suite. Never run the full suite twice in a row (flakes and load
+  stalls need a targeted rerun, not another 40-minute run). Known exceptions until their part is
+  fixed: `sas` (crossbow/mod ownership, part C2) and `survival` (agents, part B5).
 - One MCP tool call must stay under ~60 s: opencode kills the MCP server when a call runs longer,
   so `run_test`/`run_all_tests` return a job and `wait_for` returns `still_waiting` after 45 s.
 - GSC check before every commit: `powershell -File tools\gsc-check\check-all.ps1`

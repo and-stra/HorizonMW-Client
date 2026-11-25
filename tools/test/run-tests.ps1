@@ -3,11 +3,15 @@
   without the MCP bridge (same logic as mcp.cpp run_test / run_all_tests).
 
   Usage:
-    .\run-tests.ps1                      # all tests
+    .\run-tests.ps1                      # all tests, one server at a time
+    .\run-tests.ps1 -Parallel 4          # four dedicated servers at once
     .\run-tests.ps1 -Name infect         # one test
     .\run-tests.ps1 -Name infect -KeepServer
 
-  Writes one line per test to stdout and a JSON summary at the end.
+  Writes one line per test to stdout and a JSON summary at the end. With -Parallel N the
+  tests are split over N child runner processes (block, not round-robin: each child takes
+  the next test when it is done); every test still gets its own debug and net port and its
+  own log file, and the child result JSONs are merged into the one summary.
 #>
 param(
     [string]$Name = "all",
@@ -15,7 +19,10 @@ param(
     [string]$Manifest = "",
     [switch]$KeepServer,
     [int]$BasePort = 27200,
-    [int]$BaseNetPort = 27016
+    [int]$BaseNetPort = 27016,
+    [int]$Parallel = 4,
+    # child-runner mode: write the summary here instead of the default location
+    [string]$JsonOut = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -30,6 +37,21 @@ if ($Name -ne "all") { $tests = @($tests | Where-Object { $_.name -eq $Name }) ;
 
 $script:portCounter = $BasePort
 $script:netPortCounter = $BaseNetPort
+$script:assignedNetPorts = @{}
+
+function Find-FreeNetPort([int]$start) {
+    # Steam holds UDP ports in the 2700x-2704x range on some PCs (27036 here). A port that is
+    # taken by another program never becomes free, so do not wait for it - take the next one.
+    for ($p = $start; $p -lt ($start + 200); $p++) {
+        if ($script:assignedNetPorts.ContainsKey($p)) { continue }
+        $used = Get-NetUDPEndpoint -LocalPort $p -ErrorAction SilentlyContinue
+        if (-not $used) {
+            $script:assignedNetPorts[$p] = 1
+            return $p
+        }
+    }
+    return $start
+}
 
 function Wait-NetPortFree([int]$netPort) {
     # a stopped server can hold its UDP port for a moment; the next server would exit on bind
@@ -65,7 +87,8 @@ function Stop-Server($process, [int]$port) {
 
 function Run-Test($test) {
     $port = $script:portCounter++
-    $netPort = $script:netPortCounter++
+    $netPort = Find-FreeNetPort $script:netPortCounter
+    $script:netPortCounter = $netPort + 1
 
     $dvars = @{}
     if ($test.dvars) { foreach ($p in $test.dvars.PSObject.Properties) { $dvars[$p.Name] = "$($p.Value)" } }
@@ -73,12 +96,13 @@ function Run-Test($test) {
     if (-not $dvars.ContainsKey("net_port")) { $dvars["net_port"] = "$netPort" }
 
     # the mod flag must come before +set commands (the game flag parser ignores it after them)
-    $argList = "-dedicated -memoryfix -debugport $port"
+    $listen = [bool]$test.listen
+    $argList = if ($listen) { "-memoryfix -debugport $port" } else { "-dedicated -memoryfix -debugport $port" }
     if ($test.mod) { $argList += " -mod `"$($test.mod)`"" }
     $argList += " +set mwx_test_mode 1"
     foreach ($k in ($dvars.Keys | Sort-Object)) { $argList += " +set $k `"$($dvars[$k])`"" }
-    if ($test.gametype) { $argList += " +set g_gametype `"$($test.gametype)`"" }
-    if ($test.map) { $argList += " +map `"$($test.map)`"" }
+    if ($test.gametype -and -not $listen) { $argList += " +set g_gametype `"$($test.gametype)`"" }
+    if ($test.map -and -not $listen) { $argList += " +map `"$($test.map)`"" }
     if ($test.args) { $argList += " $($test.args)" }
 
     if (-not (Wait-NetPortFree $netPort)) {
@@ -113,10 +137,36 @@ function Run-Test($test) {
     }
 
     try {
+        # a listen client boots to the menu: wait for its debug server, set the gametype/map
+        # dvars, then issue `map` (the engine's `map` works from the menu; a map on the command
+        # line would load before the client is up)
+        if ($listen) {
+            $up = $false
+            $status = $null
+            for ($i = 0; $i -lt 240; $i++) {
+                $status = Rpc $port "status" @{} 2
+                if ($status.result) { $up = $true; break }
+                if ($process.HasExited) { break }
+                Start-Sleep -Seconds 1
+            }
+
+            if ($up) {
+                Rpc $port "set_dvar" @{ name = "g_gametype"; value = "$($test.gametype)" } 5 | Out-Null
+                Rpc $port "set_dvar" @{ name = "ui_gametype"; value = "$($test.gametype)" } 5 | Out-Null
+                Rpc $port "set_dvar" @{ name = "ui_mapname"; value = "$($test.map)" } 5 | Out-Null
+                Rpc $port "set_dvar" @{ name = "mwx_test"; value = "$($test.script)" } 5 | Out-Null
+                foreach ($k in $dvars.Keys) {
+                    if ($k -eq "mwx_test") { continue }
+                    Rpc $port "set_dvar" @{ name = $k; value = "$($dvars[$k])" } 5 | Out-Null
+                }
+                Rpc $port "command" @{ command = "map $($test.map)" } 10 | Out-Null
+            }
+        }
+
         $running = $false
         for ($i = 0; $i -lt 240; $i++) {
             $status = Rpc $port "status" @{} 2
-            if ($status.result -and $status.result.sv_running) { $running = $true; break }
+            if ($status.result -and $status.result.sv_running -and (-not $listen -or $status.result.in_game)) { $running = $true; break }
             if ($process.HasExited) { break }
             Start-Sleep -Seconds 1
         }
@@ -205,23 +255,107 @@ function Run-Test($test) {
     return $result
 }
 
-$all = New-Object System.Collections.ArrayList
-foreach ($test in $tests) {
-    Write-Host ("=== {0} ({1} on {2}) ===" -f $test.name, $test.gametype, $test.map)
-    $r = Run-Test $test
-    [void]$all.Add($r)
+function Write-Summary($all)
+{
+    $summary = [ordered]@{
+        tests = $all.Count
+        green = @($all | Where-Object { -not $_.error -and $_.failed -eq 0 -and $_.script_errors -eq 0 -and $_.done }).Count
+        results = $all
+    }
+    $json = $summary | ConvertTo-Json -Depth 12
+    $out = if ($JsonOut) { $JsonOut } else { Join-Path (Split-Path $PSCommandPath) ("test-results-{0}.json" -f (Get-Date -Format "yyyyMMdd-HHmmss")) }
+    $json | Set-Content -Path $out -Encoding UTF8
+    Write-Host "summary written to $out"
+    Write-Host ("GREEN {0}/{1}" -f $summary.green, $summary.tests)
+    return $summary
+}
+
+function Write-TestResult($r, $name)
+{
     $state = if ($r.error) { "ERROR: $($r.error)" } elseif ($r.failed -eq 0 -and $r.script_errors -eq 0 -and $r.done) { "PASS" } else { "FAIL" }
-    Write-Host ("{0}: passed={1} failed={2} script_errors={3} {4}s {5}" -f $test.name, $r.passed, $r.failed, $r.script_errors, $r.total_s, $state)
+    Write-Host ("{0}: passed={1} failed={2} script_errors={3} {4}s {5}" -f $name, $r.passed, $r.failed, $r.script_errors, $r.total_s, $state)
     foreach ($f in $r.failures) { Write-Host ("  FAIL {0}: expected {1}, got {2}" -f $f.name, $f.expected, $f.actual) }
 }
 
-$summary = [ordered]@{
-    tests = $all.Count
-    green = @($all | Where-Object { -not $_.error -and $_.failed -eq 0 -and $_.script_errors -eq 0 -and $_.done }).Count
-    results = $all
+$all = New-Object System.Collections.ArrayList
+
+if ($Parallel -gt 1 -and @($tests).Count -gt 1)
+{
+    # Child processes: one runner per slot, each child runs one test and writes its own JSON.
+    $tmp = Join-Path $env:TEMP ("mwx-parallel-" + (Get-Date -Format "yyyyMMdd-HHmmss") + "-" + $PID)
+    New-Item -ItemType Directory -Force -Path $tmp | Out-Null
+
+    $queue = New-Object System.Collections.Queue
+    $i = 0
+    foreach ($test in $tests) {
+        $queue.Enqueue([pscustomobject]@{ index = $i; test = $test; port = $BasePort + $i; netPort = (Find-FreeNetPort ($BaseNetPort + $i)) })
+        $i++
+    }
+
+    $workerArgs = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
+    if ($Manifest) { $workerArgs += " -Manifest `"$Manifest`"" }
+
+    $running = @()
+    $results = @($null) * (@($tests).Count)
+    $jobs = New-Object System.Collections.ArrayList
+
+    function Start-Worker($item)
+    {
+        $outJson = Join-Path $tmp ("result-{0}-{1}.json" -f $item.index, $item.test.name)
+        $outLog = Join-Path $tmp ("run-{0}-{1}.log" -f $item.index, $item.test.name)
+        # dedupe -BasePort/-BaseNetPort: the child only needs the ports of its one test
+        $a = $workerArgs + " -Name `"$($item.test.name)`" -BasePort $($item.port) -BaseNetPort $($item.netPort) -JsonOut `"$outJson`""
+        $p = Start-Process -FilePath powershell.exe -ArgumentList $a -NoNewWindow -PassThru `
+            -RedirectStandardOutput $outLog -RedirectStandardError ($outLog + ".err")
+        return [pscustomobject]@{ process = $p; item = $item; json = $outJson; log = $outLog }
+    }
+
+    while ($queue.Count -gt 0 -or $running.Count -gt 0)
+    {
+        while ($running.Count -lt $Parallel -and $queue.Count -gt 0)
+        {
+        # two mwx processes must not start close together: the engine's early startup races on
+        # shared files in the game folder (observed: a second process started 6 s later exits with
+        # no output; 30 s apart both run). Four workers add ~90 s.
+        if ($running.Count -gt 0)
+        {
+            Start-Sleep -Seconds 30
+        }
+        $running += Start-Worker $queue.Dequeue()
+        }
+
+        $finished = @($running | Where-Object { $_.process.HasExited })
+        if (-not $finished) {
+            Start-Sleep -Milliseconds 500
+            continue
+        }
+
+        foreach ($w in $finished) {
+            $running = @($running | Where-Object { $_.process.Id -ne $w.process.Id })
+            $r = $null
+            if (Test-Path $w.json) {
+                try { $r = (Get-Content $w.json -Raw | ConvertFrom-Json).results[0] } catch { $r = $null }
+            }
+            if (-not $r) {
+                $tail = @()
+                if (Test-Path $w.log) { $tail = Get-Content $w.log -Tail 20 }
+                $r = [ordered]@{ test = $w.item.test.name; error = "child runner failed (exit $($w.process.ExitCode))"; port = $w.item.port; net_port = $w.item.netPort; console_tail = $tail }
+            }
+            $results[$w.item.index] = $r
+            Write-TestResult $r $w.item.test.name
+        }
+    }
+
+    foreach ($r in $results) { [void]$all.Add($r) }
 }
-$json = $summary | ConvertTo-Json -Depth 12
-$out = Join-Path (Split-Path $PSCommandPath) ("test-results-{0}.json" -f (Get-Date -Format "yyyyMMdd-HHmmss"))
-$json | Set-Content -Path $out -Encoding UTF8
-Write-Host "summary written to $out"
-Write-Host ("GREEN {0}/{1}" -f $summary.green, $summary.tests)
+else
+{
+    foreach ($test in $tests) {
+        Write-Host ("=== {0} ({1} on {2}) ===" -f $test.name, $test.gametype, $test.map)
+        $r = Run-Test $test
+        [void]$all.Add($r)
+        Write-TestResult $r $test.name
+    }
+}
+
+$summary = Write-Summary $all
