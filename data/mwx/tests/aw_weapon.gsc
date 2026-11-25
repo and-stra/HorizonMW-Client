@@ -14,7 +14,7 @@
 // Visual checks that GSC cannot do (ADS reticle centred, ring hidden, camo look, CAC entry)
 // stay as MCP screenshots in mwx-debug\aw-weapons\<milestone>\.
 
-#include mwx\tests\_test;
+#include tests\_test;
 
 aw_param(name, fallback)
 {
