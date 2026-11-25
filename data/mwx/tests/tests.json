@@ -301,16 +301,5 @@
       "mwx_aw_attachments": "reflex,acog",
       "mwx_aw_camo": 42
     }
-  },
-  {
-    "name": "aw_crossbow_sas",
-    "script": "aw_crossbow_sas",
-    "gametype": "sas",
-    "map": "mp_shipment",
-    "mod": "mods/sticksandstones",
-    "timeout_s": 300,
-    "dvars": {
-      "mwx_test_bots": 3
-    }
   }
 ]
