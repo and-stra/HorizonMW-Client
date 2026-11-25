@@ -23,7 +23,9 @@ namespace gamemodes
 	// "maps/mp/gametypes/war"), or nullptr when `name` is not a party ref.
 	const char* script_alias(const char* name);
 
-	// Sets scr_game_hodgepodgeMode / scr_game_madprops / mwx_gamemode for a g_gametype value.
+	// Sets scr_game_hodgepodgeMode / scr_game_madprops / mwx_gamemode for a g_gametype value and,
+	// for the party modes, the scr_<ref>_* rule dvars from H1's setupdvars() before the map loads
+	// (war.gsc registers its watched dvars with these values).
 	void apply_gametype(const char* gametype);
 
 	// Appends the virtual refs to maps/mp/gametypes/_gametypes.txt.

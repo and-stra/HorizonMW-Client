@@ -37,6 +37,10 @@ main()
         proplistsize = level.proplist.size;
     test_assert(proplistsize > 0, "the prop list is not empty", ">0", proplistsize);
 
+    // hold the bots: with one life per round a hunter bot that finds the props before the checks
+    // would end the round while the test is still looking at the loadout (test_kill still works)
+    test_hold_bots();
+
     test_step("wait for a prop and a hunter");
 
     prop = undefined;
@@ -107,9 +111,12 @@ main()
 
     test_step("end the round: all props eliminated");
 
+    // propkilledend() sets level.gameending as soon as the last prop is dead and calls
+    // ph_endgame() 3 s later; the H1 intermission then reloads the map ~25 s after the kill, which
+    // would kill this script before test_done. Do not wait for level.gameended here.
     ended = 0;
     waited = 0;
-    while (waited < 25 && !ended)
+    while (waited < 60 && !ended)
     {
         foreach (player in level.players)
         {
@@ -123,6 +130,8 @@ main()
         wait 1;
         waited = waited + 1;
 
+        if (isdefined(level.gameending) && level.gameending)
+            ended = 1;
         if (isdefined(level.gameended) && level.gameended)
             ended = 1;
         if (isdefined(game["roundsWon"]) && isdefined(game["roundsWon"][game["attackers"]]) &&
@@ -134,12 +143,21 @@ main()
 
     test_assert(ended, "the round ended", "1", ended);
 
+    // the winner is set 3 s after the last prop died (ph_endgame); the map reload after the
+    // intermission ends this thread, so keep this window short
     winner = "none";
-    if (isdefined(level.finalkillcam_winner))
-        winner = level.finalkillcam_winner;
-    if (winner == "none" && isdefined(game["roundsWon"]) && isdefined(game["roundsWon"][game["attackers"]]) &&
-        game["roundsWon"][game["attackers"]] > 0)
-        winner = game["attackers"];
+    waited = 0;
+    while (waited < 10 && winner == "none")
+    {
+        wait 0.5;
+        waited = waited + 0.5;
+
+        if (isdefined(level.finalkillcam_winner))
+            winner = level.finalkillcam_winner;
+        if (winner == "none" && isdefined(game["roundsWon"]) && isdefined(game["roundsWon"][game["attackers"]]) &&
+            game["roundsWon"][game["attackers"]] > 0)
+            winner = game["attackers"];
+    }
     test_assert(winner == game["attackers"], "the hunters won", game["attackers"], winner);
 
     test_step("mwx prop fix installed");

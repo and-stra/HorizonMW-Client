@@ -348,6 +348,119 @@ namespace gamemodes
 		return utils::string::va("maps/mp/gametypes/%s", mode->base);
 	}
 
+	namespace
+	{
+		bool on_map(const char* mapname)
+		{
+			const auto* dvar = game::Dvar_FindVar("mapname");
+			return dvar && dvar->current.string && std::strcmp(dvar->current.string, mapname) == 0;
+		}
+
+		// R1: H1's war.gsc main() registers its watched rule dvars as scr_<level.gametype>_*
+		// (getdvarint(name, default) at registration time). A party ref ("ph", "mprops",
+		// "slasher") has no engine-registered scr_<ref>_* dvars, so war.gsc saw the default 0:
+		// numlives 0 = unlimited lives, and a Prop Hunt round could never end by elimination.
+		// Create/overwrite the rule dvars with the mode's own setupdvars() values before the map
+		// loads. Numeric dvars can be registered late (the string-dvar crash does not apply).
+		void set_rule_int(const char* name, const int value, const int min, const int max)
+		{
+			if (game::Dvar_FindVar(name) == nullptr)
+			{
+				game::Dvar_RegisterInt(game::generateHashValue(name), name, value, min, max,
+					game::DVAR_FLAG_NONE);
+				console::info("[gamemodes] registered %s = %i\n", name, value);
+				return;
+			}
+
+			const auto text = std::to_string(value);
+			game::Dvar_SetFromStringByNameFromSource(name, text.data(), game::DVAR_SOURCE_INTERNAL);
+		}
+
+		void set_rule_float(const char* name, const float value, const float min, const float max)
+		{
+			if (game::Dvar_FindVar(name) == nullptr)
+			{
+				game::Dvar_RegisterFloat(game::generateHashValue(name), name, value, min, max,
+					game::DVAR_FLAG_NONE);
+				console::info("[gamemodes] registered %s = %f\n", name, value);
+				return;
+			}
+
+			const auto text = std::to_string(value);
+			game::Dvar_SetFromStringByNameFromSource(name, text.data(), game::DVAR_SOURCE_INTERNAL);
+		}
+
+		void set_rule_bool(const char* name, const bool value)
+		{
+			if (game::Dvar_FindVar(name) == nullptr)
+			{
+				game::Dvar_RegisterBool(game::generateHashValue(name), name, value, game::DVAR_FLAG_NONE);
+				console::info("[gamemodes] registered %s = %i\n", name, value ? 1 : 0);
+				return;
+			}
+
+			game::Dvar_SetFromStringByNameFromSource(name, value ? "1" : "0", game::DVAR_SOURCE_INTERNAL);
+		}
+
+		// maps/mp/gametypes/_hodgepodge_ph.gsc setupdvars(), with the mode's own dvar prefix.
+		void apply_prop_hunt_dvars(const bool madprops)
+		{
+			const auto prefix = std::string("scr_") + (madprops ? "mprops" : "ph") + "_";
+			const auto shipment = !madprops && on_map("mp_shipment");
+
+			set_rule_int("scr_game_hardpoints", 0, 0, 10);
+			set_rule_float((prefix + "timelimit").data(), shipment ? 2.2f : 4.0f, 0.0f, 60.0f);
+			set_rule_int((prefix + "scorelimit").data(), 0, 0, 10000);
+			set_rule_int((prefix + "roundlimit").data(), 4, 0, 20);
+			set_rule_int((prefix + "winlimit").data(), 3, 0, 20);
+			set_rule_int((prefix + "numlives").data(), madprops ? 4 : 1, 0, 20);
+			set_rule_int((prefix + "roundswitch").data(), 1, 0, 9);
+			set_rule_int((prefix + "halftime").data(), 0, 0, 1);
+
+			// the H1 script only does this for the non-madprops round
+			if (!madprops)
+			{
+				set_rule_int("scr_player_healthregen", 0, 0, 100);
+			}
+
+			// a later party mode must not inherit the oldschool rule from the previous one
+			set_rule_bool("g_oldschool", shipment);
+		}
+
+		// maps/mp/gametypes/_hodgepodge.gsc setupdvarsmm()
+		void apply_slasher_dvars()
+		{
+			set_rule_int("scr_game_hardpoints", 0, 0, 10);
+			set_rule_float("scr_slasher_timelimit", 10.0f, 0.0f, 60.0f);
+			set_rule_int("scr_slasher_numlives", 1, 0, 20);
+			set_rule_float("scr_game_mmUavTime", 30.0f, 0.0f, 600.0f);
+			set_rule_bool("g_oldschool", true);
+		}
+
+		// maps/mp/gametypes/_hodgepodge.gsc setupdvarsrpg(): no limits, but g_oldschool has to be
+		// in place before the map load too (_gamelogic::init reads it)
+		void apply_rpg_dvars()
+		{
+			set_rule_bool("g_oldschool", true);
+		}
+
+		void reset_mode_dvars()
+		{
+			const auto* previous = game::Dvar_FindVar("mwx_gamemode");
+			const auto had_mode = previous && previous->current.string && *previous->current.string;
+
+			game::Dvar_SetFromStringByNameFromSource("scr_game_hodgepodgeMode", "0", game::DVAR_SOURCE_INTERNAL);
+			game::Dvar_SetFromStringByNameFromSource("scr_game_madprops", "0", game::DVAR_SOURCE_INTERNAL);
+			game::Dvar_SetFromStringByNameFromSource("mwx_gamemode", "", game::DVAR_SOURCE_INTERNAL);
+
+			// only the party modes switch the oldschool rule on; do not leak it into a normal match
+			if (had_mode)
+			{
+				set_rule_bool("g_oldschool", false);
+			}
+		}
+	}
+
 	void apply_gametype(const char* gametype)
 	{
 		if (!gametype)
@@ -363,13 +476,29 @@ namespace gamemodes
 			game::Dvar_SetFromStringByNameFromSource("scr_game_madprops",
 				std::to_string(mode->madprops).data(), game::DVAR_SOURCE_INTERNAL);
 			game::Dvar_SetFromStringByNameFromSource("mwx_gamemode", mode->ref, game::DVAR_SOURCE_INTERNAL);
+
+			if (std::strcmp(mode->ref, "ph") == 0)
+			{
+				apply_prop_hunt_dvars(false);
+			}
+			else if (std::strcmp(mode->ref, "mprops") == 0)
+			{
+				apply_prop_hunt_dvars(true);
+			}
+			else if (std::strcmp(mode->ref, "slasher") == 0)
+			{
+				apply_slasher_dvars();
+			}
+			else if (std::strcmp(mode->ref, "rpg") == 0)
+			{
+				apply_rpg_dvars();
+			}
+
 			return;
 		}
 
 		// normal gametype: a later match must not inherit a party mode's dvars
-		game::Dvar_SetFromStringByNameFromSource("scr_game_hodgepodgeMode", "0", game::DVAR_SOURCE_INTERNAL);
-		game::Dvar_SetFromStringByNameFromSource("scr_game_madprops", "0", game::DVAR_SOURCE_INTERNAL);
-		game::Dvar_SetFromStringByNameFromSource("mwx_gamemode", "", game::DVAR_SOURCE_INTERNAL);
+		reset_mode_dvars();
 	}
 
 	namespace

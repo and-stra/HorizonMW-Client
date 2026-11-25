@@ -30,6 +30,9 @@ main()
     test_assert(level.hodgepodgemode == 9, "hodgepodge mode is mad props", "9", level.hodgepodgemode);
     test_assert(level.madpropsmode == 1, "mad props mode", "1", level.madpropsmode);
 
+    // bots would trade kills while the test waits for the prop invulnerability phase to end
+    test_hold_bots();
+
     test_step("wait for a prop and a soldier");
 
     prop = undefined;
@@ -74,6 +77,23 @@ main()
         soldier getcurrentweapon());
 
     test_step("kill a prop");
+
+    // mad props keeps the props invulnerable for scr_ph_madpropsInvulnTime after the hide phase
+    // (gamemodemodifyplayerdamage returns 0); wait the phase out so the kill can land
+    invuln_before = -1;
+    if (isdefined(level.propsinvuln))
+        invuln_before = level.propsinvuln;
+    waited = 0;
+    while (waited < 60 && isdefined(level.propsinvuln) && level.propsinvuln)
+    {
+        wait 0.5;
+        waited = waited + 0.5;
+    }
+    invuln_after = -1;
+    if (isdefined(level.propsinvuln))
+        invuln_after = level.propsinvuln;
+    logprint("mwx mprops test: invuln " + invuln_before + " -> " + invuln_after + " after " + waited +
+        " s, prop health=" + prop.health + " alive=" + isalive(prop) + " hidden=" + prop.hasspawned);
 
     deaths_before = 0;
     if (isdefined(prop.deaths))

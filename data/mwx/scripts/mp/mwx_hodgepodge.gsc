@@ -45,10 +45,13 @@ install()
 }
 
 // Prop Hunt (hodgepodge 9). The stock onspawnplayer starts handleprop() for the defenders and
-// handleprop waits for "applyLoadout" to build the prop; the mode class is applied in the same
-// frame as the spawn, so on this build the notify arrives before the thread waits and no prop is
-// ever created (mp_crash: proplist 25, defenders alive with the hunter weapon, self.prop never
-// defined). Repeating the notify after the spawn is the same path a class change uses.
+// handleprop()/givecustomloadout() wait for "applyLoadout" to build the prop. HMW's _class only
+// notifies "applyloadout" (lower case) on this build, and GSC notifies are case-sensitive, so the
+// camel-case wait never fires and no prop is created (mp_crash: proplist 25, defenders alive with
+// the hunter weapon, self.prop never defined).
+//
+// Fix: an event bridge - one thread per player that turns every "applyloadout" into the
+// "applyLoadout" the H1 scripts wait for. (ph_notify_probe logs the case behaviour of the build.)
 install_ph()
 {
     // ph_init() runs inside onstartgametype; wait until its globals exist (proplist from the CSV)
@@ -62,118 +65,172 @@ install_ph()
     if (!isdefined(level.proplist))
         return;
 
-    // The party ref is level.gametype ("ph"/"mprops"), but MWR's hodgepodge code was written
-    // for g_gametype "war": its setupdvars only sets scr_war_* and the watched dvars are
-    // scr_<gametype>_*, so getgametypenumlives() stayed 0 (unlimited lives: dead props respawned,
-    // the round could never end by elimination). The watched-dvar table is filled before the
-    // party ref is known, so override the getter itself.
-    replacefunc(maps\mp\_utility::getgametypenumlives, ::ph_numlives_stub);
-
-    if (level.madpropsmode)
-    {
-        level.numlives = 4;
-    }
-    else
-    {
-        level.numlives = 1;
-    }
-
     level.mwx_ph_fix = 1;
 
-    // the lives machinery stays ineffective with the party-ref gametype (see above); MWR asks
-    // level.gamemodemayspawn() before every spawn, so one life per round is enforced there
-    level.gamemodemayspawn = ::ph_mayspawn;
+    // log the notify case behaviour of this build once per match
+    level thread ph_notify_probe();
+
+    // Lives/limits: gamemodes.cpp sets the scr_<ref>_* defaults before the map loads (war.gsc
+    // registers its watched dvars from them). Keep the host migration path working: the stock
+    // setupdvars() hard-codes scr_war_*, this copy writes scr_<level.gametype>_*.
+    replacefunc(maps\mp\gametypes\_hodgepodge_ph::setupdvars, ::ph_setupdvars_stub);
+
     level thread ph_onconnect();
 
     foreach (player in level.players)
-        player thread ph_ensure_prop();
+        player thread ph_bridge();
+
+    logprint("mwx ph: install done (bridge + limits), proplist=" + level.proplist.size +
+        " madprops=" + level.madpropsmode + " debug=" + getdvarint("mwx_debug_gamemodes", 0));
+
+    if (getdvarint("mwx_debug_gamemodes", 0))
+        level thread ph_diag();
 }
 
-ph_numlives_stub()
+// mwx_debug_gamemodes 1: every 2 s, the counters the round end depends on (see the ph test)
+ph_diag()
 {
-    if (level.madpropsmode)
-        return 4;
-    return 1;
+    level endon("game_ended");
+    logprint("mwx ph diag: started");
+
+    for (;;)
+    {
+        wait 2;
+
+        numlives = -1;
+        key = "scr_" + level.gametype + "_numlives";
+        if (isdefined(level.watchdvars) && isdefined(level.watchdvars[key]))
+            numlives = level.watchdvars[key].value;
+
+        rounds = -1;
+        if (isdefined(game["roundsPlayed"]))
+            rounds = game["roundsPlayed"];
+
+        ending = -1;
+        if (isdefined(level.gameending))
+            ending = level.gameending;
+
+        allies_alive = -1;
+        axis_alive = -1;
+        allies_lives = -1;
+        axis_lives = -1;
+        if (isdefined(level.alivecount))
+        {
+            allies_alive = level.alivecount["allies"];
+            axis_alive = level.alivecount["axis"];
+        }
+        if (isdefined(level.livescount))
+        {
+            allies_lives = level.livescount["allies"];
+            axis_lives = level.livescount["axis"];
+        }
+
+        text = "mwx ph diag: gt=" + level.gametype + " numlives=" + numlives +
+            " alive=" + allies_alive + "/" + axis_alive + " lives=" + allies_lives + "/" + axis_lives +
+            " rounds=" + rounds + " ending=" + ending;
+
+        foreach (player in level.players)
+        {
+            if (!isdefined(player.team))
+                continue;
+
+            lives = -1;
+            if (isdefined(player.pers) && isdefined(player.pers["lives"]))
+                lives = player.pers["lives"];
+
+            text = text + " | " + player.name + " " + player.team + " alive=" + isalive(player) + " lives=" + lives;
+        }
+
+        logprint(text);
+    }
 }
 
-// One life per round for the props (see install_ph). `ph_dead_this_round` is stamped by
-// ph_watch_death on the player's "death" notify and compared with game["roundsPlayed"], so a
-// new round spawns again without depending on the broken lives dvar.
-ph_mayspawn(shouldspawn)
+// same values as maps\mp\gametypes\_hodgepodge_ph.gsc setupdvars(), with the mode's dvar prefix
+ph_setupdvars_stub()
 {
+    prefix = "scr_" + level.gametype + "_";
+    setdynamicdvar("scr_game_hardpoints", 0);
+    setdynamicdvar(prefix + "timelimit", 4);
+    setdynamicdvar(prefix + "scorelimit", 0);
+    setdynamicdvar(prefix + "roundlimit", 4);
+    setdynamicdvar(prefix + "winlimit", 3);
+    maps\mp\_utility::registerwinlimitdvar(level.gametype, 3);
+    setdynamicdvar(prefix + "roundswitch", 1);
+    maps\mp\_utility::registerroundswitchdvar(level.gametype, 1, 0, 9);
+    setdynamicdvar(prefix + "halftime", 0);
+
     if (level.madpropsmode)
-        return 1;
-    if (!isdefined(self.team) || self.team != game["defenders"])
-        return 1;
-    if (!maps\mp\_utility::gamehasstarted())
-        return 1;
-    if (!isdefined(self.ph_dead_this_round))
-        return 1;
+    {
+        setdynamicdvar(prefix + "numlives", 4);
+        return;
+    }
 
-    rounds = 0;
-    if (isdefined(game["roundsPlayed"]))
-        rounds = game["roundsPlayed"];
+    setdynamicdvar(prefix + "numlives", 1);
+    setdynamicdvar("scr_player_healthregen", 0);
+    level.roundswitch = getdvarint(prefix + "roundswitch");
 
-    if (self.ph_dead_this_round == rounds)
-        return 0;
-
-    return 1;
+    if (maps\mp\_utility::getmapname() == "mp_shipment")
+    {
+        setdynamicdvar("g_oldschool", 1);
+        setdynamicdvar(prefix + "timelimit", 2.2);
+    }
 }
 
-ph_watch_death()
+// R1a: prove the notify case in the log. Two waits on the same name in different case, one
+// notify: both counters 1 = case-insensitive (then the bridge is not the fix), camel 1 / lower 0
+// = case-sensitive (the reason HMW's lower-case notify never reached handleprop).
+ph_notify_probe()
+{
+    level endon("game_ended");
+    level.mwx_ph_case_camel = 0;
+    level.mwx_ph_case_lower = 0;
+
+    level thread ph_case_wait_camel();
+    level thread ph_case_wait_lower();
+
+    wait 0.1;
+    level notify("mwxphcaseprobeCamel");
+    wait 0.3;
+
+    logprint("mwx ph: notify case probe: notify camel -> camelWait=" + level.mwx_ph_case_camel +
+        " lowerWait=" + level.mwx_ph_case_lower);
+}
+
+ph_case_wait_camel()
+{
+    level waittill("mwxphcaseprobeCamel");
+    level.mwx_ph_case_camel = 1;
+}
+
+ph_case_wait_lower()
+{
+    level waittill("mwxphcaseprobelower");
+    level.mwx_ph_case_lower = 1;
+}
+
+// Event bridge: HMW's _class notifies "applyloadout" (lower case) after it applied the class;
+// H1's handleprop()/givecustomloadout() wait for "applyLoadout". One thread per player.
+ph_bridge()
 {
     self endon("disconnect");
     level endon("game_ended");
 
     for (;;)
     {
-        self waittill("death");
-
-        rounds = 0;
-        if (isdefined(game["roundsPlayed"]))
-            rounds = game["roundsPlayed"];
-        self.ph_dead_this_round = rounds;
+        self waittill("applyloadout");
+        self notify("applyLoadout");
+        level.mwx_ph_bridge = 1;
     }
 }
 
 ph_onconnect()
 {
+    level endon("game_ended");
+
     for (;;)
     {
         level waittill("connected", player);
-        player thread ph_ensure_prop();
-    }
-}
-
-ph_ensure_prop()
-{
-    self endon("disconnect");
-
-    if (!isdefined(self.ph_deathwatch))
-    {
-        self.ph_deathwatch = 1;
-        thread ph_watch_death();
-    }
-
-    for (;;)
-    {
-        wait 0.25;
-
-        if (!isdefined(game["defenders"]) || self.team != game["defenders"])
-            continue;
-
-        // this build starts the props with pers["lives"] 0 (the watched numlives dvar was
-        // registered before the party ref was known), which made every dead prop respawn and
-        // kept the round from ending. Prop Hunt gives the props one life.
-        if (!level.madpropsmode && isalive(self) && isdefined(self.pers["lives"]) && self.pers["lives"] <= 0)
-            self.pers["lives"] = 1;
-
-        if (isdefined(self.prop))
-            continue;
-        if (!isalive(self))
-            continue;
-
-        self notify("applyLoadout");
+        player thread ph_bridge();
     }
 }
 
@@ -193,8 +250,11 @@ install_slasher()
     replacefunc(maps\mp\gametypes\_hodgepodge::onmmplayerkilled, ::onmmplayerkilled_stub);
     level.onplayerkilled = ::onmmplayerkilled_stub;
 
-    level.numlives = 1;
-    setdynamicdvar("scr_war_numlives", 1);
+    // Lives/limits: same root fix as Prop Hunt - gamemodes.cpp sets scr_slasher_* before the map
+    // loads, setupdvarsmm() runs later and hard-codes scr_war_*. The copy writes level.gametype's
+    // prefix so host migration and later reads see the mode's values.
+    replacefunc(maps\mp\gametypes\_hodgepodge::setupdvarsmm, ::mm_setupdvars_stub);
+
     level.mwx_slasher_fix = 1;
     level thread slasher_onconnect();
 
@@ -205,6 +265,18 @@ install_slasher()
             player thread slasher_botfire();
     }
 }
+
+// maps\mp\gametypes\_hodgepodge.gsc setupdvarsmm() with the mode's own dvar prefix
+mm_setupdvars_stub()
+{
+    prefix = "scr_" + level.gametype + "_";
+    setdynamicdvar("scr_game_hardpoints", 0);
+    setdynamicdvar(prefix + "timelimit", 10);
+    setdynamicdvar(prefix + "numlives", 1);
+    setdynamicdvar("g_oldschool", 1);
+    setdynamicdvar("scr_game_mmUavTime", 30);
+}
+
 
 slasher_onconnect()
 {
