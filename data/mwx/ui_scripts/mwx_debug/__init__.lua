@@ -335,7 +335,9 @@ function mwx_debug.click(element_id, text, index)
     end
 
     local queued = queue_action(root, function()
-        element:processEvent({ name = 'button_action', controllerIndex = 0 })
+        -- stock menu handlers read event.controller (older LUI API), newer ones
+        -- controllerIndex; send both so Play Online / game setup work from the debug UI
+        element:processEvent({ name = 'button_action', controller = 0, controllerIndex = 0 })
     end)
 
     info.ok = queued
