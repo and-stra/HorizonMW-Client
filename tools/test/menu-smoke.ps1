@@ -139,9 +139,48 @@ function Get-ModeName([int]$port, [string]$ref) {
 
 function Get-PartyModes([int]$port) {
     $code = "local o = {} for i, v in ipairs(Cac.GameModes.Data.Party.List) do o[#o+1] = tostring(v) end return o"
-    $answer = Rpc $port "lua_eval" @{ code = $code } 20
-    if ($answer.result -and $answer.result.ok) { return @($answer.result.result) }
+    for ($try = 0; $try -lt 15; $try++) {
+        $answer = Rpc $port "lua_eval" @{ code = $code } 25
+        if ($answer.result -and $answer.result.ok) { return @($answer.result.result) }
+        if ($answer.error -and $answer.error -match 'busy') { Start-Sleep -Seconds 2; continue }
+        break
+    }
     return @()
+}
+
+# Item 6: the mode screens build "@OBJECTIVES_<ref>", "_SCORE" and "_HINT" from the gametype ref.
+# Every one of those keys must resolve to text, also in the frontend before the map zones load
+# (a raw key is returned unchanged by Engine.Localize).
+function Get-ObjectiveKeyProblems([int]$port) {
+    $code = @"
+local refs = {}
+local function add(list)
+    if list then for _, v in ipairs(list) do refs[#refs + 1] = tostring(v) end end
+end
+add(Cac.GameModes.Data.Party.List)
+if Cac.GameModes.Data.Standard then add(Cac.GameModes.Data.Standard.List) end
+for _, v in ipairs({'infect', 'dz', 'sas'}) do refs[#refs + 1] = v end
+local seen = {}
+local problems = {}
+for _, r in ipairs(refs) do
+    if not seen[r] then
+        seen[r] = true
+        for _, suffix in ipairs({'', '_SCORE', '_HINT'}) do
+            local key = 'OBJECTIVES_' .. r .. suffix
+            local value = tostring(Engine.Localize('@' .. key))
+            if value == key or value == '' then problems[#problems + 1] = key end
+        end
+    end
+end
+return problems
+"@
+    for ($try = 0; $try -lt 15; $try++) {
+        $answer = Rpc $port "lua_eval" @{ code = $code } 25
+        if ($answer.result -and $answer.result.ok) { return @($answer.result.result) }
+        if ($answer.error -and $answer.error -match 'busy') { Start-Sleep -Seconds 2; continue }
+        break
+    }
+    return @("objective key check failed: $($answer.error)")
 }
 
 function Get-LobbyLabel([int]$port) {
@@ -168,18 +207,40 @@ for ($run = 1; $run -le $Runs; $run++) {
     New-Item -ItemType Directory -Force -Path $LogRoot | Out-Null
 
     Write-Host ("run {0}/{1}: client on debug port {2}" -f $run, $Runs, $port)
-    $process = Start-Process -FilePath $Exe -ArgumentList @("-debugport", "$port", "+set", "mwx_test_mode", "1") `
-        -WorkingDirectory $GameDir -PassThru -RedirectStandardOutput $log -RedirectStandardError $errLog
+    $process = $null
+    $ready = "exited"
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        if ($attempt -gt 1) {
+            # a client started right after another one can exit before the hooks (no output, no
+            # dump). That is the known process-spacing hazard, not a regression - retry it. A real
+            # startup crash leaves a dump and is not retried.
+            Write-Host "  start attempt $attempt after a silent startup exit"
+            Start-Sleep -Seconds 20
+        }
+
+        $process = Start-Process -FilePath $Exe -ArgumentList @("-debugport", "$port", "+set", "mwx_test_mode", "1") `
+            -WorkingDirectory $GameDir -PassThru -RedirectStandardOutput $log -RedirectStandardError $errLog
+
+        $ready = Wait-MainMenu $port $process
+        if ($ready -eq "ok") { break }
+
+        $newDumps = @(Get-ChildItem (Join-Path $GameDir "minidumps") -Filter *.zip -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty Name | Where-Object { $dumpBefore -notcontains $_ })
+        if ($newDumps.Count -gt 0) { break }
+        if (-not $process.HasExited) { try { $process.Kill() } catch {} }
+    }
 
     $failures = @()
     try {
-        $ready = Wait-MainMenu $port $process
         if ($ready -ne "ok") { throw "client did not reach the main menu ($ready)" }
 
         Open-PrivateLobby $port
 
         $party = @(Get-PartyModes $port)
         if ($party.Count -lt 10 -and -not $Modes) { $failures += "party list has only $($party.Count) entries" }
+
+        $rawKeys = @(Get-ObjectiveKeyProblems $port)
+        foreach ($key in $rawKeys) { $failures += "objective key shows the raw key: $key" }
 
         $modeList = @()
         if ($Modes) {

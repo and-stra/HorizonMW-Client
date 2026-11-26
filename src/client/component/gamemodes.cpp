@@ -107,6 +107,82 @@ namespace gamemodes
 			{"survival", "Prototype: hold out against waves of agents. (mwx_show_survival 1)"},
 		};
 
+		// Item 6: HMW's frontend localization table has no stock OBJECTIVES_* entries (they load
+		// with the MP gametype zones). The private-match UI and the in-game mode display build
+		// "OBJECTIVES_<gametype>" and "OBJECTIVES_<gametype>_SCORE" from the lowercase ref, so in
+		// the frontend those keys came back raw ("OBJECTIVES_war_SCORE"). Register the stock texts
+		// here as well; &&1 is the score-limit argument the UI passes. The texts are the strings
+		// the engine itself shows in game. Also keeps SAS/Infected/Drop Zone covered when their
+		// gametype zones (and the mod's lowercase strings) are not loaded.
+		struct stock_objective
+		{
+			const char* ref;
+			const char* text;
+			const char* score;
+			const char* hint;
+		};
+
+		constexpr stock_objective stock_objectives[] =
+		{
+			{"war", "Gain points by eliminating enemy players.",
+				"Gain points by eliminating enemy players.  First team to &&1 wins.",
+				"Eliminate enemy players."},
+			{"dm", "Gain points by eliminating other players.",
+				"Gain points by eliminating other players.  First player to &&1 points wins.",
+				"Eliminate other players."},
+			{"dom", "Capture and defend the flags.",
+				"Capture and defend the flags.  First team to &&1 wins.",
+				"Capture the flags and defend them."},
+			{"sd", "Take turns destroying and defending A and B bomb sites.",
+				"Take turns destroying and defending A and B bomb sites.",
+				"Destroy target A or B."},
+			{"sab", "Recover the explosives and plant them at the enemy target, while protecting your own.",
+				"Recover the explosives and plant them at the enemy target, while protecting your own. First team to &&1 wins.",
+				"Destroy the enemy target."},
+			{"koth", "Gain points by holding the headquarters.",
+				"Gain points by holding the headquarters.  First team to &&1 points wins.",
+				"Hold the headquarters."},
+			{"ctf", "Gain points by stealing the enemy flag and then touching your flag at your base.",
+				"Gain points by stealing the enemy flag and then touching your flag at your base. First team with &&1 captures wins.",
+				"Capture the enemy flag."},
+			{"dd", "Teams alternate in attacking and defending two bomb sites, both of which must be destroyed by the attacking team equipped with bombs.",
+				"Teams alternate in attacking and defending two bomb sites, both of which must be destroyed by the attacking team equipped with bombs.",
+				"Destroy targets A and B."},
+			{"conf", "Recover Dog Tags to score for your team and deny enemy scores.",
+				"Recover Dog Tags to score for your team and deny enemy score.  First team to &&1 wins.",
+				"Recover Dog Tags for the win."},
+			{"hp", "Capture and hold the hardpoints.",
+				"Capture the Hardpoint and hold it to score points. First team to &&1 points wins.",
+				"Hardpoint location will move after set amount of time."},
+			{"gun", "Kill players with your weapon to advance to the next weapon.",
+				"Kill players with your weapon to advance to the next weapon. First to get a kill with all &&1 weapons wins.",
+				"Eliminate other players."},
+			// MWX gametypes whose own strings are registered uppercase by the mode scripts; the UI
+			// builds the lowercase ref. Keep both texts the same in every case.
+			{"sas", "Get kills with the crossbow and the knife.",
+				"Highest score when the time runs out wins.",
+				"A throwing knife kill or a suicide resets the score to 0."},
+			{"infect", "Survivors: stay alive. Infected: infect the survivors.",
+				"Infect everyone, or survive the game to win.",
+				"Survivors: stay alive. Infected: infect the survivors."},
+			{"dz", "Hold the Drop Zone for Team Points and Care Packages. First team to 7500 points wins",
+				"Hold the Drop Zone for Team Points and Care Packages. First team to 7500 points wins",
+				"Get to the Drop Zone!"},
+		};
+
+		void override_both_cases(const std::string& key, const char* value)
+		{
+			localized_strings::override(key, value);
+
+			std::string upper = key;
+			std::transform(upper.begin(), upper.end(), upper.begin(),
+				[](const unsigned char c) { return static_cast<char>(std::toupper(c)); });
+			if (upper != key)
+			{
+				localized_strings::override(upper, value);
+			}
+		}
+
 		constexpr auto gametype_list = "maps/mp/gametypes/_gametypes.txt";
 		constexpr auto gametype_table = "mp/gametypesTable.csv";
 
@@ -893,9 +969,7 @@ namespace gamemodes
 				"Free-for-all with the crossbow, a knife and a throwing knife. A throwing knife kill or a suicide bankrupts the victim.");
 			localized_strings::override("MWX_GAMETYPE_SAS_CAPS", "STICKS AND STONES");
 			localized_strings::override("SAS", "STICKS AND STONES");
-			localized_strings::override("OBJECTIVES_SAS", "Get kills with the crossbow and the knife.");
-			localized_strings::override("OBJECTIVES_SAS_SCORE", "Highest score when the time runs out wins.");
-			localized_strings::override("OBJECTIVES_SAS_HINT", "A throwing knife kill or a suicide resets the score to 0.");
+			// SAS objectives are in stock_objectives (both cases).
 			localized_strings::override("MWX_SAS_BANKRUPTED", "BANKRUPTED!");
 			localized_strings::override("MWX_SAS_BANKRUPT_ENEMY", "BANKRUPTED AN ENEMY!");
 			localized_strings::override("MWX_PARTY_CAPS", "PARTY");
@@ -904,9 +978,7 @@ namespace gamemodes
 			localized_strings::override("MPUI_INFECT", "Infected");
 			localized_strings::override("MPUI_INFECT_CAPS", "INFECTED");
 			localized_strings::override("INFECT", "INFECTED");
-			localized_strings::override("OBJECTIVES_INFECT", "Survivors: stay alive. Infected: infect the survivors.");
-			localized_strings::override("OBJECTIVES_INFECT_SCORE", "Infect everyone, or survive the game to win.");
-			localized_strings::override("OBJECTIVES_INFECT_HINT", "Survivors: stay alive. Infected: infect the survivors.");
+			// Infected objectives are in stock_objectives (both cases).
 			localized_strings::override("MPUI_DZ", "Drop Zone");
 			localized_strings::override("MPUI_DZ_CAPS", "DROP ZONE");
 			localized_strings::override("DZ", "DROP ZONE");
@@ -967,6 +1039,16 @@ namespace gamemodes
 					localized_strings::override("OBJECTIVES_" + ref, objective.text);
 					localized_strings::override("OBJECTIVES_" + ref + "_HINT", objective.text);
 				}
+			}
+
+			// item 6: the stock gametypes' objective strings, so the private-match screens do not
+			// show the raw key before the gametype's localization zone is loaded
+			for (const auto& objective : stock_objectives)
+			{
+				const std::string base = std::string("OBJECTIVES_") + objective.ref;
+				override_both_cases(base, objective.text);
+				override_both_cases(base + "_SCORE", objective.score);
+				override_both_cases(base + "_HINT", objective.hint);
 			}
 
 			// M4: the party ref is the gametype; the mode dvars follow it (both on the server and on a
