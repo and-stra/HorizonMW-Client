@@ -176,6 +176,21 @@ one PC block each other's map load.
 It is the fallback when the MCP bridge is not connected, and it is what the Windows regression
 check uses.
 
+## Menu smoke test
+
+`tools\test\menu-smoke.ps1` drives a **client** through the private match menus over the debug RPC:
+main menu -> PLAY ONLINE -> PRIVATE MATCH -> GAME SETUP -> MODE -> every Party mode and
+Domination/Team Deathmatch -> START (checks `g_gametype`, `ui_gametype`/loading screen name,
+`mwx_gamemode`) -> back to the lobby -> START again -> main menu -> PLAY ONLINE -> MODS menu
+open/close. A crash, a new file in `minidumps\`, a Lua error or a wrong mode fails it.
+
+```
+powershell -File tools\test\menu-smoke.ps1 -Runs 5        # the release check
+powershell -File tools\test\menu-smoke.ps1 -Runs 1 -Quick -Modes ph,dom   # quick pass
+```
+
+It starts a fresh client per run (debug ports 27201+), so it does not use `tests.json` servers.
+
 ## Shortening timers
 
 The mode scripts register their dvars (`scr_<mode>_scorelimit`, `scr_<mode>_timelimit`, ...) and

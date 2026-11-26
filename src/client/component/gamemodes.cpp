@@ -721,6 +721,64 @@ namespace gamemodes
 			return ui_get_game_type_display_name_hook.invoke<const char*>(gametype);
 		}
 
+		utils::hook::detour cbuf_add_text_hook;
+
+		std::atomic_bool enforcing_ui_gametype{false};
+
+		// M4b: the game setup restore writes the engine's match-rules gametype ("war") back into
+		// ui_gametype after the pick. Keep the picked ref while a private match is being set up;
+		// the start path and the loadscreen read ui_gametype.
+		void on_ui_gametype(game::dvar_value* value)
+		{
+			if (enforcing_ui_gametype)
+			{
+				return;
+			}
+
+			const auto* selected = game::Dvar_FindVar("mwx_selected_gametype");
+			if (selected == nullptr || selected->current.string == nullptr || *selected->current.string == '\0')
+			{
+				return;
+			}
+
+			const auto* private_match = game::Dvar_FindVar("xblive_privatematch");
+			if (private_match == nullptr || !private_match->current.enabled)
+			{
+				return;
+			}
+
+			const auto* current = value != nullptr && value->string != nullptr ? value->string : nullptr;
+			if (current != nullptr && std::strcmp(current, selected->current.string) == 0)
+			{
+				return;
+			}
+
+			enforcing_ui_gametype = true;
+			game::Dvar_SetFromStringByNameFromSource("ui_gametype", selected->current.string,
+				game::DVAR_SOURCE_INTERNAL);
+			enforcing_ui_gametype = false;
+		}
+
+		// M4b: the private match start (xpartygo) reads ui_gametype, but the game setup restore writes
+		// the engine's match-rules gametype ("war") back into it. Re-apply the gametype picked in the
+		// menu right before the start command runs.
+		void cbuf_add_text_stub(const int local_client_num, const int controller, const char* text)
+		{
+			if (text != nullptr && std::strstr(text, "xpartygo") != nullptr)
+			{
+				const auto* selected = game::Dvar_FindVar("mwx_selected_gametype");
+				if (selected != nullptr && selected->current.string != nullptr && *selected->current.string != '\0')
+				{
+					enforcing_ui_gametype = true;
+					game::Dvar_SetFromStringByNameFromSource("ui_gametype", selected->current.string,
+						game::DVAR_SOURCE_INTERNAL);
+					enforcing_ui_gametype = false;
+				}
+			}
+
+			cbuf_add_text_hook.invoke<void>(local_client_num, controller, text);
+		}
+
 		void on_g_gametype(game::dvar_value* value)
 		{
 			if (!value || !value->string)
@@ -914,6 +972,7 @@ namespace gamemodes
 			// M4: the party ref is the gametype; the mode dvars follow it (both on the server and on a
 			// listen host/client, so a dedicated server with +set g_gametype slasher works too)
 			dvars::callback::on_new_value("g_gametype", on_g_gametype);
+			dvars::callback::on_new_value("ui_gametype", on_ui_gametype);
 			scheduler::once([]()
 			{
 				// the command line (+set g_gametype ...) is applied before the callback exists
@@ -927,10 +986,14 @@ namespace gamemodes
 			ui_get_game_type_display_name_hook.create(game::UI_GetGameTypeDisplayName,
 				ui_get_game_type_display_name_stub);
 
+			cbuf_add_text_hook.create(game::Cbuf_AddText, cbuf_add_text_stub);
+
 			scheduler::once([]()
 			{
 				dvars::register_string("mwx_gamemode", "", game::DVAR_FLAG_NONE,
 					"Current MWX party game mode (empty for normal modes)");
+				dvars::register_string("mwx_selected_gametype", "", game::DVAR_FLAG_NONE,
+					"Gametype picked in the private match game setup (applied when xpartygo starts)");
 				dvars::register_bool("mwx_gsc_print", false, game::DVAR_FLAG_NONE, "Print GSC print()/println() output to the console (release builds)");
 				dvars::register_bool("mwx_debug_gamemodes", false, game::DVAR_FLAG_NONE,
 					"Log gamemode dvar writes and the loading screen menu");
