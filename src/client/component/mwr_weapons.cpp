@@ -17,6 +17,32 @@ namespace mwr_weapons
 {
 	namespace
 	{
+		// The DLC guns ship their own WEAPON_* names in MWR; HMW's language table does not
+		// necessarily carry them, and the D0 check ran without the weapon assets. Override them
+		// with the same strings the MWR weapon definitions carry.
+		constexpr std::pair<const char*, const char*> gun_names[] =
+		{
+			{"WEAPON_XMLAR", "XM-LAR"},
+			{"WEAPON_BOS14", "BOS14"},
+			{"WEAPON_LYNXCQ300", "Lynx CQ300"},
+			{"WEAPON_MAC10", "MAC-10"},
+			{"WEAPON_FANG45", "Fang 45"},
+			{"WEAPON_PKPSD9", "PK-PSD9"},
+			{"WEAPON_BEREDMK8", "Bered MK8"},
+			{"WEAPON_KAM12", "Kamchatka-12"},
+			{"WEAPON_STAC330", "S-Tac Aggressor"},
+			{"WEAPON_PROKOLOT", "Prokolot"},
+			{"WEAPON_BR9", "BR9"},
+			{"WEAPON_G3", "G3"},
+			{"WEAPON_M14", "M14"},
+			{"WEAPON_MP44", "MP44"},
+			{"WEAPON_SKORPION", "Skorpion"},
+			{"WEAPON_M60E4", "M60E4"},
+			{"WEAPON_SAW", "M249 SAW"},
+			{"WEAPON_DRAGUNOV", "Dragunov"},
+			{"WEAPON_REMINGTON700", "R700"},
+		};
+
 		constexpr std::pair<const char*, const char*> melee_names[] =
 		{
 			{"MWX_MWR_H1_MELEEAPR1", "Caveman"},
@@ -55,6 +81,10 @@ namespace mwr_weapons
 	public:
 		void post_unpack() override
 		{
+			for (const auto& [key, name] : gun_names)
+			{
+				localized_strings::override(key, name);
+			}
 			for (const auto& [key, name] : melee_names)
 			{
 				localized_strings::override(key, name);
