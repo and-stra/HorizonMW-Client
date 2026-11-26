@@ -147,3 +147,27 @@ is a content-pipeline task (zonetool + a new zone), not a GSC task.
 
 Total: ~2-3 weeks for a playable single-map port (mp_crash), 4-6 weeks for all seven maps with the
 boss content. The blocking decision is item 1 (agent allocation vs bots).
+
+## B5c: why the wave agents never appear (26 Nov)
+
+Measured on a dedicated `mp_crash` server (`g_gametype survival`, `mwx_show_survival 1`, one bot):
+
+| query | value |
+|---|---|
+| `getmaxagents()` / `level.agentarray.size` | 24 / 24 |
+| `level.survival_agents.size` (created by `add_humanoid_agent`) | 5 |
+| first agent | `team=axis pers=axis isactive=1 hasdied=0 isagent=1 isai=1 **isplayer=0**` |
+| `level.players` | only the bot (`ai=1 agent=0 alive=1`) |
+| `spawnagent((0,0,0),(0,0,0))` on a free slot | runs, returns, no error — still not a player |
+
+So the framework gets as far as `connectnewagent`/`activateagent`; the engine's **`spawnagent()` is a
+no-op in MP** (no script error, no player entity, nothing added to `level.players`). This is not a team
+assignment problem (the slots are already `axis`). The three paths forward:
+
+1. find/hook the engine function behind `spawnagent` (the slot must transition to a connected player;
+   `addagent()` allocates the slot but MP never spawns it), or
+2. use `spawnBot` + a GSC think layer (the bots already move and shoot in every mode test), or
+3. leave the spike as is (hidden, hidden tests).
+
+The wave manager intentionally retries wave 1 instead of advancing (a wave of 0 agents must not count
+as cleared).
