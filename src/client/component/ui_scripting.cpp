@@ -47,6 +47,11 @@ namespace ui_scripting
 	{
 		std::unordered_map<game::hks::cclosure*, std::function<arguments(const function_arguments& args)>> converted_functions;
 
+		// item 6: true while LUI is reloading (hks_start + our script load, or a DB zone load).
+		// lua_eval must not touch the Lua state then; an Engine.* call from a chunk crashed at
+		// 0x1400BCB13 when the frontend was mid-reload.
+		std::atomic_int ui_loading{0};
+
 		utils::hook::detour hks_start_hook;
 		utils::hook::detour hks_shutdown_hook;
 		utils::hook::detour hks_package_require_hook;
@@ -692,7 +697,14 @@ namespace ui_scripting
 
 		void* hks_start_stub(char a1)
 		{
-			const auto _0 = gsl::finally(&try_start);
+			// keep lua_eval out while the engine's start and our script load run
+			set_loading(true);
+			const auto _0 = gsl::finally([]()
+			{
+				try_start();
+				set_loading(false);
+			});
+
 			return hks_start_hook.invoke<void*>(a1);
 		}
 
@@ -849,6 +861,24 @@ namespace ui_scripting
 	bool lui_running()
 	{
 		return *game::hks::lua_state != nullptr;
+	}
+
+	void set_loading(const bool loading)
+	{
+		// a counter, so a DB load inside hks_start does not clear the outer flag
+		if (loading)
+		{
+			++ui_loading;
+		}
+		else if (ui_loading > 0)
+		{
+			--ui_loading;
+		}
+	}
+
+	bool is_loading()
+	{
+		return ui_loading > 0;
 	}
 
 	void restart(const std::function<void()>& on_menu_opened)

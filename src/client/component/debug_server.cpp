@@ -638,6 +638,15 @@ namespace debug_server
 
 			if (method == "lua_eval")
 			{
+				// Do not run Lua while the main thread is reloading the UI/frontend: the LUI state
+				// exists but the script globals are mid-rebuild, and an engine call from the chunk
+				// (Engine.Localize in the item 6 probe) crashed at 0x1400BCB13. Answer "busy"
+				// instead; the caller can retry (the menu smoke does).
+				if (!wait_engine_ready(std::chrono::milliseconds(2000)))
+				{
+					return json{{"error", "the game's main thread is busy (loading?), try again"}};
+				}
+
 				return on_pipeline(scheduler::pipeline::lui, [params] { return json{{"result", ui_debug::lua_eval(params)}}; }, 10000ms);
 			}
 

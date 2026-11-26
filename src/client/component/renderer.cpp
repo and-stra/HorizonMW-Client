@@ -7,6 +7,7 @@
 #include "game/game.hpp"
 #include "game/dvars.hpp"
 #include "game/scripting/execution.hpp"
+#include "ui_scripting.hpp"
 #include <utils/hook.hpp>
 
 
@@ -181,6 +182,12 @@ namespace renderer
 			}
 		}
 
+		bool db_trace_enabled()
+		{
+			const auto* dvar = game::Dvar_FindVar("mwx_debug_fastfiles");
+			return dvar && dvar->current.enabled;
+		}
+
 		void db_load_xassets_stub(void* a1, void* a2, void* a3)
 		{
 			set_tonemap_highlight_range();
@@ -189,7 +196,34 @@ namespace renderer
 				set_colorscale_use_tweaks();
 			}, scheduler::main);
 
+			// Item 9: log the zones, flags, sync mode and caller of every DB load
+			// (mwx_debug_fastfiles 1), and whether the call returned.
+			const auto trace = db_trace_enabled();
+			const auto* zones = static_cast<game::XZoneInfo*>(a1);
+			const auto zone_count = static_cast<unsigned int>(
+				reinterpret_cast<std::uintptr_t>(a2) & 0xFFFFFFFF);
+			const auto sync_mode = static_cast<game::DBSyncMode>(
+				reinterpret_cast<std::uintptr_t>(a3) & 0xFFFFFFFF);
+			if (trace && zones)
+			{
+				console::info("[db] DB_LoadXAssets %u zone(s), mode %d, caller %p\n", zone_count,
+					static_cast<int>(sync_mode), _ReturnAddress());
+				for (unsigned int i = 0; i < zone_count; ++i)
+				{
+					console::info("[db]   %s alloc=%x free=%x\n",
+						zones[i].name ? zones[i].name : "(null)", zones[i].allocFlags, zones[i].freeFlags);
+				}
+			}
+
+			// A DB load swaps the string/asset tables; Lua must not run in that window.
+			ui_scripting::set_loading(true);
 			db_load_xassets_hook.invoke<void>(a1, a2, a3);
+			ui_scripting::set_loading(false);
+
+			if (trace)
+			{
+				console::info("[db] DB_LoadXAssets returned (mode %d)\n", static_cast<int>(sync_mode));
+			}
 		}
 
 		int get_red_dot_brightness()
@@ -348,7 +382,11 @@ namespace renderer
 			{
 				// Adjust red dot brightness
 				utils::hook::jump(0x1C4125_b, get_tonemap_highlight_range_stub(), true);
-				db_load_xassets_hook.create(0x397500_b, db_load_xassets_stub);
+				// a dedicated server has no renderer; fastfiles.cpp installs the DB hook there
+				if (!game::environment::is_dedi())
+				{
+					db_load_xassets_hook.create(0x397500_b, db_load_xassets_stub);
+				}
 
 				r_red_dot_brightness_scale = dvars::register_float("r_redDotBrightness", 1.f, 0.1f, 55.f, game::DVAR_FLAG_CHEAT, "Adjust red-dot tonemap highlighting");
 				r_use_custom_red_dot_brightness = dvars::register_bool("r_useCustomRedDotBrightness", false, game::DVAR_FLAG_CHEAT, "Use custom red-dot tonemap highlighting");

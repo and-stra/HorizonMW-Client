@@ -165,6 +165,13 @@ namespace ui_debug
 			return nlohmann::json{{"error", "code is required"}};
 		}
 
+		// The LUI state can exist while the frontend scripts or a zone are being (re)loaded;
+		// running a chunk there crashes (0x1400BCB13). Return "busy" and let the caller retry.
+		if (ui_scripting::is_loading())
+		{
+			return nlohmann::json{{"ok", false}, {"error", "the game is busy loading the UI, try again"}};
+		}
+
 		std::vector<std::string> results;
 		std::string error;
 

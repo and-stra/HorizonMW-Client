@@ -438,6 +438,40 @@ namespace fastfiles
 			return sys_create_file(folder, base_filename, false);
 		}
 
+		// Item 9: on a dedicated server the renderer (and its DB_LoadXAssets detour) is not loaded,
+		// so install this one there. On a client renderer.cpp owns the hook (never both: a second
+		// detour on the same address throws at startup).
+		utils::hook::detour db_load_xassets_hook;
+
+		bool db_trace_enabled()
+		{
+			const auto* dvar = game::Dvar_FindVar("mwx_debug_fastfiles");
+			return dvar && dvar->current.enabled;
+		}
+
+		void db_load_xassets_stub(game::XZoneInfo* zones, const unsigned int zone_count,
+			const game::DBSyncMode sync_mode)
+		{
+			const auto trace = db_trace_enabled();
+			if (trace && zones)
+			{
+				console::info("[db] DB_LoadXAssets %u zone(s), mode %d, caller %p\n", zone_count,
+					static_cast<int>(sync_mode), _ReturnAddress());
+				for (unsigned int i = 0; i < zone_count; ++i)
+				{
+					console::info("[db]   %s alloc=%x free=%x\n",
+						zones[i].name ? zones[i].name : "(null)", zones[i].allocFlags, zones[i].freeFlags);
+				}
+			}
+
+			db_load_xassets_hook.invoke<void>(zones, zone_count, sync_mode);
+
+			if (trace)
+			{
+				console::info("[db] DB_LoadXAssets returned (mode %d)\n", static_cast<int>(sync_mode));
+			}
+		}
+
 		utils::hook::detour db_file_exists_hook;
 		bool db_file_exists_stub(const char* file, int a2)
 		{
@@ -1348,6 +1382,13 @@ namespace fastfiles
 			db_find_xasset_header_hook.create(game::DB_FindXAssetHeader, db_find_xasset_header_stub);
 
 			db_unload_x_zones_hook.create(0x39B3C0_b, db_unload_x_zones_stub);
+
+			dvars::register_bool("mwx_debug_fastfiles", false, game::DVAR_FLAG_NONE,
+				"Log every DB_LoadXAssets call (zones, flags, sync mode) to the game log");
+			if (game::environment::is_dedi())
+			{
+				db_load_xassets_hook.create(game::DB_LoadXAssets, db_load_xassets_stub);
+			}
 
 #ifdef DEBUG
 			const auto print_assets_flag = game::DVAR_FLAG_SAVED;

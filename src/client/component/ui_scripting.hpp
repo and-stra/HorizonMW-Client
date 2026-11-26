@@ -55,6 +55,11 @@ namespace ui_scripting
 
 	bool lui_running();
 
+	// True while the frontend/LUI is being (re)loaded: the hks_start script load or a DB zone
+	// load. Lua must not run then (Engine.* from a chunk crashed at 0x1400BCB13).
+	void set_loading(bool loading);
+	bool is_loading();
+
 	// M6: shut the frontend LUI down and start it again (globals rebuild + scripts), then open
 	// the main menu. Used to pick up a new mod's ui_scripts / gametype list without a relaunch.
 	// on_menu_opened runs after the main menu was opened (for timing/logging).

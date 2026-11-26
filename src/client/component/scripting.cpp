@@ -122,15 +122,50 @@ namespace scripting
 				game::G_LogPrintf("InitGame\n");
 			}
 
+			const auto* trace = game::Dvar_FindVar("mwx_debug_fastfiles");
+			const bool log = trace && trace->current.enabled;
+			if (log)
+			{
+				console::info("[load] g_load_structs: running main handles\n");
+			}
+
 			gsc::load_main_handles();
 
+			if (log)
+			{
+				console::info("[load] g_load_structs: original\n");
+			}
+
 			g_load_structs_hook.invoke<void>();
+
+			if (log)
+			{
+				console::info("[load] g_load_structs: done\n");
+			}
 		}
 
 		void scr_load_level_stub()
 		{
+			const auto* trace = game::Dvar_FindVar("mwx_debug_fastfiles");
+			const bool log = trace && trace->current.enabled;
+			if (log)
+			{
+				console::info("[load] scr_load_level: running init handles\n");
+			}
+
 			gsc::load_init_handles();
+
+			if (log)
+			{
+				console::info("[load] scr_load_level: original\n");
+			}
+
 			scr_load_level_hook.invoke<void>();
+
+			if (log)
+			{
+				console::info("[load] scr_load_level: done\n");
+			}
 		}
 
 		void g_shutdown_game_stub(const int free_scripts)
