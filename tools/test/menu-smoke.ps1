@@ -143,7 +143,7 @@ function Get-PartyModes([int]$port) {
     # between menus. The default list is static; mod refs have their own game tests. Mode names
     # come from Engine.TableLookup below, which is safe.
     return @("infect", "gun", "slasher", "rpg", "oic", "aon", "cranked", "sharpshooter",
-        "reinforce", "srescue", "mugger", "arena", "ph", "mprops")
+        "reinforce", "srescue", "mugger", "arena", "ph", "mprops", "sas")
 }
 
 # Item 6: the mode screens build "@OBJECTIVES_<ref>", "_SCORE" and "_HINT" from the gametype ref.

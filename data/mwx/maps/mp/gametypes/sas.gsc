@@ -1,5 +1,5 @@
-// MWX: Sticks and Stones, a built-in gametype (native port; the old mods/sticksandstones
-// mod.ff was the proof of concept and is kept only as an archive).
+// MWX: Sticks and Stones, a built-in gametype (native port; the old mods/sticksandstones PoC is
+// archived under mwx-debug\backups\sticksandstones-mod).
 // Rules from Black Ops 2 maps/mp/gametypes/sas.gsc (COD-GSC-Source/BO2-GSC), FFA structure from H1 dm.gsc:
 // - crossbow (Advanced Warfare's iw5_exocrossbow, owned by hmw_aw_weapons.ff / the AW port) as the primary
 // - a melee weapon instead of BO's ballistic knife (HMW has none)
@@ -52,7 +52,7 @@ main()
 
     // AW's crossbow (maps\mp\_exocrossbow in AW): the bolt sticks, blinks and explodes after 1.5 s. The explosion
     // and its damage come from the weapon (timedDetonation, explosionRadius); the blinking light, the warning
-    // sound and the explosion effect were AW script, ported below. Both effects are in this mod's mod.ff (AW loaded the same two).
+    // sound and the explosion effect were AW script, ported below. Both effects are in hmw_aw_weapons.ff (AW loaded the same two).
     level.sas_bolt_blink_fx = loadfx("vfx/lights/light_beacon_crossbow");
     level.sas_bolt_explode_fx = loadfx("vfx/explosion/frag_grenade_default");
 

@@ -135,7 +135,6 @@
         "script":  "sas",
         "gametype":  "sas",
         "map":  "mp_shipment",
-        "mod":  "mods/sticksandstones",
         "timeout_s":  300,
         "dvars":  {
                       "mwx_test_bots":  3

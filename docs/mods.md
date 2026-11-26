@@ -36,16 +36,30 @@ Reloading the `mod` zone gives the engine a new zone slot; the old slot stays in
 
 A dedicated server uses the same flag: `mwx.exe -dedicated -mod "mods/<name>" ...`.
 
-Note: starting a map from the client while a mod is loaded (at startup or after a switch) hangs on
-the loading screen in this build; the dedicated sas test is unaffected. Open issue, see the
-autonomous report.
+Note: starting a map from the client while a mod with a `mod.ff` is loaded (at startup or after a
+switch) hangs on the loading screen in this build; the test mod has no `mod.ff`, so it exercises
+the load/swap path without that open issue.
 
 Not handled yet: joining a server that runs a mod you don't have (no download on LAN; both PCs need
 the same mod folder), and stats are shared with the unmodded game.
 
-## Proof of concept: Sticks and Stones (`data/mods/sticksandstones`)
+## Native Sticks and Stones (`gametype sas`)
 
-- `sas.gsc`: BO2 rules (crossbow, knife, throwing knife as tomahawk = bankrupt, suicide = bankrupt).
-- `mod.ff`: Advanced Warfare's `iw5_exocrossbow_mp`, ported with x64-zt (see the opencode prompt
-  in the session; zone source in `GAME\zone_source\mod_sticksandstones.csv`).
-- Without `mod.ff`: `set sas_weapon h2_m21_mp` before the map loads to test the rules.
+Sticks and Stones is a **built-in gametype** now, not a mod: the row is in
+`src\client\component\gamemodes.cpp`, the script is
+`data\mwx\maps\mp\gametypes\sas.gsc`, and the crossbow comes from `hmw_aw_weapons.ff`.
+The old `mods/sticksandstones` proof of concept (mod.ff, backups and maps) is archived under
+`mwx-debug\backups\sticksandstones-mod`; the mod system itself stays.
+
+## Test mod (`data/mods/test_mod`)
+
+The mod-system tests use a minimal mod with **no weapons and no zone**:
+
+```text
+data/mods/test_mod/mod.json                 name/description/version
+data/mods/test_mod/scripts/mp/test_mod.gsc  prints "[test_mod] loaded", sets mwx_test_mod_loaded 1
+```
+
+Load it from the Mods menu or the console (`loadmod mods/test_mod`), check `modzone status`,
+switch/unload, and confirm the menu still works. The old Sticks and Stones mod was removed from the
+repo in the same change; do not add weapons to the test mod.

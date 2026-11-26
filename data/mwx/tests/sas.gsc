@@ -1,5 +1,5 @@
-// MWX test: Sticks and Stones (mod mods/sticksandstones, gametype sas): crossbow, melee weapon and
-// throwing knife; a throwing knife kill bankrupts the victim and a suicide bankrupts the player.
+// MWX test: Sticks and Stones (native gametype sas): crossbow from hmw_aw_weapons.ff, melee weapon
+// and throwing knife; a throwing knife kill bankrupts the victim and a suicide bankrupts the player.
 
 #include mwx\tests\_test;
 
@@ -51,7 +51,7 @@ main()
     test_step("loadout");
 
     weapon = getdvar("sas_weapon");
-    test_assert(weapon == "iw5_exocrossbow_mp", "the mod's crossbow is the weapon", "iw5_exocrossbow_mp", weapon);
+    test_assert(weapon == "iw5_exocrossbow_mp", "the crossbow is the weapon", "iw5_exocrossbow_mp", weapon);
 
     first = undefined;
     badloadout = 0;
