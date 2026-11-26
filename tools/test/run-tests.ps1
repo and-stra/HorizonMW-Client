@@ -85,7 +85,7 @@ function Stop-Server($process, [int]$port) {
     return "quit"
 }
 
-function Run-Test($test) {
+function Run-TestOnce($test) {
     $port = $script:portCounter++
     $netPort = Find-FreeNetPort $script:netPortCounter
     $script:netPortCounter = $netPort + 1
@@ -173,6 +173,12 @@ function Run-Test($test) {
 
         if (-not $running) {
             $result.error = if ($process.HasExited) { "server exited (code $($process.ExitCode), log $log)" } else { "the server did not start the map" }
+            if ($process.HasExited -and (Test-Path $log) -and (Get-Item $log).Length -eq 0) {
+                # Startup hazard: the engine can exit before it writes a single console line
+                # ("silent startup exit", no dump). A huge process-spacing window or a failed
+                # startup lock is the usual reason - retry once like menu-smoke does.
+                $result.silent_exit = $true
+            }
             if (Test-Path $log) { $result.console_tail = Get-Content $log -Tail 25 }
             return $result
         }
@@ -255,6 +261,17 @@ function Run-Test($test) {
     return $result
 }
 
+function Run-Test($test) {
+    $first = Run-TestOnce $test
+    if (-not $first.silent_exit) { return $first }
+
+    Write-Host ("  {0}: silent startup exit; retrying once" -f $test.name)
+    Start-Sleep -Seconds 20
+    $second = Run-TestOnce $test
+    $second.retried_after_silent_exit = $true
+    return $second
+}
+
 function Write-Summary($all)
 {
     $summary = [ordered]@{
@@ -314,14 +331,23 @@ if ($Parallel -gt 1 -and @($tests).Count -gt 1)
     {
         while ($running.Count -lt $Parallel -and $queue.Count -gt 0)
         {
-        # two mwx processes must not start close together: the engine's early startup races on
-        # shared files in the game folder (observed: a second process started 6 s later exits with
-        # no output; 30 s apart both run). Four workers add ~90 s.
-        if ($running.Count -gt 0)
-        {
-            Start-Sleep -Seconds 30
-        }
-        $running += Start-Worker $queue.Dequeue()
+            # The engine's early startup cannot overlap another instance's early startup: a
+            # second process started while the first is still initializing exits silently (no
+            # output, no dump). Start the next worker only after the previous game answers the
+            # debug RPC. The client itself also serializes init with a named mutex
+            # (load_timing::acquire_startup_lock), so manual launches are safe too.
+            if ($running.Count -gt 0)
+            {
+                $previous = $running[$running.Count - 1]
+                $deadline = (Get-Date).AddSeconds(180)
+                while ((Get-Date) -lt $deadline -and -not $previous.process.HasExited)
+                {
+                    $ready = Rpc $previous.item.port "status" @{} 1
+                    if ($ready.result) { break }
+                    Start-Sleep -Milliseconds 500
+                }
+            }
+            $running += Start-Worker $queue.Dequeue()
         }
 
         $finished = @($running | Where-Object { $_.process.HasExited })

@@ -28,6 +28,10 @@ namespace load_timing
 		std::string last_zone;
 		clock::time_point last_zone_start{};
 
+		std::mutex startup_lock_mutex;
+		HANDLE startup_lock_handle = nullptr;
+		bool startup_lock_owned = false;
+
 		double since_start_ms(const clock::time_point t)
 		{
 			return std::chrono::duration<double, std::milli>(t - process_start).count();
@@ -75,6 +79,67 @@ namespace load_timing
 			utils::string::va("\n==== MWX start (%s) ====\n", dedicated ? "dedicated" : "client"), true);
 	}
 
+	void acquire_startup_lock()
+	{
+		// HMW's engine init cannot overlap with another instance's early init: a second
+		// process started while the first is still loading its zones exits silently (no
+		// console output, no crash dump). The window is short (~15 s), so serialize only
+		// the init phase; map load and the running server/game stay concurrent. The mutex
+		// is released on the first main-thread frame. A crashing process abandons it and
+		// Windows hands it to the next waiter (WAIT_ABANDONED).
+		startup_lock_handle = CreateMutexA(nullptr, FALSE, "Local\\mwx-startup-lock");
+		if (!startup_lock_handle)
+		{
+			mark("startup lock: CreateMutex failed");
+			return;
+		}
+
+		const auto start = clock::now();
+		const auto wait = WaitForSingleObject(startup_lock_handle, 180000);
+		if (wait == WAIT_OBJECT_0 || wait == WAIT_ABANDONED)
+		{
+			{
+				std::lock_guard _guard(startup_lock_mutex);
+				startup_lock_owned = true;
+			}
+
+			const auto waited = std::chrono::duration<double, std::milli>(clock::now() - start).count();
+			if (waited >= 200.0)
+			{
+				mark(utils::string::va("startup lock acquired after %.0f ms", waited));
+			}
+
+			// Fallback: if the game never reaches its first frame (failed load, a mod that
+			// skips the scheduler), do not block the next instance forever.
+			std::thread([]()
+				{
+					std::this_thread::sleep_for(std::chrono::seconds(45));
+					release_startup_lock();
+				}).detach();
+			return;
+		}
+
+		// Timeout or wait failure: let this instance start anyway; the runner also retries.
+		CloseHandle(startup_lock_handle);
+		startup_lock_handle = nullptr;
+		mark(utils::string::va("startup lock wait failed (%lu)", wait));
+	}
+
+	void release_startup_lock()
+	{
+		std::lock_guard _guard(startup_lock_mutex);
+		if (startup_lock_owned)
+		{
+			ReleaseMutex(startup_lock_handle);
+			startup_lock_owned = false;
+		}
+		if (startup_lock_handle)
+		{
+			CloseHandle(startup_lock_handle);
+			startup_lock_handle = nullptr;
+		}
+	}
+
 	void mark(const std::string& event)
 	{
 		const auto now = clock::now();
@@ -96,6 +161,7 @@ namespace load_timing
 			scheduler::once([]()
 			{
 				mark("first main-thread frame");
+				release_startup_lock();
 			}, scheduler::pipeline::main);
 
 			if (game::environment::is_dedi())
