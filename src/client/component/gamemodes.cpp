@@ -298,6 +298,37 @@ namespace gamemodes
 			result->values = allocator.allocate_array<game::StringTableCell>(static_cast<size_t>(cols) * new_rows);
 			std::memcpy(result->values, original->values, sizeof(game::StringTableCell) * cols * old_rows);
 
+			// Refs whose row already exists in the stock table (e.g. "mugger") keep the stock
+			// description key, and that key has no text in HMW's localization -> empty description.
+			// Give every MWX-owned ref its own description, existing row or not.
+			const auto fill_desc = [&](const char* ref, const char* desc)
+			{
+				if (!desc)
+				{
+					return;
+				}
+
+				const auto row_index = row_of(ref);
+				if (row_index < 0)
+				{
+					return;
+				}
+
+				auto& cell = result->values[static_cast<size_t>(row_index) * cols + 2];
+				cell.string = allocator.duplicate_string(desc);
+				cell.hash = static_cast<int>(hash(desc));
+			};
+
+			for (const auto& m : modes)
+			{
+				fill_desc(m.ref, m.desc);
+			}
+
+			for (const auto& g : all_extra_gametypes())
+			{
+				fill_desc(g.ref, g.desc);
+			}
+
 			for (size_t n = 0; n < rows.size(); ++n)
 			{
 				const auto& row = rows[n];
