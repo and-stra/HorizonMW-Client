@@ -29,8 +29,93 @@ that the client loads like the HMW zones. Until then:
 - the 11 DLC guns and 28 melee rows are in the header but `stock_weapons` drops them
   (`weapon_loaded` is false), and their tests are not in the manifest.
 
-Next: dump the 11 weapons + 28 melee from `refs\dumps\patch_common_mp`, build
-`mwr_weapons.ff` with zonetool, add `try_load_zone("mwr_weapons")`, re-add the rows/tests.
+## Where the assets really are (corrected 26 Nov)
+
+The first D0 check assumed the DLC models were in `patch_common_mp.ff`. They are not: the patch
+only **references** them (`xmodel,,name` in the zone CSV = "not built here"). The model data lives
+in per-weapon zones:
+
+- `zone\mp_vm_<token>_base_tr.ff` - view model, materials, techsets, image definitions;
+- `zone\mp_wm_<token>_base_tr.ff` - world model;
+- `zone\mp_vm_<token>_base_p_tr.ff` - the patch/variant model used by e.g. the Kamchatka-12;
+- the weapon definitions, xanims, attachments, HUD-icon materials and streamed image data are in
+  `patch_common_mp` (`refs\dumps\patch_common_mp`).
+
+The repack therefore copies the patch dump into `GAME\zonetool\hmw_mwr_weapons`, dumps the
+per-weapon `_tr` zones (103 zones: 47 weapons incl. the CoD4 set, base and `_p` variants) into
+the same folder, and builds one `hmw_mwr_weapons.ff`. The zone lists only `weapon,<ref>` per gun;
+zonetool pulls xmodels/xanims/materials/techsets/images/sounds as dependencies, and a missing
+asset shows up as a build warning instead of silently disappearing.
+
+Model-zone mapping found by scanning the zone headers for each weapon's `gunModel`/`worldModel`:
+`aprast`, `aprpst`, `augast`, `augpst`, `augsmg`, `febsmg`, `junlmg`, `meleejun6->meleebottle`,
+`meleefuture*->meleebayonet`, `meleeshovel` (base and `_p`), `kam12` (base and `_p`), `xmlar`;
+`aprsmg` uses the Skorpion `vz61` model (`mp_vm_skorpion_base_tr`), `junsnp` the M40A3 model
+(`mp_vm_m40a3_base_tr`). No `mp_vm_mac10_base_tr` model is referenced by the MAC-10 weapon def;
+the actual model is in `mp_vm_febsmg_base_tr`.
+
+## Real-world models (IMFDB, 26 Nov)
+
+| MWR gun | real-world basis | AW PORT duplicate? |
+|---|---|---|
+| XM-LAR | FAL/ACR hybrid (fictional) | no |
+| BOS14 | SCAR 17 Ultralight bullpup conversion (SCAR-H/L) | no |
+| Lynx CQ300 | AAC Honey Badger with cosmetic changes | no |
+| MAC-10 | MAC-10 | no |
+| Fang 45 | fictional AR-15 SMG (LWRC SMG-45 / POF PSG hybrid); user decision treats it as the SIG MPX counterpart | KF5 dropped, no other |
+| PK-PSD9 | Prokolot (Strike One/Stryk-B hybrid) in a carbine conversion kit | no |
+| Bered MK8 | IMI Negev Commando / Ultimax 100 hybrid | no |
+| Kamchatka-12 | Saiga 12K (full-auto, embellished) | no (AW UTS-15 is different) |
+| S-Tac Aggressor | Cheyenne Tactical M200 Intervention | no (AW GM6 Lynx is different) |
+| Prokolot | Arsenal Firearms Strike One / Stryk-B hybrid ("Russian Glock") | no |
+| BR9 | Luger P08 with cosmetic alterations | no |
+
+None of the approved AW PORT weapons is a duplicate of these MWR guns; the only overlap was the
+Fang 45 / KF5 (SIG MPX) case, and the KF5 is already dropped in the AW plan.
+
+## B result (26 Nov): zone built, loading BLOCKED
+
+The repack itself works:
+
+- `GAME\zonetool\hmw_mwr_weapons` was built from the `patch_common_mp` dump plus the 87
+  per-weapon `_tr` zones (`GAME\dump\weapon_models`, 718 files / 121 MB).
+- `hmw_mwr_weapons.ff` compiled in **8.8 s**: full dependencies 56.0 MB, no streamed images
+  51.9 MB, weapon definitions + animations 8.8 MB, one weapon 3.0 MB.
+- A client with the zone loads it in **5-7 s** and `asset_exists` confirms all 39 weapon assets
+  and the key models (`wpn_h1_asl_xmlar_patch_vm_camo`, `wpn_h1_smg_vz61_vm_camo`,
+  `wpn_h1_sni_m40a3_vm_camo`, `wpn_h1_melee_sickle_vm`).
+
+But **every version that is loaded at UI init makes the next map load hang** at
+`imagefile48.pak` (2.24 GB): `mp_crash` and `mp_shipment` both stop after
+`start imagefile48` and never finish; without the zone the same map loads it in ~3 s. Tried and
+ruled out:
+
+- full model/attachment/image zone (56 MB) and model-only / no-image variants;
+- weapon definitions + xanims only (15 MB), a single weapon (3 MB), a renamed
+  `mwx_xmlar_mp` weapon (no name collision);
+- stripping attachments, HUD/kill icons, sounds, and all `szXAnims` values;
+- reducing the source `xanim` folder to the 644 referenced anims (the build still pulls the
+  dependency set from the game's zones, so the asset base stayed 15,464).
+
+The hang is engine-side, not a build error: the zone load itself completes, then the map's
+imagefile48 load stalls. Next ideas (in order):
+
+1. Instrument `DB_LoadXAssets`/the image stream with `mwx_debug_fastfiles 1` to see which asset
+   in the zone holds the stream buffer or asset pool when imagefile48 starts.
+2. Load the zone **after** the map is running (or unload it before `map`, reload after) so the
+   map's imagefile48 is not loaded while the zone is resident. This loses the menu CAC rows
+   unless the zone is loaded at the menu and unloaded only for the map start.
+3. Load the original MWR `patch_common_mp.ff` under its real name instead of a repack (248 MB;
+   conflicts with HMW's `hmw_patch_common_mp` override and slower loading).
+4. Try loading the per-weapon `_tr` zones directly (the engine already loads
+   `mp_wm_g3_base_tr` on demand in the no-zone G3 test) with a **weapon-def-only** zone; that is
+   the same experiment as 2 but avoids the zone during map load.
+
+The zone is parked at `GAME\zone\hmw_mwr_weapons.ff.blocked-b` and is **not** in the startup
+zone list. The 8 CoD4 guns from item 12 continue to work; the 11 DLC guns and 28 melee stay
+hidden until the load hang is fixed. The tooling and findings are kept for the next attempt.
+
+The next step is the load-hang investigation above; the assets and build are ready.
 
 ## How it works
 
