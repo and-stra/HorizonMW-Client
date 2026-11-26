@@ -25,10 +25,19 @@ servers at the same time. Every test keeps its own debug port, its own net port 
 file; the per-test result JSONs are merged into the one `test-results-<time>.json` in manifest
 order. `-Parallel 1` is the default.
 
-Two processes must **not** start in the same seconds: the engine's early startup races on files in
-the game folder and the second process exits with no output. Both runners therefore serialise the
-process starts with a 30 s gap (measured: a 6 s gap is not enough, 30 s works). The parent also
-waits for a free net port before each start.
+Two processes must **not** run their early startup at the same time: the engine exits the second
+one with no console output and no crash dump while the first is still initialising its zones (the
+window is ~15 s; a 6 s gap was not enough, a fixed 30 s gap worked most of the time but still
+flaked). This is fixed in two places:
+
+- The client serialises its init phase with the named mutex `Local\mwx-startup-lock`
+  (`load_timing::acquire_startup_lock`, released on the first main-thread frame, with a 45 s
+  watchdog and a 180 s wait timeout). Four clients started in the same second now all reach the
+  menu; the measured `---- startup lock acquired after N ms ----` lines show the queue.
+- `run-tests.ps1` starts the next parallel worker only after the previous game answers the debug
+  RPC (no fixed sleep), and both this runner and `menu-smoke.ps1` retry a silent startup exit once.
+
+The parent also waits for a free net port before each start.
 
 Measured full runs (26 tests, commit `1ca2854e` + the parallel runner):
 
