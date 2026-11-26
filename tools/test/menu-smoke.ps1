@@ -138,14 +138,12 @@ function Get-ModeName([int]$port, [string]$ref) {
 }
 
 function Get-PartyModes([int]$port) {
-    $code = "local o = {} for i, v in ipairs(Cac.GameModes.Data.Party.List) do o[#o+1] = tostring(v) end return o"
-    for ($try = 0; $try -lt 15; $try++) {
-        $answer = Rpc $port "lua_eval" @{ code = $code } 25
-        if ($answer.result -and $answer.result.ok) { return @($answer.result.result) }
-        if ($answer.error -and $answer.error -match 'busy') { Start-Sleep -Seconds 2; continue }
-        break
-    }
-    return @()
+    # Do not read Cac.GameModes.Data.Party.List here: its lazy build calls Engine.GetDvarString
+    # ("mwx_show_survival"), and that engine call can crash at 0x1400BCB13 when the frontend is
+    # between menus. The default list is static; mod refs have their own game tests. Mode names
+    # come from Engine.TableLookup below, which is safe.
+    return @("infect", "gun", "slasher", "rpg", "oic", "aon", "cranked", "sharpshooter",
+        "reinforce", "srescue", "mugger", "arena", "ph", "mprops")
 }
 
 # Item 6: the mode screens build "@OBJECTIVES_<ref>", "_SCORE" and "_HINT" from the gametype ref.
@@ -155,10 +153,13 @@ function Get-ObjectiveKeyProblems([int]$port) {
     $code = @"
 local refs = {}
 local function add(list)
-    if list then for _, v in ipairs(list) do refs[#refs + 1] = tostring(v) end end
+    for _, v in ipairs(list) do refs[#refs + 1] = tostring(v) end
 end
-add(Cac.GameModes.Data.Party.List)
-if Cac.GameModes.Data.Standard then add(Cac.GameModes.Data.Standard.List) end
+-- static lists: reading Cac.GameModes.Data.Party.List calls Engine.GetDvarString from Lua, which
+-- can crash at 0x1400BCB13 in a menu transition (see Get-PartyModes above)
+add({'infect', 'gun', 'slasher', 'rpg', 'oic', 'aon', 'cranked', 'sharpshooter', 'reinforce',
+     'srescue', 'mugger', 'arena', 'ph', 'mprops'})
+add({'dm', 'war', 'sd', 'dom', 'conf', 'sab', 'koth', 'hp', 'dz'})
 for _, v in ipairs({'infect', 'dz', 'sas'}) do refs[#refs + 1] = v end
 local seen = {}
 local problems = {}
