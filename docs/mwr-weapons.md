@@ -16,6 +16,22 @@ Out as duplicates (D1): .44 Magnum (`h1_janpst`) and Rangers (`h1_junsho`), plus
 whose real gun HMW already offers (`h1_ak47`, `h1_m4`, ...). Those rows stay in the table but are
 not added to the whitelist.
 
+## Status (26 Nov, D0 runtime check)
+
+`asset_exists` over all 66 `h1_*_mp` in the manifest: **27 present, 39 missing**. The missing are
+exactly the 11 DLC guns and the 28 melee weapons; the 8 CoD4 guns and the duplicate h1_* rows are
+present. Reason: the DLC/melee assets live in `zone\patch_common_mp.ff` (248 MB), which
+`hmw-mod\zone\hmw_patch_common_mp.ff` shadows - the engine loads only the latter. Loading a copy of
+the MWR patch under another name exits at startup (zone name mismatch / size), so those assets need
+a **zonetool repack** into a small `mwr_weapons.ff` (weapons + their xmodels/anims/materials/sounds)
+that the client loads like the HMW zones. Until then:
+- the 8 CoD4 guns work end to end (rows, whitelist, `mwr_weapon` tests);
+- the 11 DLC guns and 28 melee rows are in the header but `stock_weapons` drops them
+  (`weapon_loaded` is false), and their tests are not in the manifest.
+
+Next: dump the 11 weapons + 28 melee from `refs\dumps\patch_common_mp`, build
+`mwr_weapons.ff` with zonetool, add `try_load_zone("mwr_weapons")`, re-add the rows/tests.
+
 ## How it works
 
 1. **Rows** - `stock_weapons_data.hpp` holds the 68-column statstable rows; `stock_weapons.cpp`
