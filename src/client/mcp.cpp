@@ -1165,23 +1165,38 @@ namespace mcp
 				},
 				{
 					{"name", "ui_snapshot"},
-					{"description", "Tree of the visible LUI menu elements: menu stack, and per element id, type, text, visible, focused, disabled, position/size."},
+					{"description", "Tree of the visible LUI menu elements: menu stack, and per element id, text, visible, focused, position/size. Elements without a name get a synthetic id `<menu>#<n>` (n = position in the tree walk), and a node without its own text inherits the first text below it, so rows/buttons can be clicked by id or by their caption."},
 					{"inputSchema", {{"type", "object"}, {"properties", {{"target", target_schema()}}}}},
 				},
 				{
 					{"name", "ui_click"},
-					{"description", "Clicks a menu element through the normal button path: by id or by visible text (and optional index). Returns what was clicked."},
-					{"inputSchema", {{"type", "object"}, {"properties", {{"id", {{"type", "string"}}}, {"text", {{"type", "string"}}}, {"index", {{"type", "integer"}}}, {"target", target_schema()}}}}},
+					{"description", "Clicks a menu element through the normal button path: by id or by visible text (and optional index). By default it waits for the main thread and for the click to be processed, and returns the new top menu; pass wait=false to only queue it, expect_menu/expect_element to wait for a result, expect_timeout_ms (default 8000) for that wait."},
+					{"inputSchema", {{"type", "object"}, {"properties", {
+						{"id", {{"type", "string"}}}, {"text", {{"type", "string"}}}, {"index", {{"type", "integer"}}},
+						{"wait", {{"type", "boolean"}}}, {"expect_menu", {{"type", "string"}}},
+						{"expect_element", {{"type", "string"}}}, {"timeout_ms", {{"type", "integer"}}},
+						{"expect_timeout_ms", {{"type", "integer"}}}, {"target", target_schema()}}}}},
 				},
 				{
 					{"name", "ui_back"},
-					{"description", "Leaves the top menu (LUI.FlowManager.RequestLeaveMenuByName of the top menu)."},
-					{"inputSchema", {{"type", "object"}, {"properties", {{"target", target_schema()}}}}},
+					{"description", "Leaves the top menu and (by default) waits until the menu actually changed, then returns the new top menu. wait=false only queues it."},
+					{"inputSchema", {{"type", "object"}, {"properties", {
+						{"wait", {{"type", "boolean"}}}, {"timeout_ms", {{"type", "integer"}}},
+						{"expect_timeout_ms", {{"type", "integer"}}}, {"target", target_schema()}}}}},
 				},
 				{
 					{"name", "ui_open"},
-					{"description", "Opens a LUI menu by name (LUI.FlowManager.RequestAddMenu)."},
-					{"inputSchema", {{"type", "object"}, {"properties", {{"name", {{"type", "string"}}}, {"target", target_schema()}}}, {"required", {"name"}}}},
+					{"description", "Opens a LUI menu by name and (by default) waits until it is the top menu. wait=false only queues it."},
+					{"inputSchema", {{"type", "object"}, {"properties", {
+						{"name", {{"type", "string"}}}, {"wait", {{"type", "boolean"}}},
+						{"expect_element", {{"type", "string"}}}, {"timeout_ms", {{"type", "integer"}}},
+						{"expect_timeout_ms", {{"type", "integer"}}}, {"target", target_schema()}}}, {"required", {"name"}}}},
+				},
+				{
+					{"name", "wait_ready"},
+					{"description", "Waits until the UI thread answers again (no zone load in progress). Returns {ready, menu, open_menus, waited_ms}; on timeout includes the cached status and its stale_ms."},
+					{"inputSchema", {{"type", "object"}, {"properties", {
+						{"timeout_ms", {{"type", "integer"}}}, {"target", target_schema()}}}}},
 				},
 				{
 					{"name", "lua_eval"},
@@ -1345,9 +1360,30 @@ namespace mcp
 			}
 
 			if (name == "ui_snapshot") return rpc(target, "ui_snapshot", json::object(), 20);
-			if (name == "ui_click") return rpc(target, "ui_click", args, 20);
-			if (name == "ui_back") return rpc(target, "ui_back", json::object(), 20);
-			if (name == "ui_open") return rpc(target, "ui_open", {{"name", args.value("name", "")}}, 20);
+			if (name == "ui_click")
+			{
+				json params = args;
+				params.erase("target");
+				return rpc(target, "ui_click", params, 30);
+			}
+			if (name == "ui_back")
+			{
+				json params = args;
+				params.erase("target");
+				return rpc(target, "ui_back", params, 30);
+			}
+			if (name == "ui_open")
+			{
+				json params = args;
+				params.erase("target");
+				return rpc(target, "ui_open", params, 30);
+			}
+			if (name == "wait_ready")
+			{
+				json params = args;
+				params.erase("target");
+				return rpc(target, "wait_ready", params, 30);
+			}
 			if (name == "lua_eval") return rpc(target, "lua_eval", {{"code", args.value("code", "")}}, 30);
 			if (name == "gsc_eval") return rpc(target, "gsc_eval", {{"code", args.value("code", "")}}, 40);
 			if (name == "players") return rpc(target, "players", json::object(), 30);

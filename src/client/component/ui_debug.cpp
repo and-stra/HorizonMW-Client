@@ -118,28 +118,27 @@ namespace ui_debug
 
 	nlohmann::json click(const nlohmann::json& params)
 	{
-		std::string arguments;
-
-		if (params.contains("id") && params["id"].is_string())
+		// mwx_debug.click(element_id, text, index) - every argument is positional, so
+		// absent ones have to be passed as a real `nil` placeholder.
+		const auto string_arg = [](const nlohmann::json& value) -> std::string
 		{
-			arguments = lua_quote(params["id"].get<std::string>()) + ", nil";
-		}
-		else
+			if (value.is_string())
+			{
+				return lua_quote(value.get<std::string>());
+			}
+			return "nil";
+		};
+
+		const auto id = string_arg(params.contains("id") ? params["id"] : nlohmann::json());
+		const auto text = string_arg(params.contains("text") ? params["text"] : nlohmann::json());
+
+		std::string index = "nil";
+		if (params.contains("index") && params["index"].is_number_integer())
 		{
-			arguments = "nil, nil";
+			index = std::to_string(params["index"].get<int>());
 		}
 
-		if (params.contains("text") && params["text"].is_string())
-		{
-			arguments += ", " + lua_quote(params["text"].get<std::string>());
-		}
-
-		if (params.contains("index"))
-		{
-			arguments += ", " + std::to_string(params["index"].get<int>());
-		}
-
-		return call("click", arguments);
+		return call("click", id + ", " + text + ", " + index);
 	}
 
 	nlohmann::json back()
@@ -214,5 +213,20 @@ namespace ui_debug
 		}
 
 		return false;
+	}
+
+	nlohmann::json menu()
+	{
+		return call("menu");
+	}
+
+	nlohmann::json has_element(const std::string& id)
+	{
+		return call("has_element", lua_quote(id));
+	}
+
+	nlohmann::json actions()
+	{
+		return call("actions");
 	}
 }

@@ -118,6 +118,11 @@ local function get_root()
     return safe(function() return Engine.GetLuiRoot() end, nil)
 end
 
+-- name of the top open menu ('' when none); used for the synthetic element ids
+local function menu_name()
+    return tostring(safe(function() return LUI.FlowManager.GetTopOpenAndVisibleMenuName() end, ''))
+end
+
 local function describe(element, focus_id)
     local id = safe(function() return element.id end, nil)
     local text = safe(function() return element:getText() end, nil)
@@ -202,15 +207,24 @@ function mwx_debug.snapshot()
     local focus_id = safe(function() return LUI.UIRoot.GetFirstButtonActionInFocusId(root) end, nil)
     local budget = { count = 0 }
     local seen = {}
+    local menu = menu_name()
+    local ordinal = 0
     local result = {
-        menu = tostring(safe(function() return LUI.FlowManager.GetTopOpenAndVisibleMenuName() end, '')),
+        menu = menu,
         open_menus = open_menu_names(),
         elements = {}
     }
 
     local function visit(element, depth)
         budget.count = budget.count + 1
+        ordinal = ordinal + 1
         local node = describe(element, focus_id)
+        -- menus do not name every widget; give the unnamed ones a stable id so the
+        -- whole tree is clickable by id (menu name + position in the walk)
+        if node.id == '' then
+            node.id = menu .. '#' .. tostring(ordinal)
+            node.synthetic = true
+        end
         node.depth = depth
         result.elements[#result.elements + 1] = node
         return true
@@ -219,10 +233,29 @@ function mwx_debug.snapshot()
     walk(root, visit, 0, budget, seen)
     result.count = budget.count
 
+    -- buttons carry their caption in a child label, so let every node that has no own
+    -- text inherit the first text below it (the button then shows "PRIVATE MATCH")
+    local elements = result.elements
+    for i = #elements, 1, -1 do
+        local node = elements[i]
+        if node.text == nil then
+            local j = i + 1
+            while j <= #elements and elements[j].depth > node.depth do
+                if elements[j].text ~= nil then
+                    node.text = elements[j].text
+                    break
+                end
+                j = j + 1
+            end
+        end
+    end
+
     return mwx_debug.to_json(result)
 end
 
--- finds a visible element by id (exact, then substring) or by its text
+
+-- finds a visible element by id (exact, then substring; also the synthetic `<menu>#<n>`
+-- ids from snapshot) or by its text
 local function find_element(id, text, index)
     local root = get_root()
     if root == nil then
@@ -232,21 +265,25 @@ local function find_element(id, text, index)
     local wanted_id = id ~= nil and string.lower(tostring(id)) or nil
     local wanted_text = text ~= nil and string.lower(tostring(text)) or nil
     local wanted_index = index ~= nil and tonumber(index) or 1
+    local menu = menu_name()
 
     local matches = {}
     local exact = {}
 
-    local function consider(element)
+    local function consider(element, synthetic)
         local element_id = safe(function() return element.id end, nil)
         local element_text = safe(function() return element:getText() end, nil)
 
-        if wanted_id ~= nil and element_id ~= nil then
-            local current = string.lower(tostring(element_id))
-            if current == wanted_id then
+        if wanted_id ~= nil then
+            local current = string.lower(tostring(element_id or ''))
+            local current_synthetic = synthetic ~= nil and string.lower(synthetic) or nil
+
+            if current == wanted_id or current_synthetic == wanted_id then
                 exact[#exact + 1] = element
                 return
             end
-            if string.find(current, wanted_id, 1, true) ~= nil then
+            if (current ~= '' and string.find(current, wanted_id, 1, true) ~= nil)
+                or (current_synthetic ~= nil and string.find(current_synthetic, wanted_id, 1, true) ~= nil) then
                 matches[#matches + 1] = element
                 return
             end
@@ -264,12 +301,19 @@ local function find_element(id, text, index)
         end
     end
 
-    consider(root)
-    walk(root, function(element) consider(element) return true end, 0, { count = 0 }, {})
+    consider(root, nil)
+
+    local ordinal = 0
+    walk(root, function(element)
+        ordinal = ordinal + 1
+        consider(element, menu .. '#' .. tostring(ordinal))
+        return true
+    end, 0, { count = 0 }, {})
 
     local list = #exact > 0 and exact or matches
     return list[wanted_index], #list
 end
+
 
 local function element_info(element)
     return {
@@ -318,6 +362,37 @@ local function get_action_root(element)
     return safe(function() return element:getRootParent() end, nil) or get_root()
 end
 
+-- widget ids that only describe a part of a row (a label or the button background);
+-- a click on those does not reach the menu handler, so climb to the real button
+local generic_ids = {
+    text_label = true,
+    buttoncontainer = true,
+    button = true,
+    luitext = true,
+    luiimage = true,
+    luielement = true,
+    container = true,
+}
+
+local function interactive_ancestor(element)
+    local node = safe(function() return element:getParent() end, nil)
+    local hops = 0
+    local menu = string.lower(menu_name())
+
+    while node ~= nil and hops < 12 do
+        local id = tostring(safe(function() return node.id end, '') or '')
+        local lower = string.lower(id)
+        if id ~= '' and not generic_ids[lower] and lower ~= menu
+            and string.find(lower, '_container$') == nil then
+            return node
+        end
+        node = safe(function() return node:getParent() end, nil)
+        hops = hops + 1
+    end
+
+    return nil
+end
+
 function mwx_debug.click(element_id, text, index)
     local element, count = find_element(element_id, text, index)
     if element == nil then
@@ -326,6 +401,15 @@ function mwx_debug.click(element_id, text, index)
 
     local info = element_info(element)
     info.matches = count or 1
+
+    local real_id = string.lower(info.id)
+    if text ~= nil or real_id == '' or generic_ids[real_id] then
+        local ancestor = interactive_ancestor(element)
+        if ancestor ~= nil then
+            element = ancestor
+            info.clicked_id = tostring(safe(function() return ancestor.id end, ''))
+        end
+    end
 
     local root = get_action_root(element)
     if root == nil then
@@ -348,6 +432,7 @@ function mwx_debug.click(element_id, text, index)
 
     return mwx_debug.to_json(info)
 end
+
 
 function mwx_debug.actions()
     return mwx_debug.to_json(pending_actions)
@@ -397,4 +482,18 @@ function mwx_debug.menu_open(name)
     return safe(function()
         return LUI.FlowManager.IsMenuOpenAndVisible(root, tostring(name)) and true or false
     end, false)
+end
+
+-- current top menu ('' when none), for the wait handling in the debug server
+function mwx_debug.menu()
+    return mwx_debug.to_json({ menu = menu_name(), open_menus = open_menu_names() })
+end
+
+-- does an element with this id (real or synthetic) exist?
+function mwx_debug.has_element(element_id)
+    local element, count = find_element(element_id, nil, 1)
+    if element == nil then
+        return mwx_debug.to_json({ found = false, count = count or 0 })
+    end
+    return mwx_debug.to_json({ found = true, count = count })
 end
