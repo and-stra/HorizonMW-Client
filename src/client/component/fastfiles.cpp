@@ -1497,6 +1497,94 @@ namespace fastfiles
 					console::info("---- %i Loaded Zones ----", count);
 				});
 #endif
+
+			// MWX: dump the DDL assets (match rules / player data definitions) - enums and the
+			// gametype-like members, to see what MatchRules.SetData validates against.
+			command::add("mwx_ddl", [](const command::params& params)
+				{
+					const auto filter = params.size() > 1
+						? utils::string::to_lower(params.get(1)) : std::string{};
+
+					enum_assets(game::ASSET_TYPE_DDL, [&filter](const game::XAssetHeader header)
+						{
+							const auto* root = header.ddlRoot;
+							if (root == nullptr || root->ddlDef == nullptr)
+							{
+								return;
+							}
+
+							const auto* def = root->ddlDef;
+							if (filter.empty())
+							{
+								console::info("[ddl] %s bit=%i byte=%i structs=%i enums=%i version=%u\n",
+									def->name ? def->name : (root->name ? root->name : "?"),
+									def->bitSize, def->byteSize, def->structCount, def->enumCount, def->version);
+							}
+
+							for (auto e = 0; e < def->enumCount; ++e)
+							{
+								const auto& enumeration = def->enumList[e];
+								const auto name = enumeration.name ? utils::string::to_lower(enumeration.name) : std::string{};
+								if (!filter.empty() && name != filter)
+								{
+									continue;
+								}
+
+								console::info("[ddl] enum %s members=%i\n",
+									enumeration.name ? enumeration.name : "?", enumeration.memberCount);
+
+								for (auto m = 0; m < enumeration.memberCount; ++m)
+								{
+									console::info("[ddl]   [%i] %s\n", m,
+										enumeration.members[m] ? enumeration.members[m] : "");
+								}
+
+								console::info("[ddl] enum %s hash count=%i max=%i\n",
+									enumeration.name ? enumeration.name : "?",
+									enumeration.hashTable.count, enumeration.hashTable.max);
+								for (auto h = 0; h < enumeration.hashTable.count && h < 256; ++h)
+								{
+									console::info("[ddl]   hash %08x -> %i\n",
+										enumeration.hashTable.list[h].hash,
+										enumeration.hashTable.list[h].index);
+								}
+
+								// slots: where each name hash actually sits (probe rule)
+								const auto slots = std::clamp(enumeration.hashTable.max, 0, 4096);
+								for (auto s = 0; s < slots; ++s)
+								{
+									const auto& entry = enumeration.hashTable.list[s];
+									if (entry.hash != 0)
+									{
+										console::info("[ddl]   slot %i: %08x -> %i\n",
+											s, entry.hash, entry.index);
+									}
+								}
+							}
+
+							if (!filter.empty())
+							{
+								return;
+							}
+
+							for (auto s = 0; s < def->structCount; ++s)
+							{
+								const auto& structure = def->structList[s];
+								for (auto m = 0; m < structure.memberCount; ++m)
+								{
+									const auto& member = structure.members[m];
+									const auto is_gametype = member.name && std::strcmp(member.name, "gametype") == 0;
+									if (!is_gametype && member.type != game::DDL_ENUM_TYPE)
+									{
+										continue;
+									}
+									console::info("[ddl]   %s.%s type=%i enumIndex=%i bitSize=%i rangeLimit=%u\n",
+										structure.name ? structure.name : "?", member.name ? member.name : "?",
+										member.type, member.enumIndex, member.bitSize, member.rangeLimit);
+								}
+							}
+						}, true);
+				});
 		}
 	};
 }

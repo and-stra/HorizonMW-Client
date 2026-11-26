@@ -6,9 +6,6 @@
 if not Engine.InFrontend() or not Engine.IsMultiplayer() then return end
 if not LUI.MapSetup or not LUI.IW5Maps or not package or not package.loaded then return end
 
-local iw5_maps = package.loaded["data.iw5_maps"]
-if type(iw5_maps) ~= "table" then return end
-
 -- Advanced Warfare maps (community H1 ports in GAME\hmw-usermaps\<loadName>\); only installed ones are listed
 local aw_all = {
     { loadName = "mp_refraction", name = "Ascend", description = "Advanced Warfare", image = "loadscreen_mp_refraction", game = "Advanced Warfare" },
@@ -43,23 +40,50 @@ local aw_all = {
     { loadName = "mp_urban", name = "Urban", description = "Advanced Warfare", image = "loadscreen_mp_urban", game = "Advanced Warfare" },
 }
 
-local aw_maps = {}
-for _, map in ipairs(aw_all) do
-    if Engine.ControllerHasMap(0, map.loadName) then
-        table.insert(aw_maps, map)
-    end
-end
-if #aw_maps == 0 then return end
+-- M2: the map probe (Engine.ControllerHasMap) is an engine/database call. Running it here executes it
+-- on a LUI (re)start (entering the lobby / starting a match) and killed the client at one point. The
+-- AW maps are only needed when the map setup menu is built, so the probe runs lazily there.
+local aw_first = nil
+local aw_last = nil
+local aw_ready = false
 
-local aw_first = #iw5_maps + 1
-for _, map in ipairs(aw_maps) do
-    table.insert(iw5_maps, map)
+local function ensure_aw_maps()
+    if aw_ready then
+        return aw_first ~= nil
+    end
+    aw_ready = true
+
+    local iw5_maps = package.loaded["data.iw5_maps"]
+    if type(iw5_maps) ~= "table" then
+        return false
+    end
+
+    local installed = {}
+    for _, map in ipairs(aw_all) do
+        if Engine.ControllerHasMap(0, map.loadName) then
+            table.insert(installed, map)
+        end
+    end
+    if #installed == 0 then
+        return false
+    end
+
+    aw_first = #iw5_maps + 1
+    for _, map in ipairs(installed) do
+        table.insert(iw5_maps, map)
+    end
+    aw_last = #iw5_maps
+    return true
 end
-local aw_last = #iw5_maps
 
 -- MW3 tab: hide the appended AW entries while it builds its buttons
 local iw5_feeder = LUI.IW5Maps.MapFeeder
 LUI.IW5Maps.MapFeeder = function(...)
+    if not ensure_aw_maps() then
+        return iw5_feeder(...)
+    end
+
+    local iw5_maps = package.loaded["data.iw5_maps"]
     local removed = {}
     for i = aw_last, aw_first, -1 do
         table.insert(removed, 1, table.remove(iw5_maps, i))
@@ -76,6 +100,11 @@ LUI.AWMaps.Buttons = {}
 
 LUI.AWMaps.MapFeeder = function(menu, list)
     LUI.AWMaps.Buttons = {}
+    if not ensure_aw_maps() then
+        return
+    end
+
+    local iw5_maps = package.loaded["data.iw5_maps"]
     for idx = aw_first, aw_last do
         local mapData = iw5_maps[idx]
         local selectMapEvent = MBh.EmitEventToRoot({ name = "select_map_new", idx = idx, game = "iw5" })
@@ -124,8 +153,14 @@ end
 
 LUI.MenuBuilder.registerType("aw_tab", LUI.AWMaps.new)
 
--- HMW's AddTabs with a fourth tab (its tab count is a local, so the whole function is replaced)
+-- HMW's AddTabs with a fourth tab (its tab count is a local, so the whole function is replaced).
+-- Without installed AW maps, HMW's own tab list is used unchanged.
+local base_add_tabs = LUI.MapSetup.AddTabs
 LUI.MapSetup.AddTabs = function(menu)
+    if not ensure_aw_maps() then
+        return base_add_tabs(menu)
+    end
+
     local tabManager = LUI.MenuBuilder.BuildRegisteredType("MFTabManager", {
         defState = CoD.CreateState(nil, nil, nil, nil, CoD.AnchorTypes.TopLeftRight),
         numOfTabs = 4
