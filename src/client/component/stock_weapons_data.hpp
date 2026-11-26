@@ -76,6 +76,7 @@ namespace stock_weapons
 		{ "6327", "9827", "weapon_melee", "MWX_MWR_H1_MELEEPADDLE", "h1_meleepaddle", "", "melee_hammer", "PERKS_MELEE_RANGE", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "-1", "", "", "", "0", "", "0", "0", "", "", "", "3", "", "", "", "3600", "0", "Gold", "" },
 		{ "6328", "9828", "weapon_melee", "MWX_MWR_H1_MELEESHOVEL", "h1_meleeshovel", "", "melee_shovel", "PERKS_MELEE_RANGE", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "-1", "", "", "", "0", "", "0", "0", "", "", "", "3", "", "", "", "3600", "0", "Gold", "" },
 		{ "6329", "9829", "weapon_melee", "MWX_MWR_H1_MELEESICKLE", "h1_meleesickle", "", "melee_sickle", "PERKS_MELEE_RANGE", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "-1", "", "", "", "0", "", "0", "0", "", "", "", "3", "", "", "", "3600", "0", "Gold", "" },
+				{ "6100", "10000", "weapon_projectile", "WEAPON_EXPLOSIVE_EXO_CROSSBOW", "iw5_exocrossbow", "", "hud_icon_exocrossbow", "WEAPON_EXPLOSIVE_EXO_CROSSBOW_DESC", "", "weapon_stow_mid_up", "", "reflex", "acog", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "90", "65", "50", "50", "10", "", "", "", "-1", "", "", "", "0", "", "0", "0", "run_and_gun|cqb|camper", "recruit|regular|hardened|veteran", "", "0", "", "", "", "0", "0", "Gold", "" },
 	};
-	inline constexpr int row_count = 71;
+	inline constexpr int row_count = 72;
 }

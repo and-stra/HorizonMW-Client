@@ -438,7 +438,10 @@ namespace patches
 				"hmw_rangers",
 				"hmw_nightshade",
 				"hmw_dlc_factions",
-				"hmw_dlc_killstreaks"
+				"hmw_dlc_killstreaks",
+				// ported AW weapons (W1: the crossbow), loaded after every HMW zone and before the
+				// mod zone so it can use HMW hands/attachments/anims
+				"hmw_aw_weapons"
 			};
 
 			// MWX: the loaded mod's zone last, so it can reference HMW's assets (hands models, anims, ...) and

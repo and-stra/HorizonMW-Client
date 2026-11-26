@@ -124,6 +124,9 @@ mwx_isvalidsecondary(weapon, flag, isdefault)
         case "h1_augpst":
         // the MWR launcher
         case "h1_rpg":
+        // item 13: the ported AW crossbow (the AW script also adds it; this whitelist is the one
+        // that survives both replacefunc calls, so it must know the AW refs too)
+        case "iw5_exocrossbow":
             return 1;
         default:
             return 0;
