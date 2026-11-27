@@ -312,3 +312,12 @@ The def weapons/iw5_combatknife_mp.json (converted, anims from h1_meleebayonet) 
 source; it was never listed in the CSV before, which is why the weapon asset did not exist.
 Textures: the material uses mp_tactical_knife_col/nml/spc/occ (AW images, not dumped yet) and
 the shared cloak_detail3 / ~envbrdflut_ggx_16-rg (HMW has those - reference, do not copy).
+
+Update, same day: the knife is **in the zone and works**. The asset-type token is xmodelsurfs
+(not xsurface; the latter is not an asset type name and silently dumps nothing), and the weapon
+was never listed in the zone CSV - both fixed. Build: 848 assets, zone-check green, w_knife
+5/5. Textures: a full dumpzone h1 common_mp image run produced 1.3k images + 21k streamed files
+(7.3 GB) but **none of the knife's** (mp_tactical_knife_col/nml, ~mp_tactical_knife_occ/spc);
+only ttachment_tactical_knife - they live in AW's patch_common_mp (the 6.7 GB dump that was
+deleted after the pilot). Until that dump is repeated for those 8 images the knife renders with
+default images. Texture polish item, like the washed-out M1/MP40 previews.
