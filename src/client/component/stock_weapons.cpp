@@ -102,6 +102,28 @@ namespace stock_weapons
 				!game::DB_IsXAssetDefault(game::ASSET_TYPE_WEAPON, name.data());
 		}
 
+		// HMW's mp/customweapons.csv lists four weapons whose h2_*_mp asset does not exist in the
+		// game (h2_fmg9, h2_mp412, h2_pm9, h2_mp7): the rows showed an untranslated key and a
+		// default preview model. Hide them from the CAC - display only, the ids and the
+		// statstable rows are untouched. A fixed list, not a DB lookup: this patch runs while the
+		// vlobby zones load, and DB_XAssetExists per row there can wedge the load.
+		bool hidden_custom_row(const char* ref)
+		{
+			static const char* const hidden[] = {"h2_fmg9", "h2_mp412", "h2_pm9", "h2_mp7"};
+			if (ref == nullptr)
+			{
+				return false;
+			}
+			for (const auto* name : hidden)
+			{
+				if (std::strcmp(ref, name) == 0)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
 		// mp/customweapons.csv is (name, class, type); the type is the Cac.Weapons group
 		// (Primary/Secondary/Lethal/Tactical). The statstable rows only carry the class.
 		const char* customweapon_type(const char* weapon_class)
@@ -242,14 +264,11 @@ namespace stock_weapons
 					return aw_a != aw_b ? aw_a : a < b;
 				});
 			}
+			const auto first_new = prepend ? 0 : old_rows;
+			const auto originals_at = prepend ? static_cast<int>(add.size()) : 0;
 
-			const auto result = allocator.allocate<game::StringTable>();
-			*result = *original;
-
-			// Hide rows whose weapon asset does not exist (HMW's table lists h2_fmg9, h2_mp412,
-			// h2_pm9, h2_mp7 with no weapon asset): display filter only, the ids and the
-			// statstable rows stay as they are. A row that is only missing because its zone has
-			// not loaded yet counts as missing, so the table is rebuilt when it does.
+			// customweapons only: hide HMW's rows for weapons that have no asset (fixed list, no
+			// DB lookups here - see hidden_custom_row)
 			auto kept_rows = old_rows;
 			if (!is_stats)
 			{
@@ -257,21 +276,18 @@ namespace stock_weapons
 				for (auto r = 0; r < old_rows; ++r)
 				{
 					const auto* ref = original->values[static_cast<size_t>(r) * cols].string;
-					if (ref != nullptr && ref[0] != '\0' && !weapon_loaded(ref))
+					if (!hidden_custom_row(ref))
 					{
-						// HMW's own table rows for weapons that have no asset at all: drop them
-						// for good, they can never load (unlike our appended rows, which wait).
-						continue;
+						++kept_rows;
 					}
-					++kept_rows;
 				}
 			}
 
-			const auto first_new = prepend ? 0 : kept_rows;
-			const auto originals_at = prepend ? static_cast<int>(add.size()) : 0;
-			const auto new_rows = kept_rows + static_cast<int>(add.size());
-			result->rowCount = new_rows;
-			result->values = allocator.allocate_array<game::StringTableCell>(static_cast<size_t>(cols) * new_rows);
+			const auto result = allocator.allocate<game::StringTable>();
+			*result = *original;
+			result->rowCount = kept_rows + static_cast<int>(add.size());
+			result->values = allocator.allocate_array<game::StringTableCell>(
+				static_cast<size_t>(cols) * result->rowCount);
 
 			if (is_stats)
 			{
@@ -283,7 +299,7 @@ namespace stock_weapons
 				for (auto r = 0; r < old_rows; ++r)
 				{
 					const auto* ref = original->values[static_cast<size_t>(r) * cols].string;
-					if (ref != nullptr && ref[0] != '\0' && !weapon_loaded(ref))
+					if (hidden_custom_row(ref))
 					{
 						continue;
 					}
