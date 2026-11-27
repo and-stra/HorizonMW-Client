@@ -5,6 +5,7 @@
 #include "console.hpp"
 #include "debug_api.hpp"
 #include "debug_server.hpp"
+#include "exception.hpp"
 #include "party.hpp"
 #include "scheduler.hpp"
 #include "screenshot.hpp"
@@ -402,6 +403,13 @@ namespace debug_server
 					result.emplace_back(line);
 				}
 				return json{{"result", result}};
+			}
+
+			if (method == "stacks")
+			{
+				// runs on the debug server thread, so it also answers while the main thread is
+				// stuck in a zone/imagefile load (see docs/zone-load-stall.md)
+				return json{{"result", exception::get_thread_stacks(GetCurrentProcessId())}};
 			}
 
 			if (method == "load_times")

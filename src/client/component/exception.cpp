@@ -1,9 +1,12 @@
 #include <std_include.hpp>
 #include "loader/component_loader.hpp"
 
+#include "exception.hpp"
 #include "scheduler.hpp"
 #include "system_check.hpp"
 #include "version.hpp"
+
+#include <tlhelp32.h>
 
 #include "game/dvars.hpp"
 #include "game/game.hpp"
@@ -313,6 +316,97 @@ namespace exception
 			// Don't register anything here...
 			return &exception_filter;
 		}
+	}
+
+	std::vector<std::string> get_thread_stacks(const unsigned int process_id)
+	{
+		std::vector<std::string> result;
+
+		const auto process = GetCurrentProcess();
+		SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS);
+		if (!SymInitialize(process, nullptr, TRUE))
+		{
+			return result;
+		}
+
+		const auto cleanup = gsl::finally([&] { SymCleanup(process); });
+
+		const auto snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+		if (snapshot == INVALID_HANDLE_VALUE)
+		{
+			return result;
+		}
+
+		const auto close_snapshot = gsl::finally([&] { CloseHandle(snapshot); });
+
+		THREADENTRY32 entry{};
+		entry.dwSize = sizeof(entry);
+
+		for (auto ok = Thread32First(snapshot, &entry); ok; ok = Thread32Next(snapshot, &entry))
+		{
+			if (entry.th32OwnerProcessID != process_id || entry.th32ThreadID == GetCurrentThreadId())
+			{
+				continue;
+			}
+
+			const auto thread = OpenThread(THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION,
+				FALSE, entry.th32ThreadID);
+			if (thread == nullptr)
+			{
+				continue;
+			}
+
+			const auto close_thread = gsl::finally([&] { CloseHandle(thread); });
+
+			SuspendThread(thread);
+
+			CONTEXT context{};
+			context.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+
+			if (GetThreadContext(thread, &context))
+			{
+				STACKFRAME64 frame{};
+				frame.AddrPC.Offset = context.Rip;
+				frame.AddrPC.Mode = AddrModeFlat;
+				frame.AddrFrame.Offset = context.Rbp;
+				frame.AddrFrame.Mode = AddrModeFlat;
+				frame.AddrStack.Offset = context.Rsp;
+				frame.AddrStack.Mode = AddrModeFlat;
+
+				result.push_back(utils::string::va("--- thread %u (rip 0x%llX) ---",
+					entry.th32ThreadID, context.Rip));
+
+				for (auto i = 0; i < 24; ++i)
+				{
+					if (!StackWalk64(IMAGE_FILE_MACHINE_AMD64, process, thread, &frame, &context, nullptr,
+						SymFunctionTableAccess64, SymGetModuleBase64, nullptr))
+					{
+						break;
+					}
+
+					if (frame.AddrPC.Offset == 0)
+					{
+						break;
+					}
+
+					std::string text = utils::string::va("0x%llX", frame.AddrPC.Offset);
+
+					IMAGEHLP_MODULE64 module{};
+					module.SizeOfStruct = sizeof(module);
+					if (SymGetModuleInfo64(process, frame.AddrPC.Offset, &module))
+					{
+						text += utils::string::va(" %s+0x%llX", module.ModuleName,
+							frame.AddrPC.Offset - module.BaseOfImage);
+					}
+
+					result.push_back("    " + text);
+				}
+			}
+
+			ResumeThread(thread);
+		}
+
+		return result;
 	}
 
 	class component final : public component_interface
