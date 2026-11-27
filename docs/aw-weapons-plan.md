@@ -183,3 +183,52 @@ Task: inventory Advanced Warfare weapons. Change no game files.
 4. Report: exit code, the number of lines starting with "weapon," and "attachment,", and the last 10 lines
    of the output. Stop there.
 ```
+
+## Pilot recipe (27 Nov 2026) - M1 Garand, MP40
+
+The pilot lives in **hmw_aw_weapons.ff** with the crossbow; no new startup zone (the startup list
+is 8 zones: HMW's 6 + hmw_aw_weapons + hmw_mwr_weapons; a 10th zone hangs the map load, see
+zone-load-stall.md).
+
+1. **Weapon JSON**: zonetool.exe -unbuffered-io, dumpzone h2 patch_common_mp (the AW tool in
+   the AW folder) writes the S1 weapon JSONs under AW\dump\patch_common_mp\weapons\; convert with
+   	ools/aw-weapon-port/s1_weapon_to_h1.py <in> <out>.
+2. **Animation source**: the S1 dumper does not write xanim assets for the H1 target (checked:
+   dumpzone h1 patch_common_mp produced no .xab; only HMW's own anims appear in a build). Use
+   the closest MWR weapon's anim table:
+   	ools/aw-weapon-port/use_hmw_anims.py <weapon.json> <refs\dumps\patch_common_mp\weapons\h1_*.json>.
+   Pilot mapping: M1 Garand -> h1_m14, MP40 -> h1_mp44, combat knife -> h1_meleebayonet. The H1
+   build pulls the donor's xanims from the HMW zones as dependencies.
+3. **Models**: dumpzone h1 mp_vm_<weapon>_tr and mp_wm_<weapon>_tr (e.g. mp_vm_m1garand_tr)
+   write xmodel/xsurface into AW\dump\weapon_models; merge that folder into
+   GAME\zonetool\hmw_aw_weapons (robocopy /E). The zone CSV lists the view/world models
+   explicitly so a missing model fails the build.
+4. **Materials/techsets/images**: the AW materials live in AW's `patch_common_mp` (not in the MWR
+   dump and not in AW's `common_mp`): `m/mtl_m1garand_*`, `m/mtl_ger_mp40_base`.
+   - `dumpzone h1 patch_common_mp material` writes the materials + techsets (H1 form) into
+     `AW\dump\patch_common_mp`. The `h2` target writes `.h2Image` images the H1 build cannot use -
+     use the **h1** target only.
+   - `dumpzone h1 patch_common_mp image` writes `images/*.h1Image` and
+     `streamed_images/*.h1Image` + `*_streamN.pixels` (~6.7 GB for all weapons; it needs the
+     temporary disk, clean it up after the collection). Each material JSON lists its images in
+     `textureTable`; `mwx-debug\aw-weapons\collect_pilot_images.py` copies only those (26 images for
+     the pilot: `tex_m1garand_*`, `ger_mp40_*`, `shared_rail_adapter_01_*`) **plus their
+     `_streamN.pixels` payloads** into the source's `images`/`streamed_images`. Copying only the
+     `.h1Image` header crashes the game at startup with
+     `Create2DTexture(... 128, 128, 0, <fmt>) failed` - the pixels are required.
+   - The H1 build is **fatal on a missing techset** (a missing material is only a warning + default).
+     The S1-dumped material techset names do not all exist in the dump (e.g.
+     `..._dc1dn1ds1dg1_r0c0n0sd0om0_nfwpf_ctq_s1`); map them to an existing techset
+     (`m_l_sm_lmpb_r0c0n0sd0om0_nfwpf_ctq_s1` is in the crossbow source) by editing
+     `techniqueSet->name` in the copied material JSONs.
+   - Do not bulk-copy all AW materials into the source: one unrelated material with a missing
+     techset (`mtl_player_emblem`) aborts the whole build.
+   - Missing HUD icons (`hud_icon_mp40`, `hud_icon_m1_garand`) and the shared mag material
+     (`mtl_mag_dual_clip_base`) are warnings; port the icon images separately if they matter.
+5. **Zone**: GAME\zone_source\hmw_aw_weapons.csv lists the weapons + models; build with
+   mwx-debug\mwr-weapons\build-zone.ps1 -Zone hmw_aw_weapons (it backs up the old .ff/.pak).
+6. **CAC/name/whitelist**: row in stock_weapons_data.hpp (helper mwx-debug\aw-weapons\add_pilot_rows.py),
+   real name/description in src/client/component/aw_weapons.cpp, ref added to
+   data/mwx/scripts/mp/mwr_weapons.gsc (isvalidprimary / isvalidsecondary / isvalidmeleeweapon).
+7. **Test**: data/mwx/tests/aw_pilot.gsc (generic w_weapon body) with mwx_aw_weapon,
+   mwx_aw_class; melee has its own w_knife.gsc (hasweapon, not switchtoweapon). 3x green.

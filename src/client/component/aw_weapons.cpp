@@ -19,6 +19,11 @@ namespace aw_weapons
 			{"WEAPON_AW_M1GARAND", "M1 Garand"},
 			{"WEAPON_AW_MP40", "MP40"},
 			{"WEAPON_AW_COMBATKNIFE", "Combat Knife"},
+			// the AW weapon defs carry their own display-name keys; the in-game HUD and kill feed
+			// read those, not the statstable row's WEAPON_AW_* key
+			{"MDLC6_DLCGUN23", "M1 Garand"},
+			{"MDLC5_DLCGUN18", "MP40"},
+			{"WEAPON_COMBAT_KNIFE", "Combat Knife"},
 		};
 
 		constexpr std::pair<const char*, const char*> descriptions[] =
