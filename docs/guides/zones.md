@@ -63,3 +63,10 @@ Everything in the index is generated data (names + sha1); it is safe to rebuild 
 - Names are compared case-sensitively, like the asset system.
 - Only the directories in `TYPE_DIRS` are indexed; add a mapping there when a new asset type
   appears in a zone we ship.
+
+## Zone sources in git
+
+The text parts of the sources live in `assets/zones/<zone>/` (CSV, converted weapon/attachment
+JSON, overrides, build scripts); the binary parts (streamed pixels, xsurface .xsb, .xmb, compiled
+shaders .cso) are game-derived and stay in the migration archive, re-created with the dump commands
+in `assets/zones/README.md`. The current built zones stay in `GAME\zone\`.

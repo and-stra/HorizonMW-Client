@@ -1,0 +1,39 @@
+﻿// zone "hmw_aw_weapons" (GAME\zone_source\hmw_aw_weapons.csv), built with the H1 x64-zt (GAME\x64zt.exe).
+// Advanced Warfare weapons for the MWX client. W1: the explosive crossbow (from the Sticks and Stones mod).
+// The weapon pulls its models, materials, techsets, xanims, sounds and fx in as dependencies.
+// MWR's own hands model by reference (",," = not built into the zone): the weapon needs a hands model so the gun
+// hangs on the hands and the player's faction arms are drawn; AW's model of the same name are the exo arms.
+xmodel,,viewhands_tf141
+weapon,iw5_exocrossbow_mp
+// the gun models must be in the zone; listed explicitly so a missing model fails the build instead of being skipped
+xmodel,vm_crossbow_base
+xmodel,npc_crossbow_base
+xmodel,npc_crossbow_bolt
+fx,vfx/lights/light_beacon_crossbow
+fx,vfx/explosion/frag_grenade_default
+sound,exocrossbow_warning
+// W1.2: crossbow scope/glass/target images, converted from AW common_mp (H1 images + streamed pixels)
+image,crossbow_scope_base_col
+image,crossbow_scope_base_nml
+image,~crossbow_scope_base_spc-rgb&~d8544476
+image,~crossbow_scope_base_occ-l
+image,crossbow_glass_col
+image,crossbow_glass_nml
+image,~crossbow_glass_spc-rgb&cross~a7515f30
+image,crossbow_target_ems
+image,wep_shared_gray_swatch_col
+image,weapon_red_cross_background
+image,emblem_temp_col
+
+// D pilot: M1 Garand, MP40 and the combat knife (models from their AW tr zones; anims use the
+// closest MWR weapon: M14, MP44, bayonet)
+weapon,iw5_dlcgun23_mp
+weapon,iw5_dlcgun18_mp
+xmodel,vm_m1garand_base
+xmodel,npc_m1garand_base
+xmodel,vm_ger_mp40_dlc_base
+xmodel,npc_ger_mp40_dlc_base
+// combat knife (AW base-game knife): models + their single LOD surfaces from AW's common_mp
+weapon,iw5_combatknife_mp
+xmodel,vm_mp_tactical_knife
+xmodel,npc_mp_tactical_knife

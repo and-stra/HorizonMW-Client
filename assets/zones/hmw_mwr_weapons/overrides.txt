@@ -1,0 +1,36 @@
+# Asset names that may differ from a previously loaded zone on purpose.
+# One per line, "<type>/<name>" (e.g. "material/mtl_shared_rail_adapter_01").
+# Keep the list short and document the evidence next to each block.
+
+# --- hmw_mwr_weapons: 19 MWR DLC view-model animations (27 Nov 2026) -------------
+# The MWR DLC weapon defs need their own copies: with them removed zonetool emits
+# notetrackSoundMap[0].Key = null for mwx_xmlar_mp and the whole build fails
+# ("type must be string, but is null"). The HMW dump has same-named copies with the
+# same byte size for all 19 but different bytes (re-encoded), so zone-check reports
+# them as differing content. They are the MWR weapon's animation set, not HMW's; the
+# smallest and most reliable fix is to keep our copy and list the names here.
+xanim/h1_vm_mp_mantle_33_up
+xanim/h1_wpn_asl_xmlar_ads_down
+xanim/h1_wpn_asl_xmlar_ads_fire
+xanim/h1_wpn_asl_xmlar_ads_up
+xanim/h1_wpn_asl_xmlar_fire
+xanim/h1_wpn_asl_xmlar_idle
+xanim/h1_wpn_asl_xmlar_inspect
+xanim/h1_wpn_asl_xmlar_pullout
+xanim/h1_wpn_asl_xmlar_pullout_first
+xanim/h1_wpn_asl_xmlar_pullout_quick
+xanim/h1_wpn_asl_xmlar_putaway
+xanim/h1_wpn_asl_xmlar_putaway_quick
+xanim/h1_wpn_asl_xmlar_recoil
+xanim/h1_wpn_asl_xmlar_reload
+xanim/h1_wpn_asl_xmlar_reload_empty
+xanim/h1_wpn_asl_xmlar_settle
+xanim/h1_wpn_asl_xmlar_sprint_in
+xanim/h1_wpn_asl_xmlar_sprint_loop
+xanim/h1_wpn_asl_xmlar_sprint_out
+
+# --- hmw_aw_weapons -----------------------------------------------------------------
+# Empty on purpose: the AW zone's shared FX/utility images, physics and view-model
+# animations collided with HMW and were removed (backup:
+# mwx-debug\backups\zone-collisions\hmw_aw_weapons\). Shared AW assets are referenced
+# from HMW instead; anything that differs keeps an AW-specific name.

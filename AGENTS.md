@@ -11,10 +11,9 @@ friends on LAN, short loading times. No master server, accounts or anti-cheat.
   It updates the submodules, runs premake + msbuild (Release x64), copies `mwx.exe` into the game
   folder, archives `mwx.pdb` per commit (`refs\pdb\<hash>\`) and mirrors `data\mwx` / `data\mods`.
   Without `-nogit` it checks out `mwx` and fast-forwards to `claude/mwx` first.
-- The thin wrappers next to the game folder keep the old call sites working:
-  `C:\Games\cod-hwm\build-mwx.bat` (normal build, log `build-mwx.log`) and
-  `C:\Games\cod-hwm\build-branch.bat` (`-nogit`: builds whatever is checked out, log
-  `build-branch.log`; used for `opencode/autonomous` and fix branches).
+- The build is run from the repository (the old root wrappers are in the migration archive):
+  `tools\build\build-mwx.bat -nogit` for a work branch (no checkout/fast-forward) and
+  `tools\build\build-mwx.bat` for the `mwx` integration build.
 - Output is `mwx.exe`. It must never overwrite `hmw-mod.exe` (the official v1.6.7 client).
 - A running `mwx.exe` (a game or the MCP server) cannot be overwritten, but it can be renamed: the
   script moves it to `mwx-prev-<n>.exe` and copies the new build. The running process keeps the old
@@ -114,7 +113,7 @@ friends on LAN, short loading times. No master server, accounts or anti-cheat.
 ## Autonomous runs
 
 - Long autonomous runs (e.g. the branch `opencode/autonomous`) build with
-  `C:\Games\cod-hwm\build-branch.bat` (`-nogit`), keep the PDB per commit and write their progress
+  `tools\build\build-mwx.bat -nogit`, keep the PDB per commit and write their progress
   to the task's report in `docs/` (done work, commits, test results, decisions, open issues);
   `docs/backlog.md` is the only todo list. The 2026-11 history is
   `docs/archive/autonomous-report-2026-11.md`.
