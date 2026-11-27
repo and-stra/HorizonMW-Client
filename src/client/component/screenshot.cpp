@@ -68,9 +68,11 @@ namespace screenshot
 				local.tm_mday, local.tm_hour, local.tm_min, local.tm_sec, static_cast<int>(ms));
 		}
 
-		// scaled/cropped copy of a BGRA image, as RGBA
+		// scaled/cropped copy of the back buffer, as RGBA. `bgra` says which channel order the
+		// source really has: the formats the capture accepts are R8G8B8A8 and B8G8R8A8, and
+		// swapping a real RGBA back buffer turns red into blue (the extinguisher/stocks bug).
 		std::vector<std::uint8_t> transform(const std::uint8_t* pixels, const int stride, int width, int height,
-			const request_t& req, int* out_width, int* out_height)
+			const request_t& req, const bool bgra, int* out_width, int* out_height)
 		{
 			int left = 0;
 			int top = 0;
@@ -105,9 +107,9 @@ namespace screenshot
 					const auto* src = src_row + static_cast<size_t>(src_x) * 4;
 					auto* dst = &rgba[(static_cast<size_t>(y) * out_w + x) * 4];
 
-					dst[0] = src[2];
+					dst[0] = bgra ? src[2] : src[0];
 					dst[1] = src[1];
-					dst[2] = src[0];
+					dst[2] = bgra ? src[0] : src[2];
 					dst[3] = 255;
 				}
 			}
@@ -193,9 +195,12 @@ namespace screenshot
 
 			int width = 0;
 			int height = 0;
+			const auto bgra = desc.Format == DXGI_FORMAT_B8G8R8A8_UNORM ||
+				desc.Format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB ||
+				desc.Format == DXGI_FORMAT_B8G8R8X8_UNORM;
 			const auto rgba = transform(static_cast<const std::uint8_t*>(mapped.pData),
 				static_cast<int>(mapped.RowPitch), static_cast<int>(desc.Width), static_cast<int>(desc.Height),
-				req, &width, &height);
+				req, bgra, &width, &height);
 
 			int png_size = 0;
 			auto* png = stbi_write_png_to_mem(rgba.data(), width * 4, width, height, 4, &png_size);
