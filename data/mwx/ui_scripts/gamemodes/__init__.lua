@@ -13,7 +13,7 @@ Cac.GameModes.Group.Party = "Party"
 -- incomplete. Calling Engine.* here killed the client (0xC0000005 at 0x1400BCB13; the step trace
 -- stopped between "mod list" and "survival", i.e. at Engine.GetDvarString("mwx_show_survival")).
 -- Load only pure Lua; every engine call happens when a menu first reads the Party table.
-local base_party = { "infect", "gun", "slasher", "rpg", "oic", "aon", "cranked", "sharpshooter", "reinforce", "srescue", "mugger", "arena", "ph", "mprops" }
+local base_party = { "infect", "gun", "slasher", "rpg", "oic", "aon", "cranked", "sharpshooter", "reinforce", "srescue", "mugger", "arena", "ph", "mprops", "sas" }
 local party = {
     Image = "h1_ui_icon_playlist_weekend"
 }

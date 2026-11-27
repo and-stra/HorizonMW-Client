@@ -47,7 +47,9 @@ the same mod folder), and stats are shared with the unmodded game.
 
 Sticks and Stones is a **built-in gametype** now, not a mod: the row is in
 `src\client\component\gamemodes.cpp`, the script is
-`data\mwx\maps\mp\gametypes\sas.gsc`, and the crossbow comes from `hmw_aw_weapons.ff`.
+`data\mwx\maps\mp\gametypes\sas.gsc`, the crossbow comes from `hmw_aw_weapons.ff`, and `sas` is in
+the Party mode list (`data\mwx\ui_scripts\gamemodes\__init__.lua`) so it can be picked in the
+lobby. The menu smoke checks the chooser entry by name ("Sticks and Stones").
 The old `mods/sticksandstones` proof of concept (mod.ff, backups and maps) is archived under
 `mwx-debug\backups\sticksandstones-mod`; the mod system itself stays.
 

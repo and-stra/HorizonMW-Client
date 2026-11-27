@@ -264,6 +264,13 @@ for ($run = 1; $run -le $Runs; $run++) {
                 Select-Mode $port $entry.group $entry.name
 
                 $ui = (Rpc $port "get_dvar" @{ name = "ui_gametype" } 10).result.value
+                if ($ui -ne $entry.ref) {
+                    # rare UI race while the mode list is still being built (seen once for rpg:
+                    # the row caption was right but the pick landed on 'gun'): pick it again
+                    Write-Host ("  {0}: pick landed on '{1}', retrying the pick" -f $label, $ui)
+                    Select-Mode $port $entry.group $entry.name
+                    $ui = (Rpc $port "get_dvar" @{ name = "ui_gametype" } 10).result.value
+                }
                 if ($ui -ne $entry.ref) { $failures += "$label : ui_gametype is '$ui' after selecting" }
 
                 $shown = Get-LobbyLabel $port
