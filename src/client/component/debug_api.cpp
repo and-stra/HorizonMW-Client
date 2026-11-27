@@ -776,6 +776,22 @@ namespace debug_api
 		return json{{"players", parsed}};
 	}
 
+	// item 12: does an asset exist and is it not the empty default? (manifest runtime checks)
+	json asset_exists(const json& params)
+	{
+		const auto name = params.value("name", "");
+		if (name.empty())
+		{
+			return json{{"error", "name is required"}};
+		}
+
+		const auto type = static_cast<game::XAssetType>(params.value("type",
+			static_cast<int>(game::ASSET_TYPE_WEAPON)));
+		const auto exists = game::DB_XAssetExists(type, name.c_str()) != 0;
+		const auto is_default = exists && game::DB_IsXAssetDefault(type, name.c_str()) != 0;
+		return json{{"exists", exists}, {"default", is_default}};
+	}
+
 	json entities(const json& params)
 	{
 		const auto classname = params.value("classname", "");

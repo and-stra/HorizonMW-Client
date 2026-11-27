@@ -158,10 +158,19 @@ namespace stock_weapons
 				return nullptr;
 			}
 
+			// item 12: the 28 melee rows are new; with hmw_mwr_weapons 0 the CAC stays as before
+			const auto* mwr_weapons_dvar = game::Dvar_FindVar("hmw_mwr_weapons");
+			const bool mwr_weapons_on = !mwr_weapons_dvar || mwr_weapons_dvar->current.enabled;
+
 			std::vector<int> add;
 			std::vector<std::string> missing;
 			for (auto i = 0; i < row_count; ++i)
 			{
+				if (!mwr_weapons_on && std::strcmp(rows[i][2], "weapon_melee") == 0)
+				{
+					continue;
+				}
+
 				const std::string ref = rows[i][4];
 				if (is_stats && id_exists(original, rows[i][0]))
 				{

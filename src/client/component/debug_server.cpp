@@ -660,6 +660,11 @@ namespace debug_server
 				return on_pipeline(scheduler::pipeline::server, [] { return json{{"result", debug_api::players()}}; }, 10000ms);
 			}
 
+			if (method == "asset_exists")
+			{
+				return on_main_thread([params] { return json{{"result", debug_api::asset_exists(params)}}; }, 10000ms);
+			}
+
 			if (method == "entities")
 			{
 				return on_pipeline(scheduler::pipeline::server, [params] { return json{{"result", debug_api::entities(params)}}; }, 10000ms);

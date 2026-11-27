@@ -1,327 +1,431 @@
-[
-  {
-    "name": "infect",
-    "script": "infect",
-    "gametype": "infect",
-    "map": "mp_shipment",
-    "timeout_s": 300,
-    "dvars": {
-      "scr_infect_timelimit": "10",
-      "mwx_test_bots": 4
+﻿[
+    {
+        "name":  "infect",
+        "script":  "infect",
+        "gametype":  "infect",
+        "map":  "mp_shipment",
+        "timeout_s":  300,
+        "dvars":  {
+                      "scr_infect_timelimit":  "10",
+                      "mwx_test_bots":  4
+                  }
+    },
+    {
+        "name":  "infect_time",
+        "script":  "infect",
+        "gametype":  "infect",
+        "map":  "mp_shipment",
+        "timeout_s":  300,
+        "dvars":  {
+                      "mwx_test_time_end":  1,
+                      "scr_infect_timelimit":  "10",
+                      "mwx_test_bots":  3
+                  }
+    },
+    {
+        "name":  "war",
+        "script":  "war",
+        "gametype":  "war",
+        "map":  "mp_shipment",
+        "timeout_s":  300,
+        "dvars":  {
+                      "scr_war_scorelimit":  20,
+                      "scr_war_timelimit":  2,
+                      "mwx_test_bots":  4
+                  }
+    },
+    {
+        "name":  "dm",
+        "script":  "war",
+        "gametype":  "dm",
+        "map":  "mp_shipment",
+        "timeout_s":  300,
+        "dvars":  {
+                      "scr_dm_scorelimit":  20,
+                      "scr_dm_timelimit":  2,
+                      "mwx_test_bots":  4
+                  }
+    },
+    {
+        "name":  "sd",
+        "script":  "objective",
+        "gametype":  "sd",
+        "map":  "mp_crash",
+        "timeout_s":  300,
+        "dvars":  {
+                      "scr_sd_timelimit":  2,
+                      "mwx_test_bots":  4
+                  }
+    },
+    {
+        "name":  "dom",
+        "script":  "objective",
+        "gametype":  "dom",
+        "map":  "mp_crash",
+        "timeout_s":  300,
+        "dvars":  {
+                      "scr_dom_scorelimit":  50,
+                      "scr_dom_timelimit":  2,
+                      "mwx_test_bots":  4
+                  }
+    },
+    {
+        "name":  "dz",
+        "script":  "objective",
+        "gametype":  "dz",
+        "map":  "mp_crash",
+        "timeout_s":  300,
+        "dvars":  {
+                      "scr_dz_timelimit":  2,
+                      "mwx_test_bots":  4
+                  }
+    },
+    {
+        "name":  "slasher",
+        "script":  "slasher",
+        "gametype":  "slasher",
+        "map":  "mp_shipment",
+        "timeout_s":  300,
+        "dvars":  {
+                      "mwx_test_bots":  4
+                  }
+    },
+    {
+        "name":  "rpg",
+        "script":  "rpg",
+        "gametype":  "rpg",
+        "map":  "mp_shipment",
+        "timeout_s":  300,
+        "dvars":  {
+                      "mwx_test_bots":  4
+                  }
+    },
+    {
+        "name":  "oic",
+        "script":  "oic",
+        "gametype":  "oic",
+        "map":  "mp_shipment",
+        "timeout_s":  300,
+        "dvars":  {
+                      "mwx_test_bots":  4
+                  }
+    },
+    {
+        "name":  "aon",
+        "script":  "aon",
+        "gametype":  "aon",
+        "map":  "mp_shipment",
+        "timeout_s":  300,
+        "dvars":  {
+                      "mwx_test_bots":  3
+                  }
+    },
+    {
+        "name":  "cranked",
+        "script":  "cranked",
+        "gametype":  "cranked",
+        "map":  "mp_shipment",
+        "timeout_s":  300,
+        "dvars":  {
+                      "mwx_test_bots":  4
+                  }
+    },
+    {
+        "name":  "sas",
+        "script":  "sas",
+        "gametype":  "sas",
+        "map":  "mp_shipment",
+        "mod":  "mods/sticksandstones",
+        "timeout_s":  300,
+        "dvars":  {
+                      "mwx_test_bots":  3
+                  }
+    },
+    {
+        "name":  "infect_rust",
+        "script":  "infect",
+        "gametype":  "infect",
+        "map":  "mp_rust",
+        "timeout_s":  300,
+        "dvars":  {
+                      "scr_infect_timelimit":  "10",
+                      "mwx_test_bots":  4
+                  }
+    },
+    {
+        "name":  "ph",
+        "script":  "ph",
+        "gametype":  "ph",
+        "map":  "mp_crash",
+        "timeout_s":  300,
+        "dvars":  {
+                      "scr_ph_propHideTime":  "8",
+                      "mwx_test_bots":  4
+                  }
+    },
+    {
+        "name":  "ph_rust",
+        "script":  "ph",
+        "gametype":  "ph",
+        "map":  "mp_rust",
+        "timeout_s":  300,
+        "dvars":  {
+                      "scr_ph_propHideTime":  "8",
+                      "mwx_test_bots":  4
+                  }
+    },
+    {
+        "name":  "ph_terminal",
+        "script":  "ph",
+        "gametype":  "ph",
+        "map":  "mp_terminal",
+        "timeout_s":  300,
+        "dvars":  {
+                      "scr_ph_propHideTime":  "8",
+                      "mwx_test_bots":  4
+                  }
+    },
+    {
+        "name":  "mprops",
+        "script":  "mprops",
+        "gametype":  "mprops",
+        "map":  "mp_crash",
+        "timeout_s":  300,
+        "dvars":  {
+                      "scr_ph_propHideTime":  "8",
+                      "scr_ph_madpropsHideTime":  "8",
+                      "mwx_test_bots":  4
+                  }
+    },
+    {
+        "name":  "sharpshooter",
+        "script":  "sharpshooter",
+        "gametype":  "sharpshooter",
+        "map":  "mp_shipment",
+        "timeout_s":  300,
+        "dvars":  {
+                      "scr_sharpshooter_rotatetime":  "6",
+                      "mwx_test_bots":  4
+                  }
+    },
+    {
+        "name":  "reinforce",
+        "script":  "reinforce",
+        "gametype":  "reinforce",
+        "map":  "mp_crash",
+        "timeout_s":  300,
+        "dvars":  {
+                      "scr_reinforce_timelimit":  "3",
+                      "mwx_test_bots":  4
+                  }
+    },
+    {
+        "name":  "srescue",
+        "script":  "srescue",
+        "gametype":  "srescue",
+        "map":  "mp_crash",
+        "timeout_s":  300,
+        "dvars":  {
+                      "scr_srescue_timelimit":  "3",
+                      "mwx_test_bots":  4
+                  }
+    },
+    {
+        "name":  "mugger",
+        "script":  "mugger",
+        "gametype":  "mugger",
+        "map":  "mp_shipment",
+        "timeout_s":  300,
+        "dvars":  {
+                      "mwx_test_bots":  4
+                  }
+    },
+    {
+        "name":  "arena",
+        "script":  "arena",
+        "gametype":  "arena",
+        "map":  "mp_crash",
+        "timeout_s":  300,
+        "dvars":  {
+                      "scr_arena_flagtime":  "8",
+                      "scr_arena_timelimit":  "4",
+                      "mwx_test_bots":  4
+                  }
+    },
+    {
+        "name":  "ph_listen",
+        "script":  "ph",
+        "gametype":  "ph",
+        "map":  "mp_crash",
+        "timeout_s":  300,
+        "listen":  true,
+        "dvars":  {
+                      "scr_ph_propHideTime":  "8",
+                      "mwx_debug_gamemodes":  1,
+                      "mwx_test_bots":  4
+                  }
+    },
+    {
+        "name":  "ph_shipment",
+        "script":  "ph",
+        "gametype":  "ph",
+        "map":  "mp_shipment",
+        "timeout_s":  300,
+        "dvars":  {
+                      "scr_ph_propHideTime":  "8",
+                      "mwx_test_bots":  4
+                  }
+    },
+    {
+        "name":  "mode_reset",
+        "script":  "mode_reset",
+        "gametype":  "war",
+        "map":  "mp_crash",
+        "timeout_s":  300,
+        "listen":  true,
+        "dvars":  {
+                      "mwx_test_bots":  1
+                  }
+    },
+    {
+        "name":  "survival",
+        "script":  "survival",
+        "gametype":  "survival",
+        "map":  "mp_crash",
+        "timeout_s":  420,
+        "dvars":  {
+                      "mwx_show_survival":  1,
+                      "mwx_gsc_print":  1,
+                      "mwx_test_bots":  1
+                  }
+    },
+    {
+        "name":  "war_rust",
+        "script":  "war",
+        "gametype":  "war",
+        "map":  "mp_rust",
+        "timeout_s":  300,
+        "dvars":  {
+                      "scr_war_scorelimit":  20,
+                      "scr_war_timelimit":  2,
+                      "mwx_test_bots":  4
+                  }
+    },
+    {
+        "name":  "war_terrace",
+        "script":  "war",
+        "gametype":  "war",
+        "map":  "mp_terrace",
+        "timeout_s":  300,
+        "listen":  true,
+        "dvars":  {
+                      "scr_war_scorelimit":  20,
+                      "scr_war_timelimit":  2,
+                      "mwx_test_bots":  4
+                  }
+    },
+    {
+        "name":  "mwr_h1_g3",
+        "script":  "mwr_weapon",
+        "gametype":  "war",
+        "map":  "mp_crash",
+        "timeout_s":  300,
+        "listen":  true,
+        "dvars":  {
+                      "mwx_test_weapon":  "h1_g3",
+                      "mwx_test_weapon_class":  "primary",
+                      "mwx_test_bots":  1
+                  }
+    },
+    {
+        "name":  "mwr_h1_m14",
+        "script":  "mwr_weapon",
+        "gametype":  "war",
+        "map":  "mp_crash",
+        "timeout_s":  300,
+        "listen":  true,
+        "dvars":  {
+                      "mwx_test_weapon":  "h1_m14",
+                      "mwx_test_weapon_class":  "primary",
+                      "mwx_test_bots":  1
+                  }
+    },
+    {
+        "name":  "mwr_h1_mp44",
+        "script":  "mwr_weapon",
+        "gametype":  "war",
+        "map":  "mp_crash",
+        "timeout_s":  300,
+        "listen":  true,
+        "dvars":  {
+                      "mwx_test_weapon":  "h1_mp44",
+                      "mwx_test_weapon_class":  "primary",
+                      "mwx_test_bots":  1
+                  }
+    },
+    {
+        "name":  "mwr_h1_skorpion",
+        "script":  "mwr_weapon",
+        "gametype":  "war",
+        "map":  "mp_crash",
+        "timeout_s":  300,
+        "listen":  true,
+        "dvars":  {
+                      "mwx_test_weapon":  "h1_skorpion",
+                      "mwx_test_weapon_class":  "primary",
+                      "mwx_test_bots":  1
+                  }
+    },
+    {
+        "name":  "mwr_h1_m60e4",
+        "script":  "mwr_weapon",
+        "gametype":  "war",
+        "map":  "mp_crash",
+        "timeout_s":  300,
+        "listen":  true,
+        "dvars":  {
+                      "mwx_test_weapon":  "h1_m60e4",
+                      "mwx_test_weapon_class":  "primary",
+                      "mwx_test_bots":  1
+                  }
+    },
+    {
+        "name":  "mwr_h1_saw",
+        "script":  "mwr_weapon",
+        "gametype":  "war",
+        "map":  "mp_crash",
+        "timeout_s":  300,
+        "listen":  true,
+        "dvars":  {
+                      "mwx_test_weapon":  "h1_saw",
+                      "mwx_test_weapon_class":  "primary",
+                      "mwx_test_bots":  1
+                  }
+    },
+    {
+        "name":  "mwr_h1_dragunov",
+        "script":  "mwr_weapon",
+        "gametype":  "war",
+        "map":  "mp_crash",
+        "timeout_s":  300,
+        "listen":  true,
+        "dvars":  {
+                      "mwx_test_weapon":  "h1_dragunov",
+                      "mwx_test_weapon_class":  "primary",
+                      "mwx_test_bots":  1
+                  }
+    },
+    {
+        "name":  "mwr_h1_remington700",
+        "script":  "mwr_weapon",
+        "gametype":  "war",
+        "map":  "mp_crash",
+        "timeout_s":  300,
+        "listen":  true,
+        "dvars":  {
+                      "mwx_test_weapon":  "h1_remington700",
+                      "mwx_test_weapon_class":  "primary",
+                      "mwx_test_bots":  1
+                  }
     }
-  },
-  {
-    "name": "infect_time",
-    "script": "infect",
-    "gametype": "infect",
-    "map": "mp_shipment",
-    "timeout_s": 300,
-    "dvars": {
-      "mwx_test_time_end": 1,
-      "scr_infect_timelimit": "10",
-      "mwx_test_bots": 3
-    }
-  },
-  {
-    "name": "war",
-    "script": "war",
-    "gametype": "war",
-    "map": "mp_shipment",
-    "timeout_s": 300,
-    "dvars": {
-      "scr_war_scorelimit": 20,
-      "scr_war_timelimit": 2,
-      "mwx_test_bots": 4
-    }
-  },
-  {
-    "name": "dm",
-    "script": "war",
-    "gametype": "dm",
-    "map": "mp_shipment",
-    "timeout_s": 300,
-    "dvars": {
-      "scr_dm_scorelimit": 20,
-      "scr_dm_timelimit": 2,
-      "mwx_test_bots": 4
-    }
-  },
-  {
-    "name": "sd",
-    "script": "objective",
-    "gametype": "sd",
-    "map": "mp_crash",
-    "timeout_s": 300,
-    "dvars": {
-      "scr_sd_timelimit": 2,
-      "mwx_test_bots": 4
-    }
-  },
-  {
-    "name": "dom",
-    "script": "objective",
-    "gametype": "dom",
-    "map": "mp_crash",
-    "timeout_s": 300,
-    "dvars": {
-      "scr_dom_scorelimit": 50,
-      "scr_dom_timelimit": 2,
-      "mwx_test_bots": 4
-    }
-  },
-  {
-    "name": "dz",
-    "script": "objective",
-    "gametype": "dz",
-    "map": "mp_crash",
-    "timeout_s": 300,
-    "dvars": {
-      "scr_dz_timelimit": 2,
-      "mwx_test_bots": 4
-    }
-  },
-  {
-    "name": "slasher",
-    "script": "slasher",
-    "gametype": "slasher",
-    "map": "mp_shipment",
-    "timeout_s": 300,
-    "dvars": {
-      "mwx_test_bots": 4
-    }
-  },
-  {
-    "name": "rpg",
-    "script": "rpg",
-    "gametype": "rpg",
-    "map": "mp_shipment",
-    "timeout_s": 300,
-    "dvars": {
-      "mwx_test_bots": 4
-    }
-  },
-  {
-    "name": "oic",
-    "script": "oic",
-    "gametype": "oic",
-    "map": "mp_shipment",
-    "timeout_s": 300,
-    "dvars": {
-      "mwx_test_bots": 4
-    }
-  },
-  {
-    "name": "aon",
-    "script": "aon",
-    "gametype": "aon",
-    "map": "mp_shipment",
-    "timeout_s": 300,
-    "dvars": {
-      "mwx_test_bots": 3
-    }
-  },
-  {
-    "name": "cranked",
-    "script": "cranked",
-    "gametype": "cranked",
-    "map": "mp_shipment",
-    "timeout_s": 300,
-    "dvars": {
-      "mwx_test_bots": 4
-    }
-  },
-  {
-    "name": "sas",
-    "script": "sas",
-    "gametype": "sas",
-    "map": "mp_shipment",
-    "mod": "mods/sticksandstones",
-    "timeout_s": 300,
-    "dvars": {
-      "mwx_test_bots": 3
-    }
-  },
-  {
-    "name": "infect_rust",
-    "script": "infect",
-    "gametype": "infect",
-    "map": "mp_rust",
-    "timeout_s": 300,
-    "dvars": {
-      "scr_infect_timelimit": "10",
-      "mwx_test_bots": 4
-    }
-  },
-  {
-    "name": "ph",
-    "script": "ph",
-    "gametype": "ph",
-    "map": "mp_crash",
-    "timeout_s": 300,
-    "dvars": {
-      "scr_ph_propHideTime": "8",
-      "mwx_test_bots": 4
-    }
-  },
-  {
-    "name": "ph_rust",
-    "script": "ph",
-    "gametype": "ph",
-    "map": "mp_rust",
-    "timeout_s": 300,
-    "dvars": {
-      "scr_ph_propHideTime": "8",
-      "mwx_test_bots": 4
-    }
-  },
-  {
-    "name": "ph_terminal",
-    "script": "ph",
-    "gametype": "ph",
-    "map": "mp_terminal",
-    "timeout_s": 300,
-    "dvars": {
-      "scr_ph_propHideTime": "8",
-      "mwx_test_bots": 4
-    }
-  },
-  {
-    "name": "mprops",
-    "script": "mprops",
-    "gametype": "mprops",
-    "map": "mp_crash",
-    "timeout_s": 300,
-    "dvars": {
-      "scr_ph_propHideTime": "8",
-      "scr_ph_madpropsHideTime": "8",
-      "mwx_test_bots": 4
-    }
-  },
-  {
-    "name": "sharpshooter",
-    "script": "sharpshooter",
-    "gametype": "sharpshooter",
-    "map": "mp_shipment",
-    "timeout_s": 300,
-    "dvars": {
-      "scr_sharpshooter_rotatetime": "6",
-      "mwx_test_bots": 4
-    }
-  },
-  {
-    "name": "reinforce",
-    "script": "reinforce",
-    "gametype": "reinforce",
-    "map": "mp_crash",
-    "timeout_s": 300,
-    "dvars": {
-      "scr_reinforce_timelimit": "3",
-      "mwx_test_bots": 4
-    }
-  },
-  {
-    "name": "srescue",
-    "script": "srescue",
-    "gametype": "srescue",
-    "map": "mp_crash",
-    "timeout_s": 300,
-    "dvars": {
-      "scr_srescue_timelimit": "3",
-      "mwx_test_bots": 4
-    }
-  },
-  {
-    "name": "mugger",
-    "script": "mugger",
-    "gametype": "mugger",
-    "map": "mp_shipment",
-    "timeout_s": 300,
-    "dvars": {
-      "mwx_test_bots": 4
-    }
-  },
-  {
-    "name": "arena",
-    "script": "arena",
-    "gametype": "arena",
-    "map": "mp_crash",
-    "timeout_s": 300,
-    "dvars": {
-      "scr_arena_flagtime": "8",
-      "scr_arena_timelimit": "4",
-      "mwx_test_bots": 4
-    }
-  },
-  {
-    "name": "ph_listen",
-    "script": "ph",
-    "gametype": "ph",
-    "map": "mp_crash",
-    "timeout_s": 300,
-    "listen": true,
-    "dvars": {
-      "scr_ph_propHideTime": "8",
-      "mwx_debug_gamemodes": 1,
-      "mwx_test_bots": 4
-    }
-  },
-  {
-    "name": "ph_shipment",
-    "script": "ph",
-    "gametype": "ph",
-    "map": "mp_shipment",
-    "timeout_s": 300,
-    "dvars": {
-      "scr_ph_propHideTime": "8",
-      "mwx_test_bots": 4
-    }
-  },
-  {
-    "name": "mode_reset",
-    "script": "mode_reset",
-    "gametype": "war",
-    "map": "mp_crash",
-    "timeout_s": 300,
-    "listen": true,
-    "dvars": {
-      "mwx_test_bots": 1
-    }
-  },
-  {
-    "name": "survival",
-    "script": "survival",
-    "gametype": "survival",
-    "map": "mp_crash",
-    "timeout_s": 420,
-    "dvars": {
-      "mwx_show_survival": 1,
-      "mwx_gsc_print": 1,
-      "mwx_test_bots": 1
-    }
-  },
-  {
-    "name": "war_rust",
-    "script": "war",
-    "gametype": "war",
-    "map": "mp_rust",
-    "timeout_s": 300,
-    "dvars": {
-      "scr_war_scorelimit": 20,
-      "scr_war_timelimit": 2,
-      "mwx_test_bots": 4
-    }
-  },
-  {
-    "name": "war_terrace",
-    "script": "war",
-    "gametype": "war",
-    "map": "mp_terrace",
-    "timeout_s": 300,
-    "listen": true,
-    "dvars": {
-      "scr_war_scorelimit": 20,
-      "scr_war_timelimit": 2,
-      "mwx_test_bots": 4
-    }
-  }
 ]
