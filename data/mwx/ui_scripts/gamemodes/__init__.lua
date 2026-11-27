@@ -31,12 +31,6 @@ local function build_list()
         end
     end
 
-    -- R6: the survival prototype is hidden unless mwx_show_survival is 1
-    local ok, show = pcall(function() return Engine.GetDvarString("mwx_show_survival") end)
-    if ok and show == "1" then
-        table.insert(list, "survival")
-    end
-
     return list
 end
 

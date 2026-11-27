@@ -327,7 +327,7 @@ return found
                 if ($result.ui_gametype -ne $entry.ref) { $failures += "$label : ui_gametype at start is '$($result.ui_gametype)'" }
                 if ($result.loadscreen -ne $entry.ref) { $failures += "$label : loading screen name is '$($result.loadscreen)'" }
 
-                $expectMode = if (@("ph", "mprops", "slasher", "rpg", "survival") -contains $entry.ref) { $entry.ref } else { "" }
+                $expectMode = if (@("ph", "mprops", "slasher", "rpg") -contains $entry.ref) { $entry.ref } else { "" }
                 if ("$($result.mwx_gamemode)" -ne $expectMode) { $failures += "$label : mwx_gamemode is '$($result.mwx_gamemode)', expected '$expectMode'" }
 
                 Open-PrivateLobby $port

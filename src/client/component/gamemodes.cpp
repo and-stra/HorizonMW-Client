@@ -65,8 +65,6 @@ namespace gamemodes
 			{"srescue", "sd", "MWX_GAMETYPE_SRESCUE", "MWX_GAMETYPE_SRESCUE_DESC"},
 			{"mugger", "dm", "MWX_GAMETYPE_MUGGER", "MWX_GAMETYPE_MUGGER_DESC"},
 			{"arena", "war", "MWX_GAMETYPE_ARENA", "MWX_GAMETYPE_ARENA_DESC"},
-			// R6: survival prototype, hidden unless mwx_show_survival is 1
-			{"survival", "war", "MWX_GAMETYPE_SURVIVAL", "MWX_GAMETYPE_SURVIVAL_DESC", "0"},
 			// Sticks and Stones: native gametype (part C). It used to be the mods/sticksandstones
 			// PoC; the mod is gone and the crossbow comes from hmw_aw_weapons.ff.
 			{"sas", "dm", "MWX_GAMETYPE_SAS", "MWX_GAMETYPE_SAS_DESC", "0"},
@@ -104,7 +102,6 @@ namespace gamemodes
 			{"srescue", "Rounds, one life. A dead player drops a tag: a teammate revives by taking it, an enemy confirms the kill. Eliminate the enemy team."},
 			{"mugger", "Free-for-all. Kills drop tags: grab them to bank them. Melee kills steal the victim's banked tags. 30 tags."},
 			{"arena", "Rounds, one life. A neutral flag appears when the clock runs down or a team is down to one: capture it to win the round."},
-			{"survival", "Prototype: hold out against waves of agents. (mwx_show_survival 1)"},
 		};
 
 		// Item 6: HMW's frontend localization table has no stock OBJECTIVES_* entries (they load
@@ -655,26 +652,6 @@ namespace gamemodes
 			set_rule_bool("g_oldschool", true);
 		}
 
-		// B5a: the exe reads "scr_<g_gametype>_maxagents" for the agent pool (format string
-		// scr_%s_maxagents; the getter caps at 24), so survival needs scr_survival_maxagents before
-		// the map load. The R6 spike only set scr_horde/scr_default and at runtime, too late. The
-		// dvar is a *string* (the exe does atoi on current.string).
-		void apply_survival_dvars()
-		{
-			auto slots = 24;
-			if (const auto* dvar = game::Dvar_FindVar("mwx_survival_maxagents"))
-			{
-				slots = std::clamp(dvar->current.integer, 0, 24);
-			}
-
-			const auto text = std::to_string(slots);
-
-			remember_global("scr_survival_maxagents");
-			set_rule_string("scr_survival_maxagents", text.data());
-			remember_global("scr_default_maxagents");
-			set_rule_string("scr_default_maxagents", text.data());
-		}
-
 		void reset_mode_dvars()
 		{
 			const auto* previous = game::Dvar_FindVar("mwx_gamemode");
@@ -698,14 +675,6 @@ namespace gamemodes
 	{
 		if (!gametype)
 		{
-			return;
-		}
-
-		// B5a: survival is an extra gametype (not in the party `modes` table); its agent pool is
-		// read from scr_survival_maxagents by the engine's getmaxagents() during the map load.
-		if (std::strcmp(gametype, "survival") == 0)
-		{
-			apply_survival_dvars();
 			return;
 		}
 
@@ -733,10 +702,6 @@ namespace gamemodes
 			else if (std::strcmp(mode->ref, "rpg") == 0)
 			{
 				apply_rpg_dvars();
-			}
-			else if (std::strcmp(mode->ref, "survival") == 0)
-			{
-				apply_survival_dvars();
 			}
 
 			return;
@@ -961,9 +926,6 @@ namespace gamemodes
 			localized_strings::override("MWX_GAMETYPE_ARENA", "Arena");
 			localized_strings::override("MWX_GAMETYPE_ARENA_DESC",
 				"Rounds with one life. A neutral flag appears late in the round or when a team is down to one; capture it to win.");
-			localized_strings::override("MWX_GAMETYPE_SURVIVAL", "Survival (prototype)");
-			localized_strings::override("MWX_GAMETYPE_SURVIVAL_DESC",
-				"Prototype for the survival spike: waves of H1 agents on mp_crash. Hidden unless mwx_show_survival 1.");
 			localized_strings::override("MWX_GAMETYPE_SAS", "Sticks and Stones");
 			localized_strings::override("MWX_GAMETYPE_SAS_DESC",
 				"Free-for-all with the crossbow, a knife and a throwing knife. A throwing knife kill or a suicide bankrupts the victim.");
@@ -997,7 +959,6 @@ namespace gamemodes
 			localized_strings::override("MWX_GAMETYPE_SRESCUE_CAPS", "SEARCH & RESCUE");
 			localized_strings::override("MWX_GAMETYPE_MUGGER_CAPS", "MUGGER");
 			localized_strings::override("MWX_GAMETYPE_ARENA_CAPS", "ARENA");
-			localized_strings::override("MWX_GAMETYPE_SURVIVAL_CAPS", "SURVIVAL");
 
 			// loadscreen names ("@" .. upper(ui_gametype))
 			localized_strings::override("PH", "PROP HUNT");
@@ -1012,7 +973,6 @@ namespace gamemodes
 			localized_strings::override("SRESCUE", "SEARCH & RESCUE");
 			localized_strings::override("MUGGER", "MUGGER");
 			localized_strings::override("ARENA", "ARENA");
-			localized_strings::override("SURVIVAL", "SURVIVAL");
 
 			// HUD and splash strings of the One in the Chamber / All or Nothing / Cranked scripts
 			localized_strings::override("MWX_OIC_LIVES_3", "LIVES: 3");
@@ -1023,7 +983,6 @@ namespace gamemodes
 			localized_strings::override("MWX_AON_BONUS", "ALL OR NOTHING!");
 			localized_strings::override("MWX_CRANKED", "CRANKED!");
 			localized_strings::override("MWX_SHRP_WEAPON", "WEAPON");
-			localized_strings::override("MWX_SURVIVAL_WAVE", "WAVE");
 			localized_strings::override("MWX_ARENA_FLAG_SPAWNED", "ARENA FLAG SPAWNED");
 
 			// objective strings: the UI builds OBJECTIVES_<ref>(_SCORE|_HINT) with the ref as it is
@@ -1079,10 +1038,6 @@ namespace gamemodes
 				dvars::register_bool("mwx_gsc_print", false, game::DVAR_FLAG_NONE, "Print GSC print()/println() output to the console (release builds)");
 				dvars::register_bool("mwx_debug_gamemodes", false, game::DVAR_FLAG_NONE,
 					"Log gamemode dvar writes and the loading screen menu");
-				dvars::register_bool("mwx_show_survival", false, game::DVAR_FLAG_NONE,
-					"Show the Survival prototype in the Party list");
-				dvars::register_int("mwx_survival_maxagents", 24, 0, 24, game::DVAR_FLAG_NONE,
-					"Agent slots the survival prototype requests (engine cap 24)");
 			}, scheduler::pipeline::main);
 		}
 	};
