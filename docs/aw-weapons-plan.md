@@ -270,3 +270,45 @@ larger set needs a different storage scheme (a 16 bit class member is a DDL layo
 needs its own crash test). The extended enum is **identical on every client of the same build**;
 a class saved with a ported weapon is not readable by an older client - note it in the
 release-prep content check.
+
+## AW preview in the lobby (27 Nov 2026)
+
+The CAC weapon preview is virtual-lobby GSC (maps/mp/_vl_cac.gsc -> setcacweapon ->
+uildweaponnamecac -> maps\mp\gametypes\_class::buildweaponname), not LUI. Our
+w_buildweaponname only ran in a match: the loader loads scripts/mp/ outside the virtual
+lobby and scripts/vlobby_patches/ inside it, while scripts/mp_patches/ loads in both.
+HMW's own uildweaponname has no return for iw5_* refs, so the preview name was undefined
+and HMW's streamcacweaponwait waited forever (empty preview, no error).
+
+Fix: data/mwx/scripts/mp_patches/aw_weapons.gsc (moved from scripts/mp/) installs the
+isvalidsecondary / uildweaponname hooks in both contexts. The lobby calls it as
+uildweaponname(ref, attachkit, furniturekit, camo, reticle, emblem); the attachkit name is
+not a real attachment, so the attachment lookup rejects it and the name stays <ref>_mp.
+
+Verified: M1 Garand, MP40 and crossbow previews render in the lobby CAC
+(mwx-debug\aw-weapons\preview-m1-vlobby-fix2.png, preview-mp40.png, preview-crossbow2.png).
+The M1/MP40 previews still look washed out (the crossbow does not): the AW world-model
+materials (m/mtl_m1garand_*, m/mtl_ger_mp40_base) do not react to the CAC preview lighting
+like HMW's materials do. Pick/name/thumbnail are correct; the material look stays on the D
+polish list.
+
+## Combat knife (27 Nov 2026)
+
+The AW knife has no per-weapon model zone (mp_vm_tacticalknife_tr does not exist): its models
+and surfaces live in AW's base common_mp. The earlier common_mp dump was defs-only (materials,
+878 xmodels, no xsurface, no images). The h1-target dump of that zone can emit the surfaces:
+
+    dumpzone h1 common_mp xmodelsurfs     # 545 .xsb -> dump\common_mp\xsurface
+    dumpzone h1 common_mp image           # textures (not run yet)
+
+Knife assets (single LOD each): m_mp_tactical_knife.xmb +
+m_mp_tactical_knife_lodvm101.xsb, 
+pc_mp_tactical_knife.xmb +
+
+pc_mp_tactical_knife_lod0101.xsb; materials m/mtl_mp_tactical_knife (and the
+m/mtl_variable_grenade_lethal the view model names), all copied into
+GAME\zonetool\hmw_aw_weapons and listed in the zone CSV after the MP40 block.
+The def weapons/iw5_combatknife_mp.json (converted, anims from h1_meleebayonet) is in the
+source; it was never listed in the CSV before, which is why the weapon asset did not exist.
+Textures: the material uses mp_tactical_knife_col/nml/spc/occ (AW images, not dumped yet) and
+the shared cloak_detail3 / ~envbrdflut_ggx_16-rg (HMW has those - reference, do not copy).
