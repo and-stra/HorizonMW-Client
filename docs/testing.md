@@ -248,3 +248,17 @@ the clock itself is the thing under test, or sets a state field to its last step
 
 See `C:\Games\cod-hwm\mwx-debug\autonomous\report.md` for the results of the first full run and
 for the bugs it found.
+
+### gsc_eval limits
+
+gsc_eval compiles the code as a standalone script (mwx/tests/_eval_N). A bare function
+call as a statement must resolve at link time, so:
+
+- eturn <expr>; is the way to read a value (the wrapper turns it into mwx_result(<expr>)).
+- println is not a builtin in that context ("couldn't resolve builtin method id"); use
+  print/iprintln only in real scripts, not in eval code.
+- Helper functions from the game's common scripts (common_scripts\utility::...) fail to link
+  ("unknown function"); call only functions of the loaded gametype scripts, or pass literal
+  values (e.g. the stats group as a number).
+- Do not call _persistence::writebufferedstats() from eval code: it stalled the test client
+  (main thread busy, debug port stopped answering).
