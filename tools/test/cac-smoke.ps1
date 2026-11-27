@@ -15,6 +15,8 @@ param(
     [int]$Port = 27260,
     [int]$Limit = 0,
     [int]$Skip = 0,
+    [int]$Stress = 0,
+    [switch]$StressOnly,
     [switch]$KeepOpen,
     [string]$ShotDir = ""
 )
@@ -166,6 +168,7 @@ try {
     Start-Sleep -Seconds 3
     $results += [pscustomobject]@{ case = "camos"; ok = $true; detail = (Shot "cac-camos") }
     Rpc "ui_back" @{} 15 | Out-Null; Start-Sleep -Milliseconds 1000
+    if ($StressOnly) { $cases = @() }
     foreach ($case in $cases) {
         $label = "$($case.ref) [$($case.class)]"
         try {
@@ -258,6 +261,26 @@ try {
             if ((Menu) -ne "CacLoadoutEditorMenu") { Rpc "ui_back" @{} 15 | Out-Null; Start-Sleep -Milliseconds 600 }
         }
     }
+    if ($Stress -gt 0) {
+        # F4: HMW's CacDetails builds a new menu (and its animation states) on every open; the
+        # engine's state pool fills after ~55 opens in one session (stock fails at 56, our build at
+        # 55 - not caused by our rows). Keep a session under that: 40 open/close cycles total.
+        $stressFailed = ""
+        for ($k = 1; $k -le $Stress; $k++) {
+            $catId = if (($k % 2) -eq 1) { "CacLoadoutEditorMenu_optionsList_Primary_button_0" } else { "CacLoadoutEditorMenu_optionsList_Secondary_button_0" }
+            Ensure-Editor
+            Wait-Element $catId 15 | Out-Null
+            Rpc "ui_click" @{ id = $catId; expect_timeout_ms = 20000 } 30 | Out-Null
+            Start-Sleep -Milliseconds 400
+            if ((Menu) -ne "CacDetails") { $stressFailed = "open ${k}: menu=$(Menu)"; break }
+            Rpc "ui_back" @{} 15 | Out-Null
+            Start-Sleep -Milliseconds 400
+            if ((Menu) -ne "CacLoadoutEditorMenu") { $stressFailed = "back ${k}: menu=$(Menu)"; break }
+        }
+        if ($stressFailed) { $failed = $true }
+        $results += [pscustomobject]@{ case = "stress $Stress list opens"; ok = ($stressFailed -eq ""); detail = $stressFailed }
+    }
+
     $lines = @((Rpc "console" @{ lines = 400 } 20).result)
     $errs = @($lines | Where-Object { $_ -match 'Error processing event|LUA ERROR|\[string "' })
     if ($errs.Count -gt 0) {
@@ -275,6 +298,7 @@ $results | ForEach-Object { "{0}  {1}  {2}" -f $(if ($_.ok) { "PASS" } else { "F
 $passed = @($results | Where-Object { $_.ok }).Count
 "cac-smoke: $passed/$($results.Count) passed"
 if ($failed) { exit 1 }
+
 
 
 
