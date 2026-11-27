@@ -436,9 +436,14 @@ namespace patches
 				"hmw_smg",
 				"hmw_shotgun",
 				"hmw_rangers",
-				"hmw_nightshade",
-				"hmw_dlc_factions",
-				"hmw_dlc_killstreaks"
+				// (hmw_nightshade, hmw_dlc_factions and hmw_dlc_killstreaks are not loaded at
+				// startup: HMW itself does not load them either, and a 10th startup zone makes
+				// the map's >2 GB imagefile load hang - docs/zone-load-stall.md)
+				// ported AW weapons (W1: the crossbow), loaded after every HMW zone and before the
+				// mod zone so it can use HMW hands/attachments/anims
+				"hmw_aw_weapons",
+				// ported MWR DLC + melee weapons (B); 8 startup zones in total
+				"hmw_mwr_weapons"
 			};
 
 			// MWX: the loaded mod's zone last, so it can reference HMW's assets (hands models, anims, ...) and
@@ -454,6 +459,7 @@ namespace patches
 
 			return utils::hook::invoke<void*>(0x2A5540_b);
 		}
+
 	}
 
 	class component final : public component_interface

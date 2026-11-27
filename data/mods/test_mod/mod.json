@@ -1,0 +1,6 @@
+{
+    "name": "MWX Test Mod",
+    "description": "Minimal mod for the load/swap tests: one script, no weapons or gametypes.",
+    "author": "MWX",
+    "version": "0.1"
+}

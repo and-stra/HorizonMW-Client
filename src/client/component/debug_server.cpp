@@ -3,8 +3,10 @@
 
 #include "command.hpp"
 #include "console.hpp"
+#include "ddl_weapon_enum.hpp"
 #include "debug_api.hpp"
 #include "debug_server.hpp"
+#include "exception.hpp"
 #include "party.hpp"
 #include "scheduler.hpp"
 #include "screenshot.hpp"
@@ -404,6 +406,13 @@ namespace debug_server
 				return json{{"result", result}};
 			}
 
+			if (method == "stacks")
+			{
+				// runs on the debug server thread, so it also answers while the main thread is
+				// stuck in a zone/imagefile load (see docs/zone-load-stall.md)
+				return json{{"result", exception::get_thread_stacks(GetCurrentProcessId())}};
+			}
+
 			if (method == "load_times")
 			{
 				std::string data{};
@@ -663,6 +672,16 @@ namespace debug_server
 			if (method == "asset_exists")
 			{
 				return on_main_thread([params] { return json{{"result", debug_api::asset_exists(params)}}; }, 10000ms);
+			}
+
+			if (method == "ddl_dump")
+			{
+				return on_main_thread([params] { return json{{"result", debug_api::ddl_dump(params)}}; }, 30000ms);
+			}
+
+			if (method == "ddl_extend")
+			{
+				return on_main_thread([] { return json{{"result", ddl_weapon_enum::extend()}}; }, 30000ms);
 			}
 
 			if (method == "entities")

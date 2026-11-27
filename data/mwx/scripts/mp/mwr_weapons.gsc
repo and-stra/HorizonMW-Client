@@ -60,6 +60,9 @@ mwx_isvalidprimary(weapon, flag)
         case "h2_aug":
         case "h2_m240":
         case "h2_inspect":
+        // AW pilot (D): M1 Garand (iw5_dlcgun23) and MP40 (iw5_dlcgun18)
+        case "iw5_dlcgun23":
+        case "iw5_dlcgun18":
         // MWR DLC (11, duplicates excluded)
         case "h1_xmlar":
         case "h1_aprast":
@@ -124,6 +127,9 @@ mwx_isvalidsecondary(weapon, flag, isdefault)
         case "h1_augpst":
         // the MWR launcher
         case "h1_rpg":
+        // item 13: the ported AW crossbow (the AW script also adds it; this whitelist is the one
+        // that survives both replacefunc calls, so it must know the AW refs too)
+        case "iw5_exocrossbow":
             return 1;
         default:
             return 0;
@@ -141,6 +147,8 @@ mwx_isvalidmeleeweapon(weapon, flag)
         case "specialty_copycat":
         case "specialty_finalstand":
         case "specialty_grenadepulldeath":
+        // AW pilot (D): combat knife
+        case "iw5_combatknife":
         // MWR DLC melee (CQB Bayonet once: h1_meleebayonet)
         case "h1_meleeapr1":
         case "h1_meleeapr2":

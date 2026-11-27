@@ -792,8 +792,87 @@ namespace debug_api
 		return json{{"exists", exists}, {"default", is_default}};
 	}
 
-	json entities(const json& params)
+	json ddl_dump(const json& params)
 	{
+		const auto with_members = params.value("members", true);
+		const auto only_enum = params.value("enum", "");
+
+		game::DDLContext context{};
+		const auto stats_source = game::LiveStorage_GetActiveStatsSource(0);
+		if (!game::CL_PlayerData_GetDDLBuffer(&context, 0, 0, stats_source) || !context.def)
+		{
+			return json{{"error", "no playerdata ddl"}};
+		}
+
+		json defs = json::array();
+		for (const game::DDLDef* def = context.def; def != nullptr; def = def->next)
+		{
+			json entry{};
+			entry["name"] = def->name != nullptr ? def->name : "";
+			entry["version"] = def->version;
+
+			json structs = json::array();
+			for (auto s = 0; s < def->structCount; ++s)
+			{
+				const auto& structure = def->structList[s];
+				json sj{};
+				sj["name"] = structure.name != nullptr ? structure.name : "";
+				json members = json::array();
+				if (with_members)
+				{
+					for (auto m = 0; m < structure.memberCount; ++m)
+					{
+						const auto& member = structure.members[m];
+						json mj{};
+						mj["name"] = member.name != nullptr ? member.name : "";
+						mj["type"] = member.type;
+						mj["array"] = member.arraySize;
+						mj["bits"] = member.bitSize;
+						mj["enum"] = member.type == game::DDL_ENUM_TYPE ? member.enumIndex : -1;
+						members.push_back(std::move(mj));
+					}
+				}
+				sj["members"] = std::move(members);
+				structs.push_back(std::move(sj));
+			}
+			entry["structs"] = std::move(structs);
+
+			json enums = json::array();
+			for (auto e = 0; e < def->enumCount; ++e)
+			{
+				const auto& enumeration = def->enumList[e];
+				const std::string enum_name = enumeration.name != nullptr ? enumeration.name : "";
+				if (!only_enum.empty() && enum_name != only_enum)
+				{
+					continue;
+				}
+				json members = json::array();
+				for (auto m = 0; m < enumeration.memberCount; ++m)
+				{
+					const auto* member = enumeration.members[m];
+					members.push_back(member != nullptr ? member : "");
+				}
+				enums.push_back(json{{"name", enum_name}, {"members", std::move(members)},
+					{"hash_count", enumeration.hashTable.count}, {"hash_max", enumeration.hashTable.max},
+					{"hashes", [&enumeration]
+					{
+						json hashes = json::array();
+						for (auto i = 0; i < enumeration.hashTable.max && i < 400; ++i)
+						{
+							const auto& entry = enumeration.hashTable.list[i];
+							hashes.push_back(json::array({entry.hash, entry.index}));
+						}
+						return hashes;
+					}()}});
+			}
+			entry["enums"] = std::move(enums);
+			defs.push_back(std::move(entry));
+		}
+
+		return json{{"defs", std::move(defs)}};
+	}
+
+	json entities(const json& params)	{
 		const auto classname = params.value("classname", "");
 		const auto targetname = params.value("targetname", "");
 		const auto limit = std::clamp(params.value("limit", 64), 1, 1024);

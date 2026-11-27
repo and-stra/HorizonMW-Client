@@ -183,3 +183,150 @@ Task: inventory Advanced Warfare weapons. Change no game files.
 4. Report: exit code, the number of lines starting with "weapon," and "attachment,", and the last 10 lines
    of the output. Stop there.
 ```
+
+## Pilot recipe (27 Nov 2026) - M1 Garand, MP40
+
+The pilot lives in **hmw_aw_weapons.ff** with the crossbow; no new startup zone (the startup list
+is 8 zones: HMW's 6 + hmw_aw_weapons + hmw_mwr_weapons; a 10th zone hangs the map load, see
+zone-load-stall.md).
+
+1. **Weapon JSON**: zonetool.exe -unbuffered-io, dumpzone h2 patch_common_mp (the AW tool in
+   the AW folder) writes the S1 weapon JSONs under AW\dump\patch_common_mp\weapons\; convert with
+   	ools/aw-weapon-port/s1_weapon_to_h1.py <in> <out>.
+2. **Animation source**: the S1 dumper does not write xanim assets for the H1 target (checked:
+   dumpzone h1 patch_common_mp produced no .xab; only HMW's own anims appear in a build). Use
+   the closest MWR weapon's anim table:
+   	ools/aw-weapon-port/use_hmw_anims.py <weapon.json> <refs\dumps\patch_common_mp\weapons\h1_*.json>.
+   Pilot mapping: M1 Garand -> h1_m14, MP40 -> h1_mp44, combat knife -> h1_meleebayonet. The H1
+   build pulls the donor's xanims from the HMW zones as dependencies.
+3. **Models**: dumpzone h1 mp_vm_<weapon>_tr and mp_wm_<weapon>_tr (e.g. mp_vm_m1garand_tr)
+   write xmodel/xsurface into AW\dump\weapon_models; merge that folder into
+   GAME\zonetool\hmw_aw_weapons (robocopy /E). The zone CSV lists the view/world models
+   explicitly so a missing model fails the build.
+4. **Materials/techsets/images**: the AW materials live in AW's `patch_common_mp` (not in the MWR
+   dump and not in AW's `common_mp`): `m/mtl_m1garand_*`, `m/mtl_ger_mp40_base`.
+   - `dumpzone h1 patch_common_mp material` writes the materials + techsets (H1 form) into
+     `AW\dump\patch_common_mp`. The `h2` target writes `.h2Image` images the H1 build cannot use -
+     use the **h1** target only.
+   - `dumpzone h1 patch_common_mp image` writes `images/*.h1Image` and
+     `streamed_images/*.h1Image` + `*_streamN.pixels` (~6.7 GB for all weapons; it needs the
+     temporary disk, clean it up after the collection). Each material JSON lists its images in
+     `textureTable`; `mwx-debug\aw-weapons\collect_pilot_images.py` copies only those (26 images for
+     the pilot: `tex_m1garand_*`, `ger_mp40_*`, `shared_rail_adapter_01_*`) **plus their
+     `_streamN.pixels` payloads** into the source's `images`/`streamed_images`. Copying only the
+     `.h1Image` header crashes the game at startup with
+     `Create2DTexture(... 128, 128, 0, <fmt>) failed` - the pixels are required.
+   - The H1 build is **fatal on a missing techset** (a missing material is only a warning + default).
+     The S1-dumped material techset names do not all exist in the dump (e.g.
+     `..._dc1dn1ds1dg1_r0c0n0sd0om0_nfwpf_ctq_s1`); map them to an existing techset
+     (`m_l_sm_lmpb_r0c0n0sd0om0_nfwpf_ctq_s1` is in the crossbow source) by editing
+     `techniqueSet->name` in the copied material JSONs.
+   - Do not bulk-copy all AW materials into the source: one unrelated material with a missing
+     techset (`mtl_player_emblem`) aborts the whole build.
+   - Missing HUD icons (`hud_icon_mp40`, `hud_icon_m1_garand`) and the shared mag material
+     (`mtl_mag_dual_clip_base`) are warnings; port the icon images separately if they matter.
+5. **Zone**: GAME\zone_source\hmw_aw_weapons.csv lists the weapons + models; build with
+   mwx-debug\mwr-weapons\build-zone.ps1 -Zone hmw_aw_weapons (it backs up the old .ff/.pak).
+6. **CAC/name/whitelist**: row in stock_weapons_data.hpp (helper mwx-debug\aw-weapons\add_pilot_rows.py),
+   real name/description in src/client/component/aw_weapons.cpp, ref added to
+   data/mwx/scripts/mp/mwr_weapons.gsc (isvalidprimary / isvalidsecondary / isvalidmeleeweapon).
+7. **Test**: data/mwx/tests/aw_pilot.gsc (generic w_weapon body) with mwx_aw_weapon,
+   mwx_aw_class; melee has its own w_knife.gsc (hasweapon, not switchtoweapon). 3x green.
+
+## CAC storage: the playerdata Weapon enum (27 Nov 2026)
+
+Symptom: a ported weapon was listed in Create-a-Class, but picking it closed the list and the
+class stayed on the old weapon ("selecting does nothing"). It was not the zone and not the
+validator: Engine.SetPlayerData(controller, group, "customClasses", <slot>, "weaponSetups",
+<0|1>, "weapon", <name>) returns **false** for any name that is not a member of the playerdata
+mp/playerdata.ddl enum **Weapon** (228 members). The class slot is an **8 bit** enum index.
+
+What the enum is:
+
+- CustomClass.weaponSetups[].weapon (and meleeWeapon) = 8 bit index into that enum;
+  pc ddl_dump prints the members and the hash table.
+- 228 of 256 indices are used. **51 of them repeat a name that already has an earlier index**
+  (
+one x3, camo016..camo062 x2, gold/golddiamond x2, ...). A repeated index is
+  unreachable through the name hash (lookups resolve to the first occurrence), so it is a free
+  slot that can carry a ported name.
+- The remaining names are appended at indices 228..255 (the 8 bit limit is 256 members).
+- The enum hash table is a **compact array of count entries sorted by hash**; the hash is a
+  lowercase x31 hash (h = h*31 + tolower(c), start 0) and lookup is a binary search. New names
+  are inserted in sorted position (src/client/component/ddl_weapon_enum.cpp). An earlier
+  attempt guessed open addressing (hash % max) and broke every name lookup in the enum -
+  do not touch the table without a binary-search layout.
+
+Implementation: mwx_cac_enum (default 1) polls the DDL on the main pipeline and extends it at
+the first lobby (the DDL does not exist at the main menu). pc ddl_extend runs it once and
+returns {enum_count, free_slots, appended, capacity, hash, added, present, skipped};
+pc ddl_dump shows the result. Verified: after the extension Engine.SetPlayerData accepts
+h1_m4, h1_ak47, h1_usp, iw5_dlcgun23/18, iw5_exocrossbow.
+
+Budget and release-prep note: today 68 ported names (MWR DLC guns, MWR melee, AW) compete for
+79 slots (51 duplicate indices + 28 appended). skipped in the report lists names that did not
+fit (the tail of the melee list today). Keep the skipped count at 0 when adding weapons; a
+larger set needs a different storage scheme (a 16 bit class member is a DDL layout change and
+needs its own crash test). The extended enum is **identical on every client of the same build**;
+a class saved with a ported weapon is not readable by an older client - note it in the
+release-prep content check.
+
+## AW preview in the lobby (27 Nov 2026)
+
+The CAC weapon preview is virtual-lobby GSC (maps/mp/_vl_cac.gsc -> setcacweapon ->
+uildweaponnamecac -> maps\mp\gametypes\_class::buildweaponname), not LUI. Our
+w_buildweaponname only ran in a match: the loader loads scripts/mp/ outside the virtual
+lobby and scripts/vlobby_patches/ inside it, while scripts/mp_patches/ loads in both.
+HMW's own uildweaponname has no return for iw5_* refs, so the preview name was undefined
+and HMW's streamcacweaponwait waited forever (empty preview, no error).
+
+Fix: data/mwx/scripts/mp_patches/aw_weapons.gsc (moved from scripts/mp/) installs the
+isvalidsecondary / uildweaponname hooks in both contexts. The lobby calls it as
+uildweaponname(ref, attachkit, furniturekit, camo, reticle, emblem); the attachkit name is
+not a real attachment, so the attachment lookup rejects it and the name stays <ref>_mp.
+
+Verified: M1 Garand, MP40 and crossbow previews render in the lobby CAC
+(mwx-debug\aw-weapons\preview-m1-vlobby-fix2.png, preview-mp40.png, preview-crossbow2.png).
+The M1/MP40 previews still look washed out (the crossbow does not): the AW world-model
+materials (m/mtl_m1garand_*, m/mtl_ger_mp40_base) do not react to the CAC preview lighting
+like HMW's materials do. Pick/name/thumbnail are correct; the material look stays on the D
+polish list.
+
+## Combat knife (27 Nov 2026)
+
+The AW knife has no per-weapon model zone (mp_vm_tacticalknife_tr does not exist): its models
+and surfaces live in AW's base common_mp. The earlier common_mp dump was defs-only (materials,
+878 xmodels, no xsurface, no images). The h1-target dump of that zone can emit the surfaces:
+
+    dumpzone h1 common_mp xmodelsurfs     # 545 .xsb -> dump\common_mp\xsurface
+    dumpzone h1 common_mp image           # textures (not run yet)
+
+Knife assets (single LOD each): m_mp_tactical_knife.xmb +
+m_mp_tactical_knife_lodvm101.xsb, 
+pc_mp_tactical_knife.xmb +
+
+pc_mp_tactical_knife_lod0101.xsb; materials m/mtl_mp_tactical_knife (and the
+m/mtl_variable_grenade_lethal the view model names), all copied into
+GAME\zonetool\hmw_aw_weapons and listed in the zone CSV after the MP40 block.
+The def weapons/iw5_combatknife_mp.json (converted, anims from h1_meleebayonet) is in the
+source; it was never listed in the CSV before, which is why the weapon asset did not exist.
+Textures: the material uses mp_tactical_knife_col/nml/spc/occ (AW images, not dumped yet) and
+the shared cloak_detail3 / ~envbrdflut_ggx_16-rg (HMW has those - reference, do not copy).
+
+Update, same day: the knife is **in the zone and works**. The asset-type token is xmodelsurfs
+(not xsurface; the latter is not an asset type name and silently dumps nothing), and the weapon
+was never listed in the zone CSV - both fixed. Build: 848 assets, zone-check green, w_knife
+5/5. Textures: a full dumpzone h1 common_mp image run produced 1.3k images + 21k streamed files
+(7.3 GB) but **none of the knife's** (mp_tactical_knife_col/nml, ~mp_tactical_knife_occ/spc);
+only ttachment_tactical_knife - they live in AW's patch_common_mp (the 6.7 GB dump that was
+deleted after the pilot). Until that dump is repeated for those 8 images the knife renders with
+default images. Texture polish item, like the washed-out M1/MP40 previews.
+
+Icons (1.8.3): the ported weapons have no CAC list icon, kill-feed icon or HUD icon of their own
+(the M1 Garand and MP40 still warn about `hud_icon_mp40`/`hud_icon_m1_garand`); the CAC row and
+the big preview fall back to the world model, which is why the list rows show the actual gun. The
+renderer in `tools/weapon-icons/` turns the world model into MWR-style list/header/HUD PNGs through
+hmw-workbench (see `docs/weapon-icons.md`); wiring them into the zone waits on the workbench side
+(hide the orbit grid/axes, add `zonetool\hmw_aw_weapons` to its asset roots) and a PNG ->
+`.h1Image` + `_streamN.pixels` writer. The style config, batch command and contact sheet are
+ready for when those two land.

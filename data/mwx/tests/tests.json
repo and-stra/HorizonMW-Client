@@ -135,7 +135,6 @@
         "script":  "sas",
         "gametype":  "sas",
         "map":  "mp_shipment",
-        "mod":  "mods/sticksandstones",
         "timeout_s":  300,
         "dvars":  {
                       "mwx_test_bots":  3
@@ -426,6 +425,212 @@
                       "mwx_test_weapon":  "h1_remington700",
                       "mwx_test_weapon_class":  "primary",
                       "mwx_test_bots":  1
+                  }
+    },
+    {
+        "name":  "mwr_h1_xmlar",
+        "script":  "mwr_weapon",
+        "gametype":  "war",
+        "map":  "mp_crash",
+        "timeout_s":  300,
+        "listen":  true,
+        "dvars":  {
+                      "mwx_test_weapon":  "h1_xmlar",
+                      "mwx_test_weapon_class":  "primary",
+                      "mwx_test_bots":  1
+                  }
+    },
+    {
+        "name":  "mwr_h1_aprast",
+        "script":  "mwr_weapon",
+        "gametype":  "war",
+        "map":  "mp_crash",
+        "timeout_s":  300,
+        "listen":  true,
+        "dvars":  {
+                      "mwx_test_weapon":  "h1_aprast",
+                      "mwx_test_weapon_class":  "primary",
+                      "mwx_test_bots":  1
+                  }
+    },
+    {
+        "name":  "mwr_h1_augast",
+        "script":  "mwr_weapon",
+        "gametype":  "war",
+        "map":  "mp_crash",
+        "timeout_s":  300,
+        "listen":  true,
+        "dvars":  {
+                      "mwx_test_weapon":  "h1_augast",
+                      "mwx_test_weapon_class":  "primary",
+                      "mwx_test_bots":  1
+                  }
+    },
+    {
+        "name":  "mwr_h1_febsmg",
+        "script":  "mwr_weapon",
+        "gametype":  "war",
+        "map":  "mp_crash",
+        "timeout_s":  300,
+        "listen":  true,
+        "dvars":  {
+                      "mwx_test_weapon":  "h1_febsmg",
+                      "mwx_test_weapon_class":  "primary",
+                      "mwx_test_bots":  1
+                  }
+    },
+    {
+        "name":  "mwr_h1_aprsmg",
+        "script":  "mwr_weapon",
+        "gametype":  "war",
+        "map":  "mp_crash",
+        "timeout_s":  300,
+        "listen":  true,
+        "dvars":  {
+                      "mwx_test_weapon":  "h1_aprsmg",
+                      "mwx_test_weapon_class":  "primary",
+                      "mwx_test_bots":  1
+                  }
+    },
+    {
+        "name":  "mwr_h1_augsmg",
+        "script":  "mwr_weapon",
+        "gametype":  "war",
+        "map":  "mp_crash",
+        "timeout_s":  300,
+        "listen":  true,
+        "dvars":  {
+                      "mwx_test_weapon":  "h1_augsmg",
+                      "mwx_test_weapon_class":  "primary",
+                      "mwx_test_bots":  1
+                  }
+    },
+    {
+        "name":  "mwr_h1_junlmg",
+        "script":  "mwr_weapon",
+        "gametype":  "war",
+        "map":  "mp_crash",
+        "timeout_s":  300,
+        "listen":  true,
+        "dvars":  {
+                      "mwx_test_weapon":  "h1_junlmg",
+                      "mwx_test_weapon_class":  "primary",
+                      "mwx_test_bots":  1
+                  }
+    },
+    {
+        "name":  "mwr_h1_kam12",
+        "script":  "mwr_weapon",
+        "gametype":  "war",
+        "map":  "mp_crash",
+        "timeout_s":  300,
+        "listen":  true,
+        "dvars":  {
+                      "mwx_test_weapon":  "h1_kam12",
+                      "mwx_test_weapon_class":  "primary",
+                      "mwx_test_bots":  1
+                  }
+    },
+    {
+        "name":  "mwr_h1_junsnp",
+        "script":  "mwr_weapon",
+        "gametype":  "war",
+        "map":  "mp_crash",
+        "timeout_s":  300,
+        "listen":  true,
+        "dvars":  {
+                      "mwx_test_weapon":  "h1_junsnp",
+                      "mwx_test_weapon_class":  "primary",
+                      "mwx_test_bots":  1
+                  }
+    },
+    {
+        "name":  "mwr_h1_aprpst",
+        "script":  "mwr_weapon",
+        "gametype":  "war",
+        "map":  "mp_crash",
+        "timeout_s":  300,
+        "listen":  true,
+        "dvars":  {
+                      "mwx_test_weapon":  "h1_aprpst",
+                      "mwx_test_weapon_class":  "secondary",
+                      "mwx_test_bots":  1
+                  }
+    },
+    {
+        "name":  "mwr_h1_augpst",
+        "script":  "mwr_weapon",
+        "gametype":  "war",
+        "map":  "mp_crash",
+        "timeout_s":  300,
+        "listen":  true,
+        "dvars":  {
+                      "mwx_test_weapon":  "h1_augpst",
+                      "mwx_test_weapon_class":  "secondary",
+                      "mwx_test_bots":  1
+                  }
+    },
+    {
+        "name":  "mwr_melee",
+        "script":  "mwr_melee",
+        "gametype":  "war",
+        "map":  "mp_crash",
+        "timeout_s":  300,
+        "listen":  true,
+        "dvars":  {
+                      "mwx_test_bots":  1
+                  }
+    },
+    {
+        "name":  "aw_crossbow",
+        "script":  "aw_crossbow",
+        "gametype":  "war",
+        "map":  "mp_shipment",
+        "timeout_s":  300,
+        "dvars":  {
+                      "mwx_test_bots":  4,
+                      "mwx_aw_weapon":  "iw5_exocrossbow",
+                      "mwx_aw_class":  "secondary",
+                      "mwx_aw_attachments":  "reflex,acog",
+                      "mwx_aw_camo":  42
+                  }
+    },
+    {
+        "name":  "aw_m1garand",
+        "script":  "aw_pilot",
+        "gametype":  "war",
+        "map":  "mp_shipment",
+        "timeout_s":  300,
+        "dvars":  {
+                      "mwx_test_bots":  4,
+                      "mwx_aw_weapon":  "iw5_dlcgun23",
+                      "mwx_aw_class":  "primary",
+                      "mwx_aw_attachments":  "",
+                      "mwx_aw_camo":  0
+                  }
+    },
+    {
+        "name":  "aw_mp40",
+        "script":  "aw_pilot",
+        "gametype":  "war",
+        "map":  "mp_shipment",
+        "timeout_s":  300,
+        "dvars":  {
+                      "mwx_test_bots":  4,
+                      "mwx_aw_weapon":  "iw5_dlcgun18",
+                      "mwx_aw_class":  "primary",
+                      "mwx_aw_attachments":  "",
+                      "mwx_aw_camo":  0
+                  }
+    },
+    {
+        "name":  "aw_knife",
+        "script":  "aw_knife",
+        "gametype":  "war",
+        "map":  "mp_shipment",
+        "timeout_s":  300,
+        "dvars":  {
+                      "mwx_test_bots":  4
                   }
     }
 ]

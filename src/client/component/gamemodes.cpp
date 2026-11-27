@@ -67,9 +67,9 @@ namespace gamemodes
 			{"arena", "war", "MWX_GAMETYPE_ARENA", "MWX_GAMETYPE_ARENA_DESC"},
 			// R6: survival prototype, hidden unless mwx_show_survival is 1
 			{"survival", "war", "MWX_GAMETYPE_SURVIVAL", "MWX_GAMETYPE_SURVIVAL_DESC", "0"},
-			// Sticks and Stones: native gametype (was the mods/sticksandstones PoC). Added in part C,
-			// when the mod is no longer loaded; while the mod is loaded its mod.json declares sas.
-			// {"sas", "dm", "MWX_GAMETYPE_SAS", "MWX_GAMETYPE_SAS_DESC", "0"},
+			// Sticks and Stones: native gametype (part C). It used to be the mods/sticksandstones
+			// PoC; the mod is gone and the crossbow comes from hmw_aw_weapons.ff.
+			{"sas", "dm", "MWX_GAMETYPE_SAS", "MWX_GAMETYPE_SAS_DESC", "0"},
 		};
 
 		// built-in extra gametypes + the ones the loaded mod declares in its mod.json

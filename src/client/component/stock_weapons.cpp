@@ -12,6 +12,7 @@
 
 #include <cctype>
 #include <cstring>
+#include <algorithm>
 #include <functional>
 #include <mutex>
 #include <string>
@@ -101,6 +102,60 @@ namespace stock_weapons
 				!game::DB_IsXAssetDefault(game::ASSET_TYPE_WEAPON, name.data());
 		}
 
+		// HMW's mp/customweapons.csv lists four weapons whose h2_*_mp asset does not exist in the
+		// game (h2_fmg9, h2_mp412, h2_pm9, h2_mp7): the rows showed an untranslated key and a
+		// default preview model. Hide them from the CAC - display only, the ids and the
+		// statstable rows are untouched. A fixed list, not a DB lookup: this patch runs while the
+		// vlobby zones load, and DB_XAssetExists per row there can wedge the load.
+		bool hidden_custom_row(const char* ref)
+		{
+			static const char* const hidden[] = {"h2_fmg9", "h2_mp412", "h2_pm9", "h2_mp7"};
+			if (ref == nullptr)
+			{
+				return false;
+			}
+			for (const auto* name : hidden)
+			{
+				if (std::strcmp(ref, name) == 0)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		// mp/customweapons.csv is (name, class, type); the type is the Cac.Weapons group
+		// (Primary/Secondary/Lethal/Tactical). The statstable rows only carry the class.
+		const char* customweapon_type(const char* weapon_class)
+		{
+			if (!weapon_class)
+			{
+				return "";
+			}
+
+			if (!std::strcmp(weapon_class, "weapon_assault") ||
+				!std::strcmp(weapon_class, "weapon_smg") ||
+				!std::strcmp(weapon_class, "weapon_sniper") ||
+				!std::strcmp(weapon_class, "weapon_heavy") ||
+				!std::strcmp(weapon_class, "weapon_shotgun"))
+			{
+				return "Primary";
+			}
+
+			if (!std::strcmp(weapon_class, "equipment_lethal"))
+			{
+				return "Lethal";
+			}
+
+			if (!std::strcmp(weapon_class, "equipment_tactical"))
+			{
+				return "Tactical";
+			}
+
+			// pistols, machine pistols, secondary shotguns, launchers and melee
+			return "Secondary";
+		}
+
 		bool id_exists(const game::StringTable* table, const char* id)
 		{
 			for (auto r = 0; r < table->rowCount; ++r)
@@ -114,7 +169,7 @@ namespace stock_weapons
 			return false;
 		}
 
-		game::StringTable* build(game::StringTable* original, const std::string& name)
+		game::StringTable* build(game::StringTable* original, const std::string& name, bool* complete)
 		{
 			const auto is_stats = name == "mp/statstable.csv";
 			// MWX: HMW's current statstable has 67 columns; the stock rows carry one extra empty
@@ -194,13 +249,65 @@ namespace stock_weapons
 
 			const auto cols = original->columnCount;
 			const auto old_rows = original->rowCount;
-			const auto new_rows = old_rows + static_cast<int>(add.size());
+
+			// The customweapons row order is the CAC display order. Put our weapons at the
+			// top of their list (AW before MWR), otherwise they sit past the visible rows.
+			const bool prepend = !is_stats && name == "mp/customweapons.csv";
+			if (prepend)
+			{
+				std::stable_sort(add.begin(), add.end(), [](int a, int b)
+				{
+					const std::string ra = rows[a][4];
+					const std::string rb = rows[b][4];
+					const bool aw_a = ra.rfind("iw5_", 0) == 0;
+					const bool aw_b = rb.rfind("iw5_", 0) == 0;
+					return aw_a != aw_b ? aw_a : a < b;
+				});
+			}
+			const auto first_new = prepend ? 0 : old_rows;
+			const auto originals_at = prepend ? static_cast<int>(add.size()) : 0;
+
+			// customweapons only: hide HMW's rows for weapons that have no asset (fixed list, no
+			// DB lookups here - see hidden_custom_row)
+			auto kept_rows = old_rows;
+			if (!is_stats)
+			{
+				kept_rows = 0;
+				for (auto r = 0; r < old_rows; ++r)
+				{
+					const auto* ref = original->values[static_cast<size_t>(r) * cols].string;
+					if (!hidden_custom_row(ref))
+					{
+						++kept_rows;
+					}
+				}
+			}
 
 			const auto result = allocator.allocate<game::StringTable>();
 			*result = *original;
-			result->rowCount = new_rows;
-			result->values = allocator.allocate_array<game::StringTableCell>(static_cast<size_t>(cols) * new_rows);
-			std::memcpy(result->values, original->values, sizeof(game::StringTableCell) * cols * old_rows);
+			result->rowCount = kept_rows + static_cast<int>(add.size());
+			result->values = allocator.allocate_array<game::StringTableCell>(
+				static_cast<size_t>(cols) * result->rowCount);
+
+			if (is_stats)
+			{
+				std::memcpy(result->values, original->values, sizeof(game::StringTableCell) * cols * old_rows);
+			}
+			else
+			{
+				auto out = 0;
+				for (auto r = 0; r < old_rows; ++r)
+				{
+					const auto* ref = original->values[static_cast<size_t>(r) * cols].string;
+					if (hidden_custom_row(ref))
+					{
+						continue;
+					}
+					std::memcpy(result->values + static_cast<size_t>(originals_at + out) * cols,
+						original->values + static_cast<size_t>(r) * cols, sizeof(game::StringTableCell) * cols);
+					++out;
+				}
+			}
 
 			for (size_t n = 0; n < add.size(); ++n)
 			{
@@ -220,10 +327,21 @@ namespace stock_weapons
 					{
 						text = src[2]; // its class (weapon_assault, ...)
 					}
-					auto& cell = result->values[static_cast<size_t>(old_rows + n) * cols + c];
+					else if (c == 2)
+					{
+						text = customweapon_type(src[2]); // Cac.Weapons group
+					}
+					auto& cell = result->values[static_cast<size_t>(first_new + static_cast<int>(n)) * cols + c];
 					cell.string = allocator.duplicate_string(text);
 					cell.hash = static_cast<int>(hash(text));
 				}
+			}
+
+			// a weapon zone that loads later still needs its row: only stop rebuilding when every
+			// row is in (rows skipped as duplicates stay missing, so that case rebuilds on demand)
+			if (complete != nullptr)
+			{
+				*complete = missing.empty();
 			}
 
 			console::info("stock weapons: %s: added %i stock weapons (%i not loaded)\n",
@@ -265,17 +383,18 @@ namespace stock_weapons
 		const auto now = game::Sys_Milliseconds();
 		if (entry.last_try != 0 && now - entry.last_try < 2000)
 		{
-			return original;
+			return entry.result ? entry.result : original;
 		}
 		entry.last_try = now;
 
-		const auto result = build(original, name);
+		auto complete = false;
+		const auto result = build(original, name, &complete);
 		if (result)
 		{
 			entry.result = result;
-			entry.done = true;
+			entry.done = complete;
 			return result;
 		}
-		return original;
+		return entry.result ? entry.result : original;
 	}
 }

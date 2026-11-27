@@ -200,6 +200,20 @@ powershell -File tools\test\menu-smoke.ps1 -Runs 1 -Quick -Modes ph,dom   # quic
 
 It starts a fresh client per run (debug ports 27201+), so it does not use `tests.json` servers.
 
+## Class menu (CAC) checks
+
+The class menu is driven over the debug RPC (`ui_click`, `ui_snapshot`, `lua_eval`), never with
+`sv_cheats` + `give`: in a listen host `sv_cheats` is registered with `DVAR_FLAG_READ` and cannot
+be set, and `give` refuses with "Cheats are not enabled on this server". To give a weapon in a
+test, use the test dvar/script path (`aw_crossbow`, `aw_m1garand`) or pick it in the class menu.
+
+A saved class can be read back without the UI: `Engine.GetPlayerData(0,
+CoD.GetStatsGroupForGameMode(), "customClasses", <slot>, "weaponSetups", 0, "weapon")` from
+`lua_eval`; `Engine.SetPlayerData` with the same path writes it and returns false when the
+weapon name is not a member of the playerdata `Weapon` DDL enum (that is the "picking does
+nothing" failure). `rpc ddl_dump` dumps that enum; `rpc ddl_extend` adds the ported names
+(see docs/aw-weapons-plan.md).
+
 ## Shortening timers
 
 The mode scripts register their dvars (`scr_<mode>_scorelimit`, `scr_<mode>_timelimit`, ...) and
@@ -234,3 +248,17 @@ the clock itself is the thing under test, or sets a state field to its last step
 
 See `C:\Games\cod-hwm\mwx-debug\autonomous\report.md` for the results of the first full run and
 for the bugs it found.
+
+### gsc_eval limits
+
+gsc_eval compiles the code as a standalone script (mwx/tests/_eval_N). A bare function
+call as a statement must resolve at link time, so:
+
+- eturn <expr>; is the way to read a value (the wrapper turns it into mwx_result(<expr>)).
+- println is not a builtin in that context ("couldn't resolve builtin method id"); use
+  print/iprintln only in real scripts, not in eval code.
+- Helper functions from the game's common scripts (common_scripts\utility::...) fail to link
+  ("unknown function"); call only functions of the loaded gametype scripts, or pass literal
+  values (e.g. the stats group as a number).
+- Do not call _persistence::writebufferedstats() from eval code: it stalled the test client
+  (main thread busy, debug port stopped answering).

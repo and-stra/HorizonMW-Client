@@ -28,24 +28,27 @@ main()
         return;
     }
 
+    // Melee weapons are given into the melee slot; switchtoweapon does not make one current, so
+    // check the inventory (hasweapon) like the other melee checks in the suite.
     equipped = 0;
     foreach (ref in melee)
     {
         full = ref + "_mp";
         p giveweapon(full);
-        p switchtoweapon(full);
         wait 0.15;
-        if (p getcurrentweapon() == full)
+        if (p hasweapon(full))
         {
             equipped++;
         }
         else
         {
-            test_log("FAIL equip " + ref + " (got " + p getcurrentweapon() + ")");
+            test_log("FAIL equip " + ref + " (not in the inventory)");
         }
+        // the player has a finite number of weapon slots; free the slot before the next one
+        p takeweapon(full);
     }
 
-    test_assert(equipped == melee.size, "every melee weapon equips", melee.size, equipped);
+    test_assert(equipped == melee.size, "every melee weapon is in the loadout", melee.size, equipped);
 
     test_step("kill a bot with the last melee weapon");
     bot = undefined;
