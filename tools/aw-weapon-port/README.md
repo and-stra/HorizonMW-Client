@@ -26,7 +26,7 @@ Tools: x64-zt (`refs\tools\x64-zt`), the S1 copy in the AW folder (`zonetool.exe
    The converter sets the weapon's hands model to `viewhands_tf141` and clears the exo-only anim slots.
    The zone CSV must reference that model (`xmodel,,viewhands_tf141`, before the weapon). `viewmodel_base_viewhands`
    (what HMW's weapons use) is not loaded yet when mod.ff loads and crashes the game. Full process and error list:
-   `docs/aw-weapon-porting.md`. Without a hands model there are no arms and the gun floats at the
+   `docs/guides/aw-weapon-porting.md`. Without a hands model there are no arms and the gun floats at the
    viewmodel origin; with AW's model built in, the exo arms would replace MWR's for every weapon.
    The zone must be built with the internal name `mod` (zone_source\mod.csv -> zone\mod.ff), otherwise the game
    fails with "Disc read error 'mod'".

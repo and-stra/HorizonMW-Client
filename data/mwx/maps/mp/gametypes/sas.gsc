@@ -1,5 +1,5 @@
 // MWX: Sticks and Stones, a built-in gametype (native port; the old mods/sticksandstones PoC is
-// archived under mwx-debug\backups\sticksandstones-mod).
+// archived under _migration\archive\mwx-debug\backups\sticksandstones-mod).
 // Rules from Black Ops 2 maps/mp/gametypes/sas.gsc (COD-GSC-Source/BO2-GSC), FFA structure from H1 dm.gsc:
 // - crossbow (Advanced Warfare's iw5_exocrossbow, owned by hmw_aw_weapons.ff / the AW port) as the primary
 // - a melee weapon instead of BO's ballistic knife (HMW has none)

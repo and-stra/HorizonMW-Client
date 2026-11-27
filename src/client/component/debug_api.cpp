@@ -28,7 +28,7 @@
 #include <cctype>
 #include <cstdlib>
 
-// MWX: implementation of the test interface RPC methods (see docs/mcp.md and docs/testing.md).
+// MWX: implementation of the test interface RPC methods (see docs/guides/mcp.md and docs/guides/testing.md).
 //
 // Game state is read on the game's threads; the debug server hands the calls over with
 // debug_server::run_on. GSC access goes through small helper functions in
@@ -1394,7 +1394,7 @@ namespace debug_api
 			scheduler::once([]
 			{
 				dvars::register_string("mwx_test", "", game::DVAR_FLAG_NONE,
-					"Run the test script mwx/tests/<name>.gsc at map start (see docs/testing.md)");
+					"Run the test script mwx/tests/<name>.gsc at map start (see docs/guides/testing.md)");
 
 				for (auto i = 0; i < 6; ++i)
 				{

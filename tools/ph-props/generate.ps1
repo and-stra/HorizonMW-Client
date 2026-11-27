@@ -18,7 +18,7 @@ param(
 # Output: data\mwx\ph_props\ph_props_<map>.csv
 #
 # The server has to run the map first: XModel bounds are read from the loaded zone through
-# the debug method model_bounds (added for this, see docs\mcp.md). The format is the one
+# the debug method model_bounds (added for this, see docs/guides/mcp.md). The format is the one
 # maps\mp\gametypes\_hodgepodge_ph.gsc reads:
 #   model,size class,packid[,offset xyz][,angles xyz]
 # only the first three columns are written (the optional offset/angle columns stay undefined,

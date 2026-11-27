@@ -1,6 +1,6 @@
 #pragma once
 
-// MWX: the RPC methods of the local debug interface (see docs/mcp.md and docs/testing.md).
+// MWX: the RPC methods of the local debug interface (see docs/guides/mcp.md and docs/guides/testing.md).
 // debug_server.cpp routes the HTTP requests here; mcp.cpp exposes it as MCP tools.
 
 namespace debug_api

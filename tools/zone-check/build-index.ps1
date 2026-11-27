@@ -5,7 +5,7 @@
 #
 # The console prints the index for every zone that is still missing; without those
 # the check cannot see a collision in them (common_mp is the big one: dump it with
-# -Dump once, it needs ~20 GB while dumping - see docs/zone-check.md).
+# -Dump once, it needs ~20 GB while dumping - see docs/guides/zones.md).
 param(
     [string]$Out = "",
     [switch]$List,
@@ -77,7 +77,7 @@ if ($Dump -and $missing.Count -gt 0) {
     $zones = $missing
     Write-Host ("dumping {0} zones (this takes a while)" -f $zones.Count)
     foreach ($zone in $zones) {
-        & (Join-Path $PSScriptRoot "..\..\mwx-debug\mwr-weapons\dump-zones.ps1") -Zones @($zone, "workbench_$zone") -InitSeconds $InitSeconds
+        & (Join-Path $PSScriptRoot "..\..\_migration\archive\mwx-debug\mwr-weapons\dump-zones.ps1") -Zones @($zone, "workbench_$zone") -InitSeconds $InitSeconds
     }
     Write-Host "re-run build-index.ps1 after dumping"
 }

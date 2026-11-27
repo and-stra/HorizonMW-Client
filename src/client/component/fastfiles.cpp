@@ -538,7 +538,7 @@ namespace fastfiles
 			// hmw_patch_common_mp.ff shadows (only 27 of the 66 h1_* weapons are loaded; the 11
 			// DLC guns and the 28 melee are not). Loading a copy of that 248 MB patch under another
 			// name exits at startup, so those assets need a repack into a small zone (see
-			// docs/mwr-weapons.md). No zone load here until then.
+			// docs/weapons/mwr.md). No zone load here until then.
 
 			game::DB_LoadXAssets(data.data(), static_cast<std::uint32_t>(data.size()), syncMode);
 		}

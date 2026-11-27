@@ -12,7 +12,7 @@
 // server has no player input), reloads, switches and credits a kill with it.
 //
 // Visual checks that GSC cannot do (ADS reticle centred, ring hidden, camo look, CAC entry)
-// stay as MCP screenshots in mwx-debug\aw-weapons\<milestone>\.
+// stay as MCP screenshots in _migration\archive\mwx-debug\aw-weapons\<milestone>\.
 
 #include tests\_test;
 

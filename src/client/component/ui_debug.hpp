@@ -1,6 +1,6 @@
 #pragma once
 
-// MWX: LUI (menu) access for the test interface (see docs/mcp.md).
+// MWX: LUI (menu) access for the test interface (see docs/guides/mcp.md).
 // The heavy lifting is in data/mwx/ui_scripts/mwx_debug/__init__.lua, which is only loaded
 // with the other MWX ui_scripts and does nothing until one of these methods is called.
 

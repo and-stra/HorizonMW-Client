@@ -10,7 +10,7 @@
 #
 # Then: one HMW weapon preview, the attachments and camo screens, and a scan of the console for
 # Lua errors. Everything goes through the debug RPC; no sv_cheats / give (both are unavailable
-# in a listen host, see docs/testing.md).
+# in a listen host, see docs/guides/testing.md).
 param(
     [int]$Port = 27260,
     [int]$Limit = 0,

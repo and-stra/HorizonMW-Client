@@ -10,7 +10,7 @@ For each ref it loads the *world* model (orbit, no hands) and renders:
 The camera is the style measured from the MWR CAC icons (style.json).
 
 The output is PNG. Converting it to the game's .h1Image + _streamN.pixels is the open
-step (see docs/weapon-icons.md); this tool stops at the render + contact sheet.
+step (see docs/guides/weapon-icons.md); this tool stops at the render + contact sheet.
 """
 import argparse
 import json

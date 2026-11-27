@@ -54,7 +54,7 @@ friends on LAN, short loading times. No master server, accounts or anti-cheat.
 | `component/server_list.cpp`, `party.cpp` | server browser and connect use `lan` instead of HTTP/master server |
 | `component/load_timing.cpp` | `mwx-logs\load_times.log`: every fastfile + milestones |
 | `component/debug_server.cpp` | local debug HTTP interface (127.0.0.1:27099 / 27098) |
-| `mcp.cpp` | `mwx.exe -mcp`: MCP server, see [docs/mcp.md](docs/mcp.md) |
+| `mcp.cpp` | `mwx.exe -mcp`: MCP server, see [docs/guides/mcp.md](docs/guides/mcp.md) |
 | `repack.cpp` | `mwx.exe -repack all` (hmw-mod\zone only; `usermaps` / `everything` / zone names also possible): zlib zones → LZ4 blocks |
 
 - `data/mwx/` is copied to `GAME\mwx\` by `build-mwx.bat`; `GAME\mwx\ui_scripts\` is loaded after HMW's zone ui_scripts (also in release).
@@ -65,7 +65,7 @@ friends on LAN, short loading times. No master server, accounts or anti-cheat.
 
 - Use the MCP tools (`start_client`, `start_server`, `wait_for`, `players`, `events`, `screenshot`,
   `ui_snapshot`/`ui_click`, `gsc_eval`, `run_test`, `run_all_tests`, `test_status`, `load_times`,
-  `console_log`), see [docs/mcp.md](docs/mcp.md) and [docs/testing.md](docs/testing.md).
+  `console_log`), see [docs/guides/mcp.md](docs/guides/mcp.md) and [docs/guides/testing.md](docs/guides/testing.md).
 - Game mode tests: `data/mwx/tests/<name>.gsc` + an entry in `data/mwx/tests/tests.json`. Run them
   with `run_all_tests` (a background job, poll `test_status`) or, without the MCP,
   `powershell -File tools\test\run-tests.ps1 [-Name <test>] [-Parallel N]`. A full run is ~15
@@ -73,7 +73,7 @@ friends on LAN, short loading times. No master server, accounts or anti-cheat.
   `run_all_tests {parallel: N}`) starts N dedicated servers at once; each test keeps its own
   debug/net port and its own log, and the results are merged into the one summary. `-Parallel 1`
   forces a serial run (used when a load-time comparison matters).
-  Weapons, perks, loadouts and spawn timing for new modes: [docs/hmw-weapons-perks.md](docs/hmw-weapons-perks.md).
+  Weapons, perks, loadouts and spawn timing for new modes: [docs/weapons/hmw-reference.md](docs/weapons/hmw-reference.md).
 - **Test rule**: while working, run only the tests affected by the change, **3x each**; at the end of
   a work part run **one** full suite. Never run the full suite twice in a row (flakes and load
   stalls need a targeted rerun, not another 40-minute run). Known exceptions until their part is
@@ -115,8 +115,9 @@ friends on LAN, short loading times. No master server, accounts or anti-cheat.
 
 - Long autonomous runs (e.g. the branch `opencode/autonomous`) build with
   `C:\Games\cod-hwm\build-branch.bat` (`-nogit`), keep the PDB per commit and write their progress
-  to `C:\Games\cod-hwm\mwx-debug\autonomous\report.md` (done work, commits, test results,
-  decisions, open issues).
+  to the task's report in `docs/` (done work, commits, test results, decisions, open issues);
+  `docs/backlog.md` is the only todo list. The 2026-11 history is
+  `docs/archive/autonomous-report-2026-11.md`.
 - They push only their own branch (never `mwx` / `main` / `claude/mwx`), never merge, rebase or
   force-push, and revert a failed milestone on that branch so it keeps building.
 - The regression check before a milestone is finished: build, `run_all_tests` (or

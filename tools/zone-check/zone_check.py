@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """zone-check: name collisions between a zone we build and the zones loaded before it.
 
-Rule (docs/zone-check.md): our zones must not contain an asset whose name already
+Rule (docs/guides/zones.md): our zones must not contain an asset whose name already
 exists in a previously loaded zone, unless the content is identical (zonetool
 linking always embeds identical copies) or the name is listed in overrides.txt.
 

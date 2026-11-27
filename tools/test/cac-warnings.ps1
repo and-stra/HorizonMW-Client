@@ -1,6 +1,6 @@
 ﻿# Count CAC "missing asset / default material" warnings for the current zone set.
 #   powershell -File tools\test\cac-warnings.ps1 -Label e
-# The compare run: switch zones with mwx-debug\cac-bisect\variant.ps1 -Variant a, run it as
+# The compare run: switch zones with _migration\archive\mwx-debug\cac-bisect\variant.ps1 -Variant a, run it as
 # -Label a, then variant.ps1 -Variant e.
 param(
     [string]$Label = "run",

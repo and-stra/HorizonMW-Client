@@ -10,7 +10,7 @@
 
 #include <utils/io.hpp>
 
-// MWX: settings for automated runs (see docs/testing.md).
+// MWX: settings for automated runs (see docs/guides/testing.md).
 //
 //   mwx_test_mode 1  - windowed 960x540, muted, no mouse capture, never paused
 //

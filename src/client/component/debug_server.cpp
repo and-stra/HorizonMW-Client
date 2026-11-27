@@ -409,7 +409,7 @@ namespace debug_server
 			if (method == "stacks")
 			{
 				// runs on the debug server thread, so it also answers while the main thread is
-				// stuck in a zone/imagefile load (see docs/zone-load-stall.md)
+				// stuck in a zone/imagefile load (see docs/investigations/zone-load-stall.md)
 				return json{{"result", exception::get_thread_stacks(GetCurrentProcessId())}};
 			}
 
@@ -425,7 +425,7 @@ namespace debug_server
 				return json{{"result", data}};
 			}
 
-			// --- MWX test interface (docs/mcp.md) ---
+			// --- MWX test interface (docs/guides/mcp.md) ---
 
 			if (method == "screenshot")
 			{

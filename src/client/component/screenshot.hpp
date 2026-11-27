@@ -1,6 +1,6 @@
 #pragma once
 
-// MWX: native frame capture (see docs/mcp.md).
+// MWX: native frame capture (see docs/guides/mcp.md).
 //
 // The frame is copied from the D3D11 swapchain at Present, so it also works while the game
 // window is not focused or is behind other windows.
