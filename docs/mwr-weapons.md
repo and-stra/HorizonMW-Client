@@ -98,24 +98,16 @@ ruled out:
   dependency set from the game's zones, so the asset base stayed 15,464).
 
 The hang is engine-side, not a build error: the zone load itself completes, then the map's
-imagefile48 load stalls. Next ideas (in order):
+imagefile48 load stalls. **Solved 27 Nov by the zone-load-stall fix** (`docs/zone-load-stall.md`):
+the engine hangs when the startup zone list has 10 entries, and HMW's three extra menu zones
+(`hmw_nightshade`, `hmw_dlc_factions`, `hmw_dlc_killstreaks`) are no longer loaded at startup. The
+MWR zone is therefore the 8th startup zone (6 HMW + `hmw_aw_weapons` + `hmw_mwr_weapons`), and
+`mp_crash` loads with it.
 
-1. Instrument `DB_LoadXAssets`/the image stream with `mwx_debug_fastfiles 1` to see which asset
-   in the zone holds the stream buffer or asset pool when imagefile48 starts.
-2. Load the zone **after** the map is running (or unload it before `map`, reload after) so the
-   map's imagefile48 is not loaded while the zone is resident. This loses the menu CAC rows
-   unless the zone is loaded at the menu and unloaded only for the map start.
-3. Load the original MWR `patch_common_mp.ff` under its real name instead of a repack (248 MB;
-   conflicts with HMW's `hmw_patch_common_mp` override and slower loading).
-4. Try loading the per-weapon `_tr` zones directly (the engine already loads
-   `mp_wm_g3_base_tr` on demand in the no-zone G3 test) with a **weapon-def-only** zone; that is
-   the same experiment as 2 but avoids the zone during map load.
-
-The zone is parked at `GAME\zone\hmw_mwr_weapons.ff.blocked-b` and is **not** in the startup
-zone list. The 8 CoD4 guns from item 12 continue to work; the 11 DLC guns and 28 melee stay
-hidden until the load hang is fixed. The tooling and findings are kept for the next attempt.
-
-The next step is the load-hang investigation above; the assets and build are ready.
+The zone is restored to `GAME\zone\hmw_mwr_weapons.ff` (the parked copy stays at
+`hmw_mwr_weapons.ff.blocked-b`) and is in the startup list. The 12 DLC/melee tests
+(`mwr_h1_xmlar`, `aprast`, `augast`, `febsmg`, `aprsmg`, `augsmg`, `junlmg`, `kam12`, `junsnp`,
+`aprpst`, `augpst`, `mwr_melee`) are back in `tests.json`.
 
 ## How it works
 
@@ -144,10 +136,27 @@ there; only string dvars cannot).
 
 - `mwr_weapon`: one listen-host test per gun (`mwx_test_weapon`), give, fire, reload, ADS, kill a
   bot. `mwx_test_weapon_class` is `secondary` for the two pistols.
-- `mwr_melee`: one listen-host test that gives and equips all 28 melee weapons and kills with the
-  last.
-- `menu-smoke`: a CAC check per category (weapons appear when `hmw_mwr_weapons 1`, not with 0).
-- CAC screenshots for the review: `mwx-debug\mwr-weapons\cac-*.png`.
+- `mwr_melee`: one listen-host test that gives all 28 melee weapons and kills with the last.
+  Melee weapons go into the melee slot (`switchtoweapon` does not make one current), so the check
+  is `hasweapon`. The player has a finite number of weapon slots: after 15 given weapons
+  `giveweapon` silently fails (the first run gave 15/28), so the test takes each weapon away
+  again (`takeweapon`) before the next one. The model zones (`mp_vm/wm_melee*_base_tr`) load on
+  demand while the test runs.
+- `menu-smoke`: opens Create-a-Class in the private lobby and reads `Cac.Weapons` via `lua_eval`;
+  it fails unless all 39 MWR refs are in the class lists. CAC screenshots per category for the
+  review: `mwx-debug\mwr-weapons\cac-*.png` (script `cac-categories.ps1`; its `cac-check.txt`
+  records `41/41` refs found - the 39 MWR plus two CoD4 spot checks).
+
+The Create-a-Class lists needed two fixes (26/27 Nov):
+1. `stock_weapons.cpp` appended the rows to `mp/customweapons.csv` with the `type` column empty;
+   the CAC reads `Cac.Weapons[type][class]`, so those rows could never show. The type is now
+   derived from the class (`weapon_assault`... -> Primary, pistols/launchers/melee -> Secondary,
+   equipment -> Lethal/Tactical).
+2. The CAC reads the row count once when its UI script loads, before the weapon zones finish
+   loading, so the appended rows (which come last) were outside the loop. The table patch is no
+   longer marked final while rows are still missing, and
+   `data/mwx/ui_scripts/cac_weapons/__init__.lua` re-scans `mp/customweapons.csv` when the class
+   menu opens and adds any ref that `Cac.Weapons` is missing (idempotent).
 
 ## Adding another stock weapon
 

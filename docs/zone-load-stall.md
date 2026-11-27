@@ -122,7 +122,11 @@ On the 7-zone build (6 HMW + `hmw_aw_weapons`), all on `mp_crash`:
 
 `mwx-debug\zone-stall\second-map.ps1`: startup (process -> main menu) **43.1 s**, then
 `mp_crash` **43.4 s** and `mp_shipment` **9.8 s** in the same client. With 9/10 startup zones the
-same startup took 52-56 s. The full suite and menu smoke follow in the step report.
+same startup took 52-56 s.
+
+Full suite `-Parallel 2`: **37/38 green**, only `survival` fails (known, B5). Menu smoke: 3 passes;
+one run had a single flaky mode pick (`rpg` -> `gun` while the chooser list was still building),
+which the smoke now retries once.
 
 ## 8. Next / open
 

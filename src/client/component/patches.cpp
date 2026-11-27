@@ -441,7 +441,9 @@ namespace patches
 				// the map's >2 GB imagefile load hang - docs/zone-load-stall.md)
 				// ported AW weapons (W1: the crossbow), loaded after every HMW zone and before the
 				// mod zone so it can use HMW hands/attachments/anims
-				"hmw_aw_weapons"
+				"hmw_aw_weapons",
+				// ported MWR DLC + melee weapons (B); 8 startup zones in total
+				"hmw_mwr_weapons"
 			};
 
 			// MWX: the loaded mod's zone last, so it can reference HMW's assets (hands models, anims, ...) and

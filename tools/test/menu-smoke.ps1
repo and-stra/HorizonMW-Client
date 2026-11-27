@@ -243,6 +243,52 @@ for ($run = 1; $run -le $Runs; $run++) {
         $rawKeys = @(Get-ObjectiveKeyProblems $port)
         foreach ($key in $rawKeys) { $failures += "objective key shows the raw key: $key" }
 
+        # B: Create-a-Class must list the ported MWR weapons (the 11 DLC guns and the 28 melee
+        # weapons), not only give them in game. The class menu's Cac.Weapons table is what the
+        # loadout editor reads; cac_weapons/__init__.lua fills in rows the UI read too early.
+        $cacRefs = @(
+            "h1_xmlar", "h1_aprast", "h1_augast", "h1_febsmg", "h1_aprsmg", "h1_augsmg",
+            "h1_junlmg", "h1_kam12", "h1_junsnp", "h1_aprpst", "h1_augpst",
+            "h1_meleeapr1", "h1_meleeapr2", "h1_meleeapr3", "h1_meleeapr4",
+            "h1_meleeaug1", "h1_meleeaug2", "h1_meleeaug3", "h1_meleeaug4",
+            "h1_meleebayonet", "h1_meleeblade", "h1_meleebottle",
+            "h1_meleefeb1", "h1_meleefeb2", "h1_meleefeb3", "h1_meleefeb4", "h1_meleefeb5",
+            "h1_meleegladius", "h1_meleehatchet", "h1_meleeicepick",
+            "h1_meleejun1", "h1_meleejun2", "h1_meleejun3", "h1_meleejun4", "h1_meleejun5",
+            "h1_meleejun6", "h1_meleepaddle", "h1_meleeshovel", "h1_meleesickle"
+        )
+        $cacLua = @"
+local refs = { '$($cacRefs -join "','")' }
+local seen = {}
+for cat, sub in pairs(Cac.Weapons) do
+    for k, list in pairs(sub) do
+        if type(list) == 'table' then
+            for _, item in ipairs(list) do
+                if type(item) == 'table' and item[1] then seen[item[1]] = true end
+            end
+        end
+    end
+end
+local found = 0
+for _, r in ipairs(refs) do if seen[r] then found = found + 1 end end
+return found
+"@
+        $cacCreate = @(((Rpc $port "ui_snapshot" @{} 25).result).elements | Where-Object {
+            $_.text -and (($_.text -replace "[\x01-\x1f]", "").Trim() -match "CREATE A CLASS") }) | Select-Object -First 1
+        if (-not $cacCreate) {
+            $failures += "Create-a-Class button not found in the private lobby"
+        } else {
+            Click $port @{ id = $cacCreate.id } | Out-Null
+            Start-Sleep -Seconds 2
+            $cac = Rpc $port "lua_eval" @{ code = $cacLua } 30
+            if (-not ($cac.result -and $cac.result.ok)) {
+                $failures += "Create-a-Class check failed: $($cac.error)"
+            } elseif ([int]$cac.result.result -lt $cacRefs.Count) {
+                $failures += "Create-a-Class lists only $($cac.result.result)/$($cacRefs.Count) MWR weapons"
+            }
+            Rpc $port "ui_back" @{ expect_timeout_ms = 8000 } 20 | Out-Null
+        }
+
         $modeList = @()
         if ($Modes) {
             foreach ($ref in ($Modes -split ",")) {

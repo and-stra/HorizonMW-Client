@@ -101,6 +101,38 @@ namespace stock_weapons
 				!game::DB_IsXAssetDefault(game::ASSET_TYPE_WEAPON, name.data());
 		}
 
+		// mp/customweapons.csv is (name, class, type); the type is the Cac.Weapons group
+		// (Primary/Secondary/Lethal/Tactical). The statstable rows only carry the class.
+		const char* customweapon_type(const char* weapon_class)
+		{
+			if (!weapon_class)
+			{
+				return "";
+			}
+
+			if (!std::strcmp(weapon_class, "weapon_assault") ||
+				!std::strcmp(weapon_class, "weapon_smg") ||
+				!std::strcmp(weapon_class, "weapon_sniper") ||
+				!std::strcmp(weapon_class, "weapon_heavy") ||
+				!std::strcmp(weapon_class, "weapon_shotgun"))
+			{
+				return "Primary";
+			}
+
+			if (!std::strcmp(weapon_class, "equipment_lethal"))
+			{
+				return "Lethal";
+			}
+
+			if (!std::strcmp(weapon_class, "equipment_tactical"))
+			{
+				return "Tactical";
+			}
+
+			// pistols, machine pistols, secondary shotguns, launchers and melee
+			return "Secondary";
+		}
+
 		bool id_exists(const game::StringTable* table, const char* id)
 		{
 			for (auto r = 0; r < table->rowCount; ++r)
@@ -114,7 +146,7 @@ namespace stock_weapons
 			return false;
 		}
 
-		game::StringTable* build(game::StringTable* original, const std::string& name)
+		game::StringTable* build(game::StringTable* original, const std::string& name, bool* complete)
 		{
 			const auto is_stats = name == "mp/statstable.csv";
 			// MWX: HMW's current statstable has 67 columns; the stock rows carry one extra empty
@@ -220,10 +252,21 @@ namespace stock_weapons
 					{
 						text = src[2]; // its class (weapon_assault, ...)
 					}
+					else if (c == 2)
+					{
+						text = customweapon_type(src[2]); // Cac.Weapons group
+					}
 					auto& cell = result->values[static_cast<size_t>(old_rows + n) * cols + c];
 					cell.string = allocator.duplicate_string(text);
 					cell.hash = static_cast<int>(hash(text));
 				}
+			}
+
+			// a weapon zone that loads later still needs its row: only stop rebuilding when every
+			// row is in (rows skipped as duplicates stay missing, so that case rebuilds on demand)
+			if (complete != nullptr)
+			{
+				*complete = missing.empty();
 			}
 
 			console::info("stock weapons: %s: added %i stock weapons (%i not loaded)\n",
@@ -265,17 +308,18 @@ namespace stock_weapons
 		const auto now = game::Sys_Milliseconds();
 		if (entry.last_try != 0 && now - entry.last_try < 2000)
 		{
-			return original;
+			return entry.result ? entry.result : original;
 		}
 		entry.last_try = now;
 
-		const auto result = build(original, name);
+		auto complete = false;
+		const auto result = build(original, name, &complete);
 		if (result)
 		{
 			entry.result = result;
-			entry.done = true;
+			entry.done = complete;
 			return result;
 		}
-		return original;
+		return entry.result ? entry.result : original;
 	}
 }
