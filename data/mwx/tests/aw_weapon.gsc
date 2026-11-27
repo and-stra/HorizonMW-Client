@@ -197,7 +197,9 @@ aw_weapon_test()
 
     // The aw_weapons.gsc replacefunc hooks are installed in init() at scr_load_level; the
     // test's main() runs earlier, so check the CAC/name functions only after the players
-    // have spawned (level load is complete).
+    // have spawned (level load is complete). mwr_weapons.gsc re-installs the validators
+    // 0.5 s after level start (to win over HMW's main), so give it that time here too.
+    wait 1;
     test_step("CAC and statstable");
     base = aw_check_names(ref, class, attachments, camo);
 
