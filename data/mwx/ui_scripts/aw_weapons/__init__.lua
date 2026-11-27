@@ -12,7 +12,11 @@
 -- __init__.lua files first, then GAME\<data>\ui_scripts), so Cac.GetValidAttachKits /
 -- Cac.GetAllDefinedAndValidWeapons from create_a_class\utils.lua already exist.
 
-if not Engine.InFrontend() or not Engine.IsMultiplayer() then
+-- No Engine calls at load time: this chunk runs while the LUI/zones are still loading, and an
+-- engine call in that window is the 0xC0000005 at 0x1400BCB13 crash pattern (see the note in
+-- gamemodes/__init__.lua). In a VM without the class menus (Cac absent) there is nothing to wrap;
+-- return without touching any engine binding.
+if Cac == nil then
     return
 end
 
