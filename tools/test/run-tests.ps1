@@ -279,7 +279,33 @@ function Write-Summary($all)
         green = @($all | Where-Object { -not $_.error -and $_.failed -eq 0 -and $_.script_errors -eq 0 -and $_.done }).Count
         results = $all
     }
-    $json = $summary | ConvertTo-Json -Depth 12
+    try {
+        $json = $summary | ConvertTo-Json -Depth 12
+    } catch {
+        # Windows PowerShell 5.1 ConvertTo-Json can throw on a nested event value ("Cannot convert
+        # value ... to type System.String"); the child runner then never wrote its result file and
+        # the parallel parent waited forever. Always write a flat, parseable summary.
+        Write-Host ("summary serialization failed ({0}); writing the flat fallback" -f $_.Exception.Message)
+        $flat = foreach ($r in $all) {
+            [ordered]@{
+                test = [string]$r.test
+                passed = [int]$r.passed
+                failed = [int]$r.failed
+                script_errors = [int]$r.script_errors
+                done = [bool]$r.done
+                error = [string]$r.error
+                total_s = [double]$r.total_s
+                failures = @($r.failures | ForEach-Object {
+                    [ordered]@{ name = [string]$_.name; expected = [string]$_.expected; actual = [string]$_.actual }
+                })
+            }
+        }
+        $json = [ordered]@{
+            tests = @($flat).Count
+            green = @($flat | Where-Object { -not $_.error -and $_.failed -eq 0 -and $_.script_errors -eq 0 -and $_.done }).Count
+            results = @($flat)
+        } | ConvertTo-Json -Depth 8
+    }
     $out = if ($JsonOut) { $JsonOut } else { Join-Path (Split-Path $PSCommandPath) ("test-results-{0}.json" -f (Get-Date -Format "yyyyMMdd-HHmmss")) }
     $json | Set-Content -Path $out -Encoding UTF8
     Write-Host "summary written to $out"
