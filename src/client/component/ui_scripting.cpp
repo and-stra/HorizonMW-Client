@@ -47,6 +47,11 @@ namespace ui_scripting
 	{
 		std::unordered_map<game::hks::cclosure*, std::function<arguments(const function_arguments& args)>> converted_functions;
 
+		// item 6: true while LUI is reloading (hks_start + our script load, or a DB zone load).
+		// lua_eval must not touch the Lua state then; an Engine.* call from a chunk crashed at
+		// 0x1400BCB13 when the frontend was mid-reload.
+		std::atomic_int ui_loading{0};
+
 		utils::hook::detour hks_start_hook;
 		utils::hook::detour hks_shutdown_hook;
 		utils::hook::detour hks_package_require_hook;
@@ -118,6 +123,17 @@ namespace ui_scripting
 		{			
 			globals.loaded_scripts[name] = name;
 
+			// M1: always log the script boundaries to a file (the console buffer dies with the
+			// process); when a load-time chunk kills the game, the last "start" without "done"
+			// names the script and its path.
+			const auto trace = [&name](const char* state, const std::string& extra = {})
+			{
+				utils::io::write_file("mwx-logs/ui_script_load.log",
+					utils::string::va("%s %s%s\n", state, name.data(), extra.data()), true);
+			};
+
+			trace("start");
+
 			const auto lua = get_globals();
 			const auto load_results = lua["loadstring"](data, name);
 
@@ -127,12 +143,16 @@ namespace ui_scripting
 				if (!results[0].as<bool>())
 				{
 					print_error(results[1].as<std::string>());
+					trace("error", std::string(" ") + results[1].as<std::string>());
 				}
 			}
 			else if (load_results[1].is<std::string>())
 			{
 				print_error(load_results[1].as<std::string>());
+				trace("error", std::string(" ") + load_results[1].as<std::string>());
 			}
+
+			trace("done");
 		}
 
 		void load_scripts(const std::string& script_dir)
@@ -564,6 +584,26 @@ namespace ui_scripting
 				console::info("%s\n", buffer.data());
 			};
 
+			// MWX: file logger for LUI scripts. The console buffer dies with the process, so a
+			// script that kills the game during its load-time chunk leaves its last step here.
+			lua["mwx_trace"] = [](const variadic_args& va)
+			{
+				std::string buffer{};
+				const auto to_string = get_globals()["tostring"];
+
+				for (auto i = 0; i < va.size(); i++)
+				{
+					if (i > 0)
+					{
+						buffer.append(" ");
+					}
+					buffer.append(to_string(va[i])[0].as<std::string>());
+				}
+
+				utils::io::write_file("mwx-logs/ui_trace.log", buffer + "\n", true);
+				return buffer;
+			};
+
 			lua["table"]["unpack"] = lua["unpack"];
 			lua["luiglobals"] = lua;
 
@@ -657,7 +697,14 @@ namespace ui_scripting
 
 		void* hks_start_stub(char a1)
 		{
-			const auto _0 = gsl::finally(&try_start);
+			// keep lua_eval out while the engine's start and our script load run
+			set_loading(true);
+			const auto _0 = gsl::finally([]()
+			{
+				try_start();
+				set_loading(false);
+			});
+
 			return hks_start_hook.invoke<void*>(a1);
 		}
 
@@ -814,6 +861,24 @@ namespace ui_scripting
 	bool lui_running()
 	{
 		return *game::hks::lua_state != nullptr;
+	}
+
+	void set_loading(const bool loading)
+	{
+		// a counter, so a DB load inside hks_start does not clear the outer flag
+		if (loading)
+		{
+			++ui_loading;
+		}
+		else if (ui_loading > 0)
+		{
+			--ui_loading;
+		}
+	}
+
+	bool is_loading()
+	{
+		return ui_loading > 0;
 	}
 
 	void restart(const std::function<void()>& on_menu_opened)

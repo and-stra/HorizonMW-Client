@@ -10,6 +10,8 @@
 #include <utils/hook.hpp>
 #include <utils/flags.hpp>
 
+#include <cstring>
+
 namespace gameplay
 {
 	namespace
@@ -140,11 +142,23 @@ namespace gameplay
 		{
 			pm_player_trace_hook.invoke<void>(pm, trace, f3, f4, bounds, a6, a7);
 
-			// By setting startsolid to false we allow the player to clip through solid objects above their head
-			if (dvars::g_enableElevators && dvars::g_enableElevators->current.enabled)
+			// By setting startsolid to false we allow the player to clip through solid objects above their head.
+			// B4: Prop Hunt / Mad Props props are solid player-attached entities; the startsolid change
+			// crashed the listen host with the hook installed (R2). Keep the hook for the modes that
+			// need elevators, but leave those two modes untouched.
+			if (!dvars::g_enableElevators || !dvars::g_enableElevators->current.enabled)
 			{
-				trace->startsolid = false;
+				return;
 			}
+
+			if (const auto* mode = game::Dvar_FindVar("mwx_gamemode");
+				mode && mode->current.string &&
+				(std::strcmp(mode->current.string, "ph") == 0 || std::strcmp(mode->current.string, "mprops") == 0))
+			{
+				return;
+			}
+
+			trace->startsolid = false;
 		}
 
 		void pm_trace_stub(utils::hook::assembler& a)
@@ -332,16 +346,11 @@ namespace gameplay
 			utils::hook::nop(0x2D6F03_b, 2); // PM_UpdateAimDownSightLerp
 			utils::hook::nop(0x2DD64D_b, 2); // PM_Weapon_StartFiring
 
-			// R2: the PM_JitterPoint trace detour (startsolid=false for elevators) crashes a listen
-			// host with Prop Hunt props. Keep it available for the modes that need elevators, but do
-			// not install it by default; the assembly hook below stays for normal modes.
-			const auto* elevator_trace = dvars::register_bool("mwx_elevator_trace", false,
-				game::DVAR_FLAG_CHEAT | game::DVAR_FLAG_REPLICATED,
-				"Influence PM_JitterPoint's startsolid checks (elevators on custom maps); off by default (listen-host crash with props)");
-			if (elevator_trace->current.enabled)
-			{
-				pm_player_trace_hook.create(0x2D14C0_b, &pm_player_trace_stub);
-			}
+			// R2/B4: the PM_JitterPoint trace detour (startsolid=false for elevators). It is
+			// installed again for every mode, but the stub itself skips Prop Hunt / Mad Props (their
+			// solid player-attached props crashed the listen host). mwx_elevator_trace is gone: it
+			// was read before the config was loaded and never worked.
+			pm_player_trace_hook.create(0x2D14C0_b, &pm_player_trace_stub);
 
 			// flags for dvars that ARE cheat commands BUT are harmless most times
 			auto dvar_flags = game::DVAR_FLAG_CHEAT | game::DVAR_FLAG_REPLICATED;

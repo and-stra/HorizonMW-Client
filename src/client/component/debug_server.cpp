@@ -70,6 +70,156 @@ namespace debug_server
 			return on_pipeline(scheduler::pipeline::main, fn, timeout);
 		}
 
+		bool is_busy(const json& result)
+		{
+			return result.is_object() && result.contains("error") && result["error"].is_string()
+				&& result["error"].get<std::string>().find("main thread is busy") != std::string::npos;
+		}
+
+		// --- cached game status: answered even while the main thread is loading a zone ---
+
+		std::mutex status_mutex;
+		json status_cache = json::object();
+		std::chrono::steady_clock::time_point status_time{};
+		bool status_valid = false;
+
+		void store_status(const json& status)
+		{
+			std::lock_guard<std::mutex> lock(status_mutex);
+			status_cache = status;
+			status_time = std::chrono::steady_clock::now();
+			status_valid = true;
+		}
+
+		json cached_status(long long& age_ms)
+		{
+			std::lock_guard<std::mutex> lock(status_mutex);
+			if (!status_valid)
+			{
+				age_ms = -1;
+				return json::object();
+			}
+
+			age_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+				std::chrono::steady_clock::now() - status_time).count();
+			return status_cache;
+		}
+
+		// --- waiting for menu actions (ui_click / ui_open / ui_back / wait_ready) ---
+
+		int action_count()
+		{
+			const auto value = ui_debug::actions();
+			return value.is_array() ? static_cast<int>(value.size()) : 0;
+		}
+
+		// true when the main thread answers a no-op: no zone load in progress. A menu can be
+		// visible while the scene behind it still loads; clicking into that state crashed HMW.
+		bool wait_engine_ready(const std::chrono::milliseconds timeout)
+		{
+			const auto deadline = std::chrono::steady_clock::now() + timeout;
+
+			for (;;)
+			{
+				const auto value = on_pipeline(scheduler::pipeline::main, [] { return json::object(); }, 400ms);
+				if (!is_busy(value))
+				{
+					return true;
+				}
+
+				if (std::chrono::steady_clock::now() >= deadline)
+				{
+					return false;
+				}
+
+				std::this_thread::sleep_for(20ms);
+			}
+		}
+
+		std::string current_menu()
+		{
+			const auto value = ui_debug::menu();
+			if (value.is_object() && value.contains("menu") && value["menu"].is_string())
+			{
+				return value["menu"].get<std::string>();
+			}
+			return {};
+		}
+
+		// waits until the queued click has actually run (the Lua queue appends a result)
+		bool wait_action(const int before, const std::chrono::milliseconds timeout)
+		{
+			const auto deadline = std::chrono::steady_clock::now() + timeout;
+
+			for (;;)
+			{
+				const auto value = on_pipeline(scheduler::pipeline::lui,
+					[] { return json{{"result", action_count()}}; }, 400ms);
+
+				if (!is_busy(value) && value.contains("result") && value["result"].is_number_integer()
+					&& value["result"].get<int>() > before)
+				{
+					return true;
+				}
+
+				if (std::chrono::steady_clock::now() >= deadline)
+				{
+					return false;
+				}
+
+				std::this_thread::sleep_for(10ms);
+			}
+		}
+
+		// waits for a menu name and/or an element; `menu_out` gets the last menu seen
+		bool wait_menu(const std::string& expect_menu, const std::string& expect_element,
+			const std::chrono::milliseconds timeout, std::string& menu_out)
+		{
+			const auto deadline = std::chrono::steady_clock::now() + timeout;
+
+			for (;;)
+			{
+				const auto value = on_pipeline(scheduler::pipeline::lui, [&]
+				{
+					json info{{"menu", current_menu()}};
+					if (!expect_element.empty())
+					{
+						info["found"] = ui_debug::has_element(expect_element).value("found", false);
+					}
+					return json{{"result", info}};
+				}, 500ms);
+
+				if (!is_busy(value) && value.contains("result"))
+				{
+					const auto& info = value["result"];
+					menu_out = info.value("menu", "");
+
+					const auto menu_ok = expect_menu.empty() || menu_out == expect_menu;
+					const auto element_ok = expect_element.empty() || info.value("found", false);
+					if (menu_ok && element_ok)
+					{
+						return true;
+					}
+				}
+
+				if (std::chrono::steady_clock::now() >= deadline)
+				{
+					return false;
+				}
+
+				std::this_thread::sleep_for(20ms);
+			}
+		}
+
+		int int_param(const json& params, const char* name, const int fallback, const int minimum, const int maximum)
+		{
+			if (!params.contains(name) || !params[name].is_number_integer())
+			{
+				return fallback;
+			}
+			return std::clamp(params[name].get<int>(), minimum, maximum);
+		}
+
 		std::string dvar_string(const char* name)
 		{
 			auto* dvar = game::Dvar_FindVar(name);
@@ -168,7 +318,33 @@ namespace debug_server
 		{
 			if (method == "status")
 			{
-				return on_main_thread([] { return json{{"result", get_status()}}; });
+				// answer from the cache unless it is older than the 1 s updater; only then
+				// ask the main thread, and fall back to the (stale) cache while it loads
+				long long age_ms = -1;
+				auto cache = cached_status(age_ms);
+				if (!cache.empty() && age_ms >= 0 && age_ms <= 1000)
+				{
+					return json{{"result", cache}};
+				}
+
+				auto result = on_main_thread([] { return json{{"result", get_status()}}; }, 250ms);
+
+				if (!is_busy(result))
+				{
+					if (result.contains("result"))
+					{
+						store_status(result["result"]);
+					}
+					return result;
+				}
+
+				if (!cache.empty())
+				{
+					cache["stale_ms"] = age_ms;
+					return json{{"result", cache}};
+				}
+
+				return result;
 			}
 
 			if (method == "get_dvar")
@@ -254,21 +430,223 @@ namespace debug_server
 
 			if (method == "ui_click")
 			{
-				return on_pipeline(scheduler::pipeline::lui, [params] { return json{{"result", ui_debug::click(params)}}; }, 5000ms);
+				const auto wait = params.value("wait", true);
+				const auto timeout = std::chrono::milliseconds(int_param(params, "timeout_ms", 15000, 100, 50000));
+				const auto expect_timeout = std::chrono::milliseconds(int_param(params, "expect_timeout_ms", 8000, 100, 20000));
+				const auto started = std::chrono::steady_clock::now();
+
+				if (wait)
+				{
+					wait_engine_ready(timeout);
+				}
+
+				int before = 0;
+				const auto count = on_pipeline(scheduler::pipeline::lui,
+					[] { return json{{"result", action_count()}}; }, timeout);
+				if (is_busy(count))
+				{
+					return count;
+				}
+				if (count.contains("result") && count["result"].is_number_integer())
+				{
+					before = count["result"].get<int>();
+				}
+
+				auto result = on_pipeline(scheduler::pipeline::lui,
+					[params] { return json{{"result", ui_debug::click(params)}}; }, timeout);
+				if (!wait || is_busy(result) || !result.contains("result"))
+				{
+					return result;
+				}
+
+				auto info = result["result"];
+				const auto processed = wait_action(before, expect_timeout);
+
+				std::string menu;
+				auto expected = true;
+				if (processed)
+				{
+					expected = wait_menu(params.value("expect_menu", ""), params.value("expect_element", ""),
+						expect_timeout, menu);
+				}
+
+				const auto engine_ready = processed && wait_engine_ready(expect_timeout);
+
+				info["processed"] = processed;
+				info["expect_met"] = expected;
+				info["engine_ready"] = engine_ready;
+				info["menu"] = menu;
+				info["waited_ms"] = std::chrono::duration_cast<std::chrono::milliseconds>(
+					std::chrono::steady_clock::now() - started).count();
+				return json{{"result", info}};
 			}
 
 			if (method == "ui_back")
 			{
-				return on_pipeline(scheduler::pipeline::lui, [] { return json{{"result", ui_debug::back()}}; }, 5000ms);
+				const auto wait = params.value("wait", true);
+				const auto timeout = std::chrono::milliseconds(int_param(params, "timeout_ms", 15000, 100, 50000));
+				const auto expect_timeout = std::chrono::milliseconds(int_param(params, "expect_timeout_ms", 8000, 100, 20000));
+				const auto started = std::chrono::steady_clock::now();
+
+				if (wait)
+				{
+					wait_engine_ready(timeout);
+				}
+
+				int before = 0;
+				std::string previous_menu;
+				const auto initial = on_pipeline(scheduler::pipeline::lui, [&]
+				{
+					return json{{"result", {{"count", action_count()}, {"menu", current_menu()}}}};
+				}, timeout);
+				if (is_busy(initial))
+				{
+					return initial;
+				}
+				if (initial.contains("result"))
+				{
+					before = initial["result"].value("count", 0);
+					previous_menu = initial["result"].value("menu", "");
+				}
+
+				auto result = on_pipeline(scheduler::pipeline::lui,
+					[] { return json{{"result", ui_debug::back()}}; }, timeout);
+				if (!wait || is_busy(result) || !result.contains("result"))
+				{
+					return result;
+				}
+
+				auto info = result["result"];
+				const auto processed = wait_action(before, expect_timeout);
+
+				std::string menu = previous_menu;
+				const auto deadline = std::chrono::steady_clock::now() + expect_timeout;
+				while (processed && std::chrono::steady_clock::now() < deadline)
+				{
+					const auto value = on_pipeline(scheduler::pipeline::lui,
+						[] { return json{{"result", current_menu()}}; }, 500ms);
+					if (!is_busy(value) && value.contains("result"))
+					{
+						menu = value["result"].get<std::string>();
+						if (menu != previous_menu)
+						{
+							break;
+						}
+					}
+					std::this_thread::sleep_for(20ms);
+				}
+
+				info["processed"] = processed;
+				info["menu"] = menu;
+				info["engine_ready"] = processed && wait_engine_ready(expect_timeout);
+				info["waited_ms"] = std::chrono::duration_cast<std::chrono::milliseconds>(
+					std::chrono::steady_clock::now() - started).count();
+				return json{{"result", info}};
 			}
 
 			if (method == "ui_open")
 			{
-				return on_pipeline(scheduler::pipeline::lui, [params] { return json{{"result", ui_debug::open(params)}}; }, 5000ms);
+				const auto wait = params.value("wait", true);
+				const auto name = params.value("name", "");
+				if (name.empty())
+				{
+					return json{{"error", "name is required"}};
+				}
+				const auto timeout = std::chrono::milliseconds(int_param(params, "timeout_ms", 15000, 100, 50000));
+				const auto expect_timeout = std::chrono::milliseconds(int_param(params, "expect_timeout_ms", 8000, 100, 20000));
+				const auto started = std::chrono::steady_clock::now();
+
+				if (wait)
+				{
+					wait_engine_ready(timeout);
+				}
+
+				int before = 0;
+				const auto count = on_pipeline(scheduler::pipeline::lui,
+					[] { return json{{"result", action_count()}}; }, timeout);
+				if (is_busy(count))
+				{
+					return count;
+				}
+				if (count.contains("result") && count["result"].is_number_integer())
+				{
+					before = count["result"].get<int>();
+				}
+
+				auto result = on_pipeline(scheduler::pipeline::lui,
+					[params] { return json{{"result", ui_debug::open(params)}}; }, timeout);
+				if (!wait || is_busy(result) || !result.contains("result"))
+				{
+					return result;
+				}
+
+				auto info = result["result"];
+				const auto processed = wait_action(before, expect_timeout);
+
+				std::string menu;
+				auto opened = false;
+				if (processed)
+				{
+					opened = wait_menu(name, params.value("expect_element", ""), expect_timeout, menu);
+				}
+
+				info["processed"] = processed;
+				info["opened"] = opened;
+				info["engine_ready"] = processed && wait_engine_ready(expect_timeout);
+				info["menu"] = menu;
+				info["waited_ms"] = std::chrono::duration_cast<std::chrono::milliseconds>(
+					std::chrono::steady_clock::now() - started).count();
+				return json{{"result", info}};
+			}
+
+			if (method == "wait_ready")
+			{
+				const auto timeout = std::chrono::milliseconds(int_param(params, "timeout_ms", 10000, 100, 55000));
+				const auto started = std::chrono::steady_clock::now();
+				const auto deadline = started + timeout;
+
+				for (;;)
+				{
+					const auto value = on_pipeline(scheduler::pipeline::lui,
+						[] { return json{{"result", ui_debug::menu()}}; }, 400ms);
+
+					if (!is_busy(value))
+					{
+						auto info = value.contains("result") ? value["result"] : json::object();
+						info["ready"] = true;
+						info["waited_ms"] = std::chrono::duration_cast<std::chrono::milliseconds>(
+							std::chrono::steady_clock::now() - started).count();
+						return json{{"result", info}};
+					}
+
+					if (std::chrono::steady_clock::now() >= deadline)
+					{
+						long long age_ms = -1;
+						const auto cache = cached_status(age_ms);
+						json info{{"ready", false}, {"waited_ms", timeout.count()}};
+						if (!cache.empty())
+						{
+							info["status"] = cache;
+							info["stale_ms"] = age_ms;
+						}
+						return json{{"result", info}};
+					}
+
+					std::this_thread::sleep_for(50ms);
+				}
 			}
 
 			if (method == "lua_eval")
 			{
+				// Do not run Lua while the main thread is reloading the UI/frontend: the LUI state
+				// exists but the script globals are mid-rebuild, and an engine call from the chunk
+				// (Engine.Localize in the item 6 probe) crashed at 0x1400BCB13. Answer "busy"
+				// instead; the caller can retry (the menu smoke does).
+				if (!wait_engine_ready(std::chrono::milliseconds(2000)))
+				{
+					return json{{"error", "the game's main thread is busy (loading?), try again"}};
+				}
+
 				return on_pipeline(scheduler::pipeline::lui, [params] { return json{{"result", ui_debug::lua_eval(params)}}; }, 10000ms);
 			}
 
@@ -403,6 +781,10 @@ namespace debug_server
 
 				mg_mgr_free(&mgr);
 			});
+
+			// The status cache is filled by successful status calls (see handle("status")).
+			// No background sampler: calling get_status() on a timer during the first seconds
+			// of a start raced engine initialization (0xC0000005 at offset 0, no dump).
 		}
 
 		void pre_destroy() override

@@ -246,6 +246,7 @@ int main()
 	ShowWindow(GetConsoleWindow(), SW_HIDE);
 
 	load_timing::begin(utils::flags::has_flag("dedicated"));
+	load_timing::acquire_startup_lock();
 	load_timing::mark("main() entered");
 
 	FARPROC entry_point;

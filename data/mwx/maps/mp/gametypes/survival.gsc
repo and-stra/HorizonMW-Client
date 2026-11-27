@@ -148,9 +148,18 @@ wavemanager()
     {
         level.survival_wave++;
         level notify("survival_wave_started", level.survival_wave);
-        spawnwave();
-        logprint("mwx survival: wave " + level.survival_wave + " spawned, alive=" + aliveagents() +
-            " fallback=" + isdefined(level.survival_fallback_bots));
+        spawned = spawnwave();
+        logprint("mwx survival: wave " + level.survival_wave + " spawned " + spawned + " agents, alive=" +
+            aliveagents() + " getmaxagents=" + getmaxagents());
+
+        // B5c: on HMW the agent slots are allocated but the agents do not spawn yet. Do not let the
+        // wave counter run away: stay on this wave and retry instead of "clearing" an empty wave.
+        if (spawned <= 0)
+        {
+            level.survival_wave--;
+            wait SURVIVAL_INTERMISSION;
+            continue;
+        }
 
         // let the wave spawn (engine bots join over the next frames)
         wait 3;
@@ -175,10 +184,8 @@ spawnwave()
     count = SURVIVAL_WAVE1 + (level.survival_wave - 1) * 2;
     level.survival_agents = [];
 
-    // H1's agent framework: on HMW-MP getmaxagents() is 0 (the engine never allocates agent slots
-    // in a multiplayer match), so add_humanoid_agent returns undefined. Fall back to engine bots
-    // (SV_AddBot through the MWX executecommand builtin) so the wave structure is testable; see
-    // docs/survival-spike.md.
+    // B5: only H1's humanoid-agent framework - no spawnBot fallback. The engine allocates the
+    // agent slots from scr_<gametype>_maxagents, which gamemodes.cpp seeds before the map load.
     for (index = 0; index < count; index++)
     {
         agent = maps\mp\agents\_agents::add_humanoid_agent("player", "axis", "class1");
@@ -191,10 +198,11 @@ spawnwave()
 
     if (level.survival_agents.size < count)
     {
-        missing = count - level.survival_agents.size;
-        level.survival_fallback_bots = 1;
-        executecommand("spawnBot " + missing);
+        logprint("mwx survival: ERROR only " + level.survival_agents.size + "/" + count +
+            " agents spawned (getmaxagents=" + getmaxagents() + ")");
     }
+
+    return level.survival_agents.size;
 }
 
 aliveagents()
@@ -203,11 +211,13 @@ aliveagents()
 
     foreach (player in level.players)
     {
-        if (!isdefined(player) || !isai(player))
+        if (!isdefined(player) || !isalive(player))
+            continue;
+        // B5: wave clearing counts the humanoid agents only (the test's own engine bot and the
+        // human players are not part of the wave)
+        if (!isagent(player))
             continue;
         if (!isdefined(player.team) || player.team != "axis")
-            continue;
-        if (!isalive(player))
             continue;
         count++;
     }

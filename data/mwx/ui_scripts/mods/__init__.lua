@@ -108,6 +108,7 @@ local function move_before_last(list)
     list:addElement(children[count - 1])
 end
 
+if LUI.MenuBuilder == nil or LUI.MenuBuilder.m_types_build == nil then return end
 local build_main_menu = LUI.MenuBuilder.m_types_build["mp_main_menu"]
 if type(build_main_menu) == "function" then
     LUI.MenuBuilder.m_types_build["mp_main_menu"] = function(menu, event)

@@ -31,18 +31,24 @@ live HMW measurements on a dedicated `mp_crash` server (2026-11-25).
 | `scr_horde_maxagents` / `scr_default_maxagents` | 18 / 0 (changing them does not change `getmaxagents()`) |
 
 So **no agent slots are allocated in a multiplayer match**: `add_humanoid_agent` returns
-`undefined`, and the wave loop cannot spawn anything through H1's framework. The agent path is
-blocked by an engine-side allocation, not by assets or scripts. MWR never shipped a mode that used
-the framework (it is the AW/CoD4-style agent code), which explains why the MP engine leaves the pool
-at zero.
+`undefined`, and the wave loop cannot spawn anything through H1's framework. The agent path was
+blocked by an engine-side allocation, not by assets or scripts.
 
-**Prototype fallback:** the spike spawns the wave with `executecommand("spawnBot <n>")` (engine
-`SV_AddBot` bots on team axis) when `add_humanoid_agent` returns undefined. With 5 bots on mp_crash
-(a dedicated server, 18 slots, 60 Hz default) the server keeps up without any frame-time symptoms in
-the test runs; the test completes in the normal ~2 minutes. A frame-time figure from the server is
-not available (dedicated `perf.frame_ms` is 0/no renderer); the honest measurement is "5-7 bots
-work, more is untested". Next measurement for the real port: `sv_fps`/round-trip timing with
-10/20/40 bots on a listen host.
+**B5 root cause and fix (2026-11-25):** `getmaxagents()` builds the name `scr_<g_gametype>_maxagents`
+(format string `scr_%s_maxagents`) and reads the **string** value with `atoi`, capped at **24**. The
+spike set `scr_horde_maxagents` and `scr_default_maxagents` (wrong names) and at runtime (too late).
+`gamemodes.cpp::apply_survival_dvars()` now registers/sets `scr_survival_maxagents = "24"` **before
+the map load** (string dvar; an int dvar is read as a char pointer). The getter is at RVA
+**`0x44C980`** in the unpacked engine (`h1_mp64_zt.exe`; the format string is at RVA `0x85F0B0`),
+which caps the accepted value at 24. It is correct for survival to use the same
+`scr_<g_gametype>_maxagents` convention as the horde mode. No engine hook is needed while the dvar
+is present; if a future build returns 0, hook `0x44C980` to return `mwx_survival_maxagents`.
+
+**Prototype fallback (removed in B5):** the spike spawned the wave with
+`executecommand("spawnBot <n>")` when `add_humanoid_agent` returned undefined. B5 removes that
+fallback: the wave now uses agents only (the test asserts `isagent()` enemies). The old fallback
+spawned engine bots that the wave counter could not distinguish from the test's own bot, which was
+the wave 1 -> 2 problem.
 
 ## b. Bot path nodes on HMW maps
 
@@ -141,3 +147,27 @@ is a content-pipeline task (zonetool + a new zone), not a GSC task.
 
 Total: ~2-3 weeks for a playable single-map port (mp_crash), 4-6 weeks for all seven maps with the
 boss content. The blocking decision is item 1 (agent allocation vs bots).
+
+## B5c: why the wave agents never appear (26 Nov)
+
+Measured on a dedicated `mp_crash` server (`g_gametype survival`, `mwx_show_survival 1`, one bot):
+
+| query | value |
+|---|---|
+| `getmaxagents()` / `level.agentarray.size` | 24 / 24 |
+| `level.survival_agents.size` (created by `add_humanoid_agent`) | 5 |
+| first agent | `team=axis pers=axis isactive=1 hasdied=0 isagent=1 isai=1 **isplayer=0**` |
+| `level.players` | only the bot (`ai=1 agent=0 alive=1`) |
+| `spawnagent((0,0,0),(0,0,0))` on a free slot | runs, returns, no error — still not a player |
+
+So the framework gets as far as `connectnewagent`/`activateagent`; the engine's **`spawnagent()` is a
+no-op in MP** (no script error, no player entity, nothing added to `level.players`). This is not a team
+assignment problem (the slots are already `axis`). The three paths forward:
+
+1. find/hook the engine function behind `spawnagent` (the slot must transition to a connected player;
+   `addagent()` allocates the slot but MP never spawns it), or
+2. use `spawnBot` + a GSC think layer (the bots already move and shoot in every mode test), or
+3. leave the spike as is (hidden, hidden tests).
+
+The wave manager intentionally retries wave 1 instead of advancing (a wave of 0 agents must not count
+as cleared).

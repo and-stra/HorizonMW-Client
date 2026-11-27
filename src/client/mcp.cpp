@@ -8,7 +8,10 @@
 #include <utils/string.hpp>
 
 #include <algorithm>
+#include <atomic>
+#include <mutex>
 #include <set>
+#include <thread>
 
 // MWX MCP bridge (stdio, newline-delimited JSON-RPC 2.0).
 //
@@ -41,6 +44,7 @@ namespace mcp
 		};
 
 		std::mutex instance_mutex;
+		std::mutex instance_start_mutex;
 		std::vector<instance_t> instances;
 		std::uint32_t next_client = 1;
 		std::uint32_t next_server = 1;
@@ -193,6 +197,11 @@ namespace mcp
 
 		json start_instance(const bool dedicated, const json& args)
 		{
+			// port allocation and process creation have to be one step: with -Parallel N two
+			// test threads can otherwise allocate the same free port before either instance is
+			// registered (the scan only sees instances that are already in the list).
+			std::lock_guard start_lock(instance_start_mutex);
+
 			const auto port = static_cast<std::uint16_t>(args.value("port", 0)) != 0
 				? static_cast<std::uint16_t>(args.value("port", 0)) : allocate_port(dedicated);
 
@@ -544,7 +553,7 @@ namespace mcp
 			return entry;
 		}
 
-		json start_test_job(const std::string& name, const bool all)
+		json start_test_job(const std::string& name, const bool all, const int parallel = 1)
 		{
 			{
 				// two game instances on one PC block each other's map load (seen with a stale client:
@@ -592,7 +601,7 @@ namespace mcp
 				test_jobs.push_back(job);
 			}
 
-			std::thread([job, cases, all]()
+			std::thread([job, cases, all, parallel]()
 			{
 				json result{};
 				try
@@ -601,7 +610,7 @@ namespace mcp
 					{
 						result = run_one_test(cases.front(), job);
 					}
-					else
+					else if (parallel <= 1)
 					{
 						json tests = json::array();
 						auto passed = 0;
@@ -621,6 +630,65 @@ namespace mcp
 							fprintf(stderr, "mwx mcp: test %s %s\n", test.name.data(), ok ? "green" : "failed");
 						}
 						result = json{{"tests", tests}, {"passed", passed}, {"failed", failed}};
+					}
+					else
+					{
+						// N dedicated servers at once. Every test keeps its own debug/net port
+						// (start_instance serialises allocation) and its own console; the result
+						// array is merged in manifest order.
+						const auto threads = static_cast<std::size_t>(std::min<int>(parallel, cases.size()));
+						std::vector<json> slots(cases.size());
+						std::atomic_size_t next{0};
+
+						std::vector<std::thread> workers;
+						workers.reserve(threads);
+						for (std::size_t t = 0; t < threads; ++t)
+						{
+							workers.emplace_back([&]()
+							{
+								for (;;)
+								{
+									if (job->cancel)
+									{
+										break;
+									}
+
+									const auto i = next.fetch_add(1);
+									if (i >= cases.size())
+									{
+										break;
+									}
+
+									const auto one = run_one_test(cases[i], job);
+									const auto ok = !one.contains("error") && one.value("failed", 1) == 0 &&
+										one.value("script_errors", 1) == 0;
+									fprintf(stderr, "mwx mcp: test %s %s (parallel %d)\n", cases[i].name.data(),
+										ok ? "green" : "failed", parallel);
+									slots[i] = one;
+								}
+							});
+						}
+						for (auto& worker : workers)
+						{
+							worker.join();
+						}
+
+						json tests = json::array();
+						auto passed = 0;
+						auto failed = 0;
+						for (auto& one : slots)
+						{
+							if (one.is_null())
+							{
+								continue;
+							}
+							const auto ok = !one.contains("error") && one.value("failed", 1) == 0 &&
+								one.value("script_errors", 1) == 0;
+							ok ? ++passed : ++failed;
+							tests.emplace_back(one);
+						}
+						result = json{{"tests", tests}, {"passed", passed}, {"failed", failed},
+							{"parallel", parallel}};
 					}
 				}
 				catch (const std::exception& e)
@@ -679,6 +747,25 @@ namespace mcp
 		json run_one_test(const test_case& test, const std::shared_ptr<test_job>& job)
 		{
 			const auto start = std::chrono::steady_clock::now();
+
+			// Two mwx processes started close together race in the engine's early startup: the
+			// second one exits with no output (measured with run-tests.ps1 -Parallel). 30 s apart
+			// they both run, so the parallel job serialises the process starts.
+			{
+				static std::mutex start_mutex;
+				static std::chrono::steady_clock::time_point last_start{};
+
+				std::lock_guard _(start_mutex);
+				if (last_start != std::chrono::steady_clock::time_point{})
+				{
+					const auto elapsed = std::chrono::steady_clock::now() - last_start;
+					if (elapsed < 30s)
+					{
+						std::this_thread::sleep_for(30s - elapsed);
+					}
+				}
+				last_start = std::chrono::steady_clock::now();
+			}
 
 			// The map goes on the command line: a `map` command after boot hangs a dedicated
 			// server that was started without one. A listen client boots to the menu and then
@@ -968,7 +1055,17 @@ namespace mcp
 				return json{{"error", "unknown test: " + only}, {"tests", list_tests()}};
 			}
 
-			return start_test_job(only.empty() ? "all" : only, true);
+			auto parallel = args.value("parallel", 4);
+			if (parallel < 1)
+			{
+				parallel = 1;
+			}
+			if (parallel > 8)
+			{
+				parallel = 8;
+			}
+
+			return start_test_job(only.empty() ? "all" : only, true, parallel);
 		}
 
 		json target_schema()
@@ -1068,23 +1165,38 @@ namespace mcp
 				},
 				{
 					{"name", "ui_snapshot"},
-					{"description", "Tree of the visible LUI menu elements: menu stack, and per element id, type, text, visible, focused, disabled, position/size."},
+					{"description", "Tree of the visible LUI menu elements: menu stack, and per element id, text, visible, focused, position/size. Elements without a name get a synthetic id `<menu>#<n>` (n = position in the tree walk), and a node without its own text inherits the first text below it, so rows/buttons can be clicked by id or by their caption."},
 					{"inputSchema", {{"type", "object"}, {"properties", {{"target", target_schema()}}}}},
 				},
 				{
 					{"name", "ui_click"},
-					{"description", "Clicks a menu element through the normal button path: by id or by visible text (and optional index). Returns what was clicked."},
-					{"inputSchema", {{"type", "object"}, {"properties", {{"id", {{"type", "string"}}}, {"text", {{"type", "string"}}}, {"index", {{"type", "integer"}}}, {"target", target_schema()}}}}},
+					{"description", "Clicks a menu element through the normal button path: by id or by visible text (and optional index). By default it waits for the main thread and for the click to be processed, and returns the new top menu; pass wait=false to only queue it, expect_menu/expect_element to wait for a result, expect_timeout_ms (default 8000) for that wait."},
+					{"inputSchema", {{"type", "object"}, {"properties", {
+						{"id", {{"type", "string"}}}, {"text", {{"type", "string"}}}, {"index", {{"type", "integer"}}},
+						{"wait", {{"type", "boolean"}}}, {"expect_menu", {{"type", "string"}}},
+						{"expect_element", {{"type", "string"}}}, {"timeout_ms", {{"type", "integer"}}},
+						{"expect_timeout_ms", {{"type", "integer"}}}, {"target", target_schema()}}}}},
 				},
 				{
 					{"name", "ui_back"},
-					{"description", "Leaves the top menu (LUI.FlowManager.RequestLeaveMenuByName of the top menu)."},
-					{"inputSchema", {{"type", "object"}, {"properties", {{"target", target_schema()}}}}},
+					{"description", "Leaves the top menu and (by default) waits until the menu actually changed, then returns the new top menu. wait=false only queues it."},
+					{"inputSchema", {{"type", "object"}, {"properties", {
+						{"wait", {{"type", "boolean"}}}, {"timeout_ms", {{"type", "integer"}}},
+						{"expect_timeout_ms", {{"type", "integer"}}}, {"target", target_schema()}}}}},
 				},
 				{
 					{"name", "ui_open"},
-					{"description", "Opens a LUI menu by name (LUI.FlowManager.RequestAddMenu)."},
-					{"inputSchema", {{"type", "object"}, {"properties", {{"name", {{"type", "string"}}}, {"target", target_schema()}}}, {"required", {"name"}}}},
+					{"description", "Opens a LUI menu by name and (by default) waits until it is the top menu. wait=false only queues it."},
+					{"inputSchema", {{"type", "object"}, {"properties", {
+						{"name", {{"type", "string"}}}, {"wait", {{"type", "boolean"}}},
+						{"expect_element", {{"type", "string"}}}, {"timeout_ms", {{"type", "integer"}}},
+						{"expect_timeout_ms", {{"type", "integer"}}}, {"target", target_schema()}}}, {"required", {"name"}}}},
+				},
+				{
+					{"name", "wait_ready"},
+					{"description", "Waits until the UI thread answers again (no zone load in progress). Returns {ready, menu, open_menus, waited_ms}; on timeout includes the cached status and its stale_ms."},
+					{"inputSchema", {{"type", "object"}, {"properties", {
+						{"timeout_ms", {{"type", "integer"}}}, {"target", target_schema()}}}}},
 				},
 				{
 					{"name", "lua_eval"},
@@ -1161,8 +1273,8 @@ namespace mcp
 				},
 				{
 					{"name", "run_all_tests"},
-					{"description", "Starts every test from tests.json in a row in the background (or only the one given as name). Returns a job id; poll test_status."},
-					{"inputSchema", {{"type", "object"}, {"properties", {{"name", {{"type", "string"}}}}}}},
+					{"description", "Starts every test from tests.json in the background (or only the one given as name). parallel N runs N dedicated servers at once (default 4, max 8); every test keeps its own debug/net port and its own console. Returns a job id; poll test_status."},
+					{"inputSchema", {{"type", "object"}, {"properties", {{"name", {{"type", "string"}}}, {"parallel", {{"type", "integer"}}}}}}},
 				},
 				{
 					{"name", "test_status"},
@@ -1248,9 +1360,30 @@ namespace mcp
 			}
 
 			if (name == "ui_snapshot") return rpc(target, "ui_snapshot", json::object(), 20);
-			if (name == "ui_click") return rpc(target, "ui_click", args, 20);
-			if (name == "ui_back") return rpc(target, "ui_back", json::object(), 20);
-			if (name == "ui_open") return rpc(target, "ui_open", {{"name", args.value("name", "")}}, 20);
+			if (name == "ui_click")
+			{
+				json params = args;
+				params.erase("target");
+				return rpc(target, "ui_click", params, 30);
+			}
+			if (name == "ui_back")
+			{
+				json params = args;
+				params.erase("target");
+				return rpc(target, "ui_back", params, 30);
+			}
+			if (name == "ui_open")
+			{
+				json params = args;
+				params.erase("target");
+				return rpc(target, "ui_open", params, 30);
+			}
+			if (name == "wait_ready")
+			{
+				json params = args;
+				params.erase("target");
+				return rpc(target, "wait_ready", params, 30);
+			}
 			if (name == "lua_eval") return rpc(target, "lua_eval", {{"code", args.value("code", "")}}, 30);
 			if (name == "gsc_eval") return rpc(target, "gsc_eval", {{"code", args.value("code", "")}}, 40);
 			if (name == "players") return rpc(target, "players", json::object(), 30);

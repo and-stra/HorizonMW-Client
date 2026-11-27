@@ -8,11 +8,11 @@ test_survival_agents()
 
     foreach (player in level.players)
     {
-        if (!isdefined(player) || !isai(player))
+        if (!isdefined(player) || !isalive(player))
+            continue;
+        if (!isagent(player))
             continue;
         if (!isdefined(player.team) || player.team != "axis")
-            continue;
-        if (!isalive(player))
             continue;
         count++;
     }
@@ -36,6 +36,12 @@ main()
 
     test_assert(isdefined(level.survival_wave) && level.survival_wave >= 1, "wave 1 started", ">=1",
         level.survival_wave);
+
+    agentarray = -1;
+    if (isdefined(level.agentarray))
+        agentarray = level.agentarray.size;
+    test_log("survival: getmaxagents=" + getmaxagents() + " agentarray=" + agentarray +
+        " agents=" + level.survival_agents.size);
 
     waited = 0;
     while (waited < 60 && test_survival_agents() < 5)

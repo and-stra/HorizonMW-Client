@@ -18,6 +18,38 @@ A run takes ~1.5 min per test (most of it is the map load), so the full set is ~
 `run_test` / `run_all_tests` return a job id at once; a single MCP tool call must stay under the
 client's request timeout (~60 s), so the result is polled with `test_status`.
 
+## Parallel runs (`-Parallel N`)
+
+`tools\test\run-tests.ps1 -Parallel N` (and `run_all_tests {parallel: N}`) runs up to N dedicated
+servers at the same time. Every test keeps its own debug port, its own net port and its own log
+file; the per-test result JSONs are merged into the one `test-results-<time>.json` in manifest
+order. `-Parallel 1` is the default.
+
+Two processes must **not** run their early startup at the same time: the engine exits the second
+one with no console output and no crash dump while the first is still initialising its zones (the
+window is ~15 s; a 6 s gap was not enough, a fixed 30 s gap worked most of the time but still
+flaked). This is fixed in two places:
+
+- The client serialises its init phase with the named mutex `Local\mwx-startup-lock`
+  (`load_timing::acquire_startup_lock`, released on the first main-thread frame, with a 45 s
+  watchdog and a 180 s wait timeout). Four clients started in the same second now all reach the
+  menu; the measured `---- startup lock acquired after N ms ----` lines show the queue.
+- `run-tests.ps1` starts the next parallel worker only after the previous game answers the debug
+  RPC (no fixed sleep), and both this runner and `menu-smoke.ps1` retry a silent startup exit once.
+
+The parent also waits for a free net port before each start.
+
+Measured full runs (26 tests, commit `1ca2854e` + the parallel runner):
+
+| N | wall time | green | notes |
+|---|---|---|---|
+| 1 | 38:04 | 24/26 | `srescue` hit net port 27036 (Steam holds it); `survival` known (pre-B5) |
+| 4 | **15:10** | 24/26 | same two: `srescue` port 27036, `survival` known |
+
+N=4 is the default: 2.5x faster with the identical result. `-Parallel 1` stays available for
+load-time-sensitive runs. The net-port picker skips ports that another program owns (Steam's
+27036), so a fixed conflict cannot fail a test.
+
 ## Writing a test
 
 A test is a GSC script in `data/mwx/tests/<name>.gsc` with a `main()` function:
@@ -152,6 +184,21 @@ one PC block each other's map load.
 `Start-Process`, poll `/rpc`, collect the events, stop it) and writes `test-results-<time>.json`.
 It is the fallback when the MCP bridge is not connected, and it is what the Windows regression
 check uses.
+
+## Menu smoke test
+
+`tools\test\menu-smoke.ps1` drives a **client** through the private match menus over the debug RPC:
+main menu -> PLAY ONLINE -> PRIVATE MATCH -> GAME SETUP -> MODE -> every Party mode and
+Domination/Team Deathmatch -> START (checks `g_gametype`, `ui_gametype`/loading screen name,
+`mwx_gamemode`) -> back to the lobby -> START again -> main menu -> PLAY ONLINE -> MODS menu
+open/close. A crash, a new file in `minidumps\`, a Lua error or a wrong mode fails it.
+
+```
+powershell -File tools\test\menu-smoke.ps1 -Runs 5        # the release check
+powershell -File tools\test\menu-smoke.ps1 -Runs 1 -Quick -Modes ph,dom   # quick pass
+```
+
+It starts a fresh client per run (debug ports 27201+), so it does not use `tests.json` servers.
 
 ## Shortening timers
 

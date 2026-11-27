@@ -28,9 +28,12 @@ Every `mwx.exe` instance listens on 127.0.0.1 only (not reachable from the netwo
 Requests: `POST http://127.0.0.1:<port>/rpc` with `{"method": "...", "params": {...}}`.
 Answers: `{"result": ...}` or `{"error": "..."}`.
 
-Methods that touch game state run on the matching game thread (main / server / LUI) and answer
-with `"the game's main thread is busy (loading?), try again"` while they can't (e.g. during a map
-load). The caller retries.
+Methods that touch game state run on the matching game thread (main / server / LUI). The last
+successful `status` answer is cached: while a zone load blocks the main thread, `status`,
+`game_status` and `wait_ready` return that copy with `stale_ms` instead of failing. Until the first
+successful call there is nothing to return. Methods that cannot answer return
+`"the game's main thread is busy (loading?), try again"`; the UI methods below wait for the thread
+themselves, so callers do not have to retry them.
 
 ### State and console
 
@@ -63,10 +66,11 @@ ui_scripts and does nothing until one of these methods is called.
 
 | Method | Params | Result |
 |---|---|---|
-| `ui_snapshot` | – | `{menu, open_menus, count, elements: [{id, full_id, text?, visible, focused?, rect?, depth}]}` |
-| `ui_click` | `id` or `text`, `index` | `{ok, id, full_id, matches, queued}` |
-| `ui_back` | – | `{ok, left}` |
-| `ui_open` | `name` | `{ok, opened}` |
+| `ui_snapshot` | – | `{menu, open_menus, count, elements: [{id, full_id, text?, visible, focused?, rect?, depth, synthetic?}]}` |
+| `ui_click` | `id` or `text`, `index`, `wait` (default true), `expect_menu`, `expect_element`, `timeout_ms` (15000), `expect_timeout_ms` (8000) | `{ok, id, full_id, clicked_id?, matches, queued, processed, expect_met, menu, waited_ms}` |
+| `ui_back` | `wait` (default true), `timeout_ms`, `expect_timeout_ms` | `{ok, left, processed, menu, waited_ms}` |
+| `ui_open` | `name`, `wait` (default true), `expect_element`, `timeout_ms`, `expect_timeout_ms` | `{ok, opened, processed, opened_ok, menu, waited_ms}` |
+| `wait_ready` | `timeout_ms` (10000) | `{ready, menu, open_menus, waited_ms}` or `{ready: false, status, stale_ms}` |
 | `lua_eval` | `code` | `{ok, result|error}` |
 
 H1's LUI elements are userdata: only `id` and the class methods are readable. Children come from
@@ -75,10 +79,17 @@ layout from `getRect()`, visibility from `isClosed()`. The menu stack is
 `LUI.FlowManager.GetTopOpenAndVisibleMenuName()` plus `LUI.MenuBuilder.m_types_build` +
 `IsMenuOpenAndVisible()`.
 
+Menus do not name every widget. `ui_snapshot` therefore gives each unnamed element the synthetic id
+`<menu>#<n>` (`n` = position in the tree walk, stable while that menu is open) and lets a node without
+its own text inherit the first text below it, so a button row shows its caption and can be found by
+`text`. When a text/id match lands on a label or button background, `ui_click` climbs to the nearest
+named ancestor (the row with the `button_action` handler) and reports it as `clicked_id`.
+
 `ui_click` schedules the `button_action` event on the game's own LUI event loop (a
 `LUI.UITimer`), because the menu handlers call `Engine.ExecNow`, which fails when it is called
-directly from an eval chunk. The click therefore completes on the next LUI frame; the effect is
-visible in the following `ui_snapshot` (or `wait_for menu_open`).
+directly from an eval chunk. With `wait` (the default) the debug server waits until the main thread
+is free, the scheduled action has run and (if given) `expect_menu`/`expect_element` are true, then
+returns the new top menu. `wait: false` only queues the click and returns immediately, like before.
 
 ### Server side (GSC)
 
@@ -173,7 +184,7 @@ instance of that kind).
 | `connect_client_to_server` | `client`, `server` | `connect 127.0.0.1:<server net_port>` on the client |
 | `wait_for` | `state`, `timeout_s`, plus the `wait` params | retries the in-game wait (also while the game is still starting) and returns the total waited time |
 | `screenshot` | `scale`, `region`, `path` | returns the PNG as an MCP **image** content block and saves it |
-| `ui_snapshot`, `ui_click`, `ui_back`, `ui_open`, `lua_eval`, `gsc_eval` | see above | the debug methods |
+| `ui_snapshot`, `ui_click`, `ui_back`, `ui_open`, `wait_ready`, `lua_eval`, `gsc_eval` | see above | the debug methods |
 | `players`, `entities`, `bots`, `events`, `perf`, `last_crash` | see above | the debug methods |
 | `input` | see above | the debug method |
 | `game_status`, `run_command`, `get_dvar`, `set_dvar`, `console_log`, `load_times` | as before | the debug methods |

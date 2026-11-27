@@ -21,4 +21,13 @@ namespace ui_debug
 	nlohmann::json lua_eval(const nlohmann::json& params);
 
 	bool is_menu_open(const std::string& name);
+
+	// top open menu name + open menu list
+	nlohmann::json menu();
+
+	// does an element with this id (real or synthetic `<menu>#<n>`) exist?
+	nlohmann::json has_element(const std::string& id);
+
+	// results of the clicks queued so far (the debug server waits for the count to grow)
+	nlohmann::json actions();
 }

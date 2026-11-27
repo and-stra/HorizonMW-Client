@@ -5,6 +5,9 @@
 -- The real fix (a patch/background per LAN player) is docs/todo-callsigns.md.
 if not Engine.IsMultiplayer() then return end
 
+-- M2: this script is loaded on every LUI (re)start; do not depend on lobby/menu globals being ready.
+if Lobby == nil or LUI.MenuBuilder == nil or LUI.MenuBuilder.m_types_build == nil then return end
+
 local function hide(element)
     if element == nil then return end
     -- alpha 0 keeps the layout (close() would reflow the card)

@@ -574,10 +574,26 @@ namespace gsc
 		}
 	}
 
+	bool handle_trace_enabled()
+	{
+		const auto* dvar = game::Dvar_FindVar("mwx_debug_fastfiles");
+		return dvar && dvar->current.enabled;
+	}
+
 	void load_main_handles()
 	{
+		const auto trace = handle_trace_enabled();
+		if (trace)
+		{
+			console::info("[load] main handles: %zu\n", main_handles.size());
+		}
+
 		for (auto& function_handle : main_handles)
 		{
+			if (trace)
+			{
+				console::info("[load] exec %s::main\n", function_handle.first.data());
+			}
 #ifdef DEBUG
 			console::info("Executing '%s::main'\n", function_handle.first.data());
 #endif
@@ -587,8 +603,18 @@ namespace gsc
 
 	void load_init_handles()
 	{
+		const auto trace = handle_trace_enabled();
+		if (trace)
+		{
+			console::info("[load] init handles: %zu\n", init_handles.size());
+		}
+
 		for (auto& function_handle : init_handles)
 		{
+			if (trace)
+			{
+				console::info("[load] exec %s::init\n", function_handle.first.data());
+			}
 #ifdef DEBUG
 			console::info("Executing '%s::init'\n", function_handle.first.data());
 #endif
