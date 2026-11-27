@@ -321,3 +321,12 @@ was never listed in the zone CSV - both fixed. Build: 848 assets, zone-check gre
 only ttachment_tactical_knife - they live in AW's patch_common_mp (the 6.7 GB dump that was
 deleted after the pilot). Until that dump is repeated for those 8 images the knife renders with
 default images. Texture polish item, like the washed-out M1/MP40 previews.
+
+Icons (1.8.3): the ported weapons have no CAC list icon, kill-feed icon or HUD icon of their own
+(the M1 Garand and MP40 still warn about `hud_icon_mp40`/`hud_icon_m1_garand`); the CAC row and
+the big preview fall back to the world model, which is why the list rows show the actual gun. The
+renderer in `tools/weapon-icons/` turns the world model into MWR-style list/header/HUD PNGs through
+hmw-workbench (see `docs/weapon-icons.md`); wiring them into the zone waits on the workbench side
+(hide the orbit grid/axes, add `zonetool\hmw_aw_weapons` to its asset roots) and a PNG ->
+`.h1Image` + `_streamN.pixels` writer. The style config, batch command and contact sheet are
+ready for when those two land.
