@@ -594,5 +594,43 @@
                       "mwx_aw_attachments":  "reflex,acog",
                       "mwx_aw_camo":  42
                   }
+    },
+    {
+        "name":  "aw_m1garand",
+        "script":  "aw_pilot",
+        "gametype":  "war",
+        "map":  "mp_shipment",
+        "timeout_s":  300,
+        "dvars":  {
+                      "mwx_test_bots":  4,
+                      "mwx_aw_weapon":  "iw5_dlcgun23",
+                      "mwx_aw_class":  "primary",
+                      "mwx_aw_attachments":  "",
+                      "mwx_aw_camo":  0
+                  }
+    },
+    {
+        "name":  "aw_mp40",
+        "script":  "aw_pilot",
+        "gametype":  "war",
+        "map":  "mp_shipment",
+        "timeout_s":  300,
+        "dvars":  {
+                      "mwx_test_bots":  4,
+                      "mwx_aw_weapon":  "iw5_dlcgun18",
+                      "mwx_aw_class":  "primary",
+                      "mwx_aw_attachments":  "",
+                      "mwx_aw_camo":  0
+                  }
+    },
+    {
+        "name":  "aw_knife",
+        "script":  "aw_knife",
+        "gametype":  "war",
+        "map":  "mp_shipment",
+        "timeout_s":  300,
+        "dvars":  {
+                      "mwx_test_bots":  4
+                  }
     }
 ]
