@@ -227,7 +227,6 @@ namespace stock_weapons
 
 			const auto cols = original->columnCount;
 			const auto old_rows = original->rowCount;
-			const auto new_rows = old_rows + static_cast<int>(add.size());
 
 			// The customweapons row order is the CAC display order. Put our weapons at the
 			// top of their list (AW before MWR), otherwise they sit past the visible rows.
@@ -243,15 +242,56 @@ namespace stock_weapons
 					return aw_a != aw_b ? aw_a : a < b;
 				});
 			}
-			const auto first_new = prepend ? 0 : old_rows;
-			const auto originals_at = prepend ? static_cast<int>(add.size()) : 0;
 
 			const auto result = allocator.allocate<game::StringTable>();
 			*result = *original;
+
+			// Hide rows whose weapon asset does not exist (HMW's table lists h2_fmg9, h2_mp412,
+			// h2_pm9, h2_mp7 with no weapon asset): display filter only, the ids and the
+			// statstable rows stay as they are. A row that is only missing because its zone has
+			// not loaded yet counts as missing, so the table is rebuilt when it does.
+			auto kept_rows = old_rows;
+			if (!is_stats)
+			{
+				kept_rows = 0;
+				for (auto r = 0; r < old_rows; ++r)
+				{
+					const auto* ref = original->values[static_cast<size_t>(r) * cols].string;
+					if (ref != nullptr && ref[0] != '\0' && !weapon_loaded(ref))
+					{
+						// HMW's own table rows for weapons that have no asset at all: drop them
+						// for good, they can never load (unlike our appended rows, which wait).
+						continue;
+					}
+					++kept_rows;
+				}
+			}
+
+			const auto first_new = prepend ? 0 : kept_rows;
+			const auto originals_at = prepend ? static_cast<int>(add.size()) : 0;
+			const auto new_rows = kept_rows + static_cast<int>(add.size());
 			result->rowCount = new_rows;
 			result->values = allocator.allocate_array<game::StringTableCell>(static_cast<size_t>(cols) * new_rows);
-			std::memcpy(result->values + static_cast<size_t>(originals_at) * cols, original->values,
-				sizeof(game::StringTableCell) * cols * old_rows);
+
+			if (is_stats)
+			{
+				std::memcpy(result->values, original->values, sizeof(game::StringTableCell) * cols * old_rows);
+			}
+			else
+			{
+				auto out = 0;
+				for (auto r = 0; r < old_rows; ++r)
+				{
+					const auto* ref = original->values[static_cast<size_t>(r) * cols].string;
+					if (ref != nullptr && ref[0] != '\0' && !weapon_loaded(ref))
+					{
+						continue;
+					}
+					std::memcpy(result->values + static_cast<size_t>(originals_at + out) * cols,
+						original->values + static_cast<size_t>(r) * cols, sizeof(game::StringTableCell) * cols);
+					++out;
+				}
+			}
 
 			for (size_t n = 0; n < add.size(); ++n)
 			{
