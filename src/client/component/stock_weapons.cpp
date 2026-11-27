@@ -12,6 +12,7 @@
 
 #include <cctype>
 #include <cstring>
+#include <algorithm>
 #include <functional>
 #include <mutex>
 #include <string>
@@ -228,11 +229,29 @@ namespace stock_weapons
 			const auto old_rows = original->rowCount;
 			const auto new_rows = old_rows + static_cast<int>(add.size());
 
+			// The customweapons row order is the CAC display order. Put our weapons at the
+			// top of their list (AW before MWR), otherwise they sit past the visible rows.
+			const bool prepend = !is_stats && name == "mp/customweapons.csv";
+			if (prepend)
+			{
+				std::stable_sort(add.begin(), add.end(), [](int a, int b)
+				{
+					const std::string ra = rows[a][4];
+					const std::string rb = rows[b][4];
+					const bool aw_a = ra.rfind("iw5_", 0) == 0;
+					const bool aw_b = rb.rfind("iw5_", 0) == 0;
+					return aw_a != aw_b ? aw_a : a < b;
+				});
+			}
+			const auto first_new = prepend ? 0 : old_rows;
+			const auto originals_at = prepend ? static_cast<int>(add.size()) : 0;
+
 			const auto result = allocator.allocate<game::StringTable>();
 			*result = *original;
 			result->rowCount = new_rows;
 			result->values = allocator.allocate_array<game::StringTableCell>(static_cast<size_t>(cols) * new_rows);
-			std::memcpy(result->values, original->values, sizeof(game::StringTableCell) * cols * old_rows);
+			std::memcpy(result->values + static_cast<size_t>(originals_at) * cols, original->values,
+				sizeof(game::StringTableCell) * cols * old_rows);
 
 			for (size_t n = 0; n < add.size(); ++n)
 			{
@@ -256,7 +275,7 @@ namespace stock_weapons
 					{
 						text = customweapon_type(src[2]); // Cac.Weapons group
 					}
-					auto& cell = result->values[static_cast<size_t>(old_rows + n) * cols + c];
+					auto& cell = result->values[static_cast<size_t>(first_new + static_cast<int>(n)) * cols + c];
 					cell.string = allocator.duplicate_string(text);
 					cell.hash = static_cast<int>(hash(text));
 				}

@@ -18,6 +18,9 @@ namespace debug_api
 	// --- game state ---------------------------------------------------------
 	nlohmann::json players();
 	nlohmann::json asset_exists(const nlohmann::json& params);
+	// playerdata DDL: structs, members (type/array size) and enum members - the CAC
+	// can only store weapon names that are members of its weapon enum.
+	nlohmann::json ddl_dump(const nlohmann::json& params);
 	nlohmann::json entities(const nlohmann::json& params);
 	nlohmann::json model_bounds(const nlohmann::json& params);
 	nlohmann::json bots(const nlohmann::json& params);

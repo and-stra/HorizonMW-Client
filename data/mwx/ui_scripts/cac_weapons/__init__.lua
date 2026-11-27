@@ -45,7 +45,37 @@ local function sync_cac_weapons()
     end
 end
 
+-- HMW's CacDataProvider.GetRestricted asks the match rules for a per-weapon
+-- "perkRestricted" entry, and MatchRules.GetData is a native that throws for a name it
+-- does not know. HMW guards three special names only; the ported weapons (h1_* MWR,
+-- iw5_* AW) are not in the rules data, so opening a CAC details tab threw
+-- "Error processing event" and LUI dropped back to the multiplayer main menu.
+-- Treat an unknown (or failed) restriction query as "not restricted".
+local function install_restricted_guard()
+    if LUI == nil or LUI.CacDataProvider == nil or LUI.CacDataProvider.__mwx_guard then
+        return
+    end
+    local original = LUI.CacDataProvider.GetRestricted
+    if type(original) ~= "function" then
+        return
+    end
+    LUI.CacDataProvider.GetRestricted = function(category, weapon, ref)
+        local ok, restricted = pcall(original, category, weapon, ref)
+        if not ok then
+            return false
+        end
+        return restricted
+    end
+    LUI.CacDataProvider.__mwx_guard = true
+end
+
+local function on_cac_open()
+    install_restricted_guard()
+    sync_cac_weapons()
+end
+
 if LUI ~= nil and LUI.onmenuopen ~= nil then
-    LUI.onmenuopen("CacMenu", function() sync_cac_weapons() end)
-    LUI.onmenuopen("CacLoadoutEditorMenu", function() sync_cac_weapons() end)
+    LUI.onmenuopen("CacMenu", on_cac_open)
+    LUI.onmenuopen("CacLoadoutEditorMenu", on_cac_open)
+    install_restricted_guard()
 end

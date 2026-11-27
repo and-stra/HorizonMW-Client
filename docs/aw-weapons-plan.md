@@ -232,3 +232,41 @@ zone-load-stall.md).
    data/mwx/scripts/mp/mwr_weapons.gsc (isvalidprimary / isvalidsecondary / isvalidmeleeweapon).
 7. **Test**: data/mwx/tests/aw_pilot.gsc (generic w_weapon body) with mwx_aw_weapon,
    mwx_aw_class; melee has its own w_knife.gsc (hasweapon, not switchtoweapon). 3x green.
+
+## CAC storage: the playerdata Weapon enum (27 Nov 2026)
+
+Symptom: a ported weapon was listed in Create-a-Class, but picking it closed the list and the
+class stayed on the old weapon ("selecting does nothing"). It was not the zone and not the
+validator: Engine.SetPlayerData(controller, group, "customClasses", <slot>, "weaponSetups",
+<0|1>, "weapon", <name>) returns **false** for any name that is not a member of the playerdata
+mp/playerdata.ddl enum **Weapon** (228 members). The class slot is an **8 bit** enum index.
+
+What the enum is:
+
+- CustomClass.weaponSetups[].weapon (and meleeWeapon) = 8 bit index into that enum;
+  pc ddl_dump prints the members and the hash table.
+- 228 of 256 indices are used. **51 of them repeat a name that already has an earlier index**
+  (
+one x3, camo016..camo062 x2, gold/golddiamond x2, ...). A repeated index is
+  unreachable through the name hash (lookups resolve to the first occurrence), so it is a free
+  slot that can carry a ported name.
+- The remaining names are appended at indices 228..255 (the 8 bit limit is 256 members).
+- The enum hash table is a **compact array of count entries sorted by hash**; the hash is a
+  lowercase x31 hash (h = h*31 + tolower(c), start 0) and lookup is a binary search. New names
+  are inserted in sorted position (src/client/component/ddl_weapon_enum.cpp). An earlier
+  attempt guessed open addressing (hash % max) and broke every name lookup in the enum -
+  do not touch the table without a binary-search layout.
+
+Implementation: mwx_cac_enum (default 1) polls the DDL on the main pipeline and extends it at
+the first lobby (the DDL does not exist at the main menu). pc ddl_extend runs it once and
+returns {enum_count, free_slots, appended, capacity, hash, added, present, skipped};
+pc ddl_dump shows the result. Verified: after the extension Engine.SetPlayerData accepts
+h1_m4, h1_ak47, h1_usp, iw5_dlcgun23/18, iw5_exocrossbow.
+
+Budget and release-prep note: today 68 ported names (MWR DLC guns, MWR melee, AW) compete for
+79 slots (51 duplicate indices + 28 appended). skipped in the report lists names that did not
+fit (the tail of the melee list today). Keep the skipped count at 0 when adding weapons; a
+larger set needs a different storage scheme (a 16 bit class member is a DDL layout change and
+needs its own crash test). The extended enum is **identical on every client of the same build**;
+a class saved with a ported weapon is not readable by an older client - note it in the
+release-prep content check.

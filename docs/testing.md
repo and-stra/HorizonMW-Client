@@ -200,6 +200,20 @@ powershell -File tools\test\menu-smoke.ps1 -Runs 1 -Quick -Modes ph,dom   # quic
 
 It starts a fresh client per run (debug ports 27201+), so it does not use `tests.json` servers.
 
+## Class menu (CAC) checks
+
+The class menu is driven over the debug RPC (`ui_click`, `ui_snapshot`, `lua_eval`), never with
+`sv_cheats` + `give`: in a listen host `sv_cheats` is registered with `DVAR_FLAG_READ` and cannot
+be set, and `give` refuses with "Cheats are not enabled on this server". To give a weapon in a
+test, use the test dvar/script path (`aw_crossbow`, `aw_m1garand`) or pick it in the class menu.
+
+A saved class can be read back without the UI: `Engine.GetPlayerData(0,
+CoD.GetStatsGroupForGameMode(), "customClasses", <slot>, "weaponSetups", 0, "weapon")` from
+`lua_eval`; `Engine.SetPlayerData` with the same path writes it and returns false when the
+weapon name is not a member of the playerdata `Weapon` DDL enum (that is the "picking does
+nothing" failure). `rpc ddl_dump` dumps that enum; `rpc ddl_extend` adds the ported names
+(see docs/aw-weapons-plan.md).
+
 ## Shortening timers
 
 The mode scripts register their dvars (`scr_<mode>_scorelimit`, `scr_<mode>_timelimit`, ...) and
