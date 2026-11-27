@@ -136,3 +136,17 @@ which the smoke now retries once.
   their Create-a-Class content is needed again, load them lazily when the CAC opens and unload
   them when it closes - do not load them at startup, and re-test a map start after visiting the
   CAC (unloading after a 10-zone startup did *not* repair the stall).
+
+## Frontend -> virtual lobby "stalls" (27 Nov 2026)
+
+A few Play Online runs stayed in the vlobby load for >60 s and the debug port stopped answering
+(load_times.log ended with start mp_vlobby_room_path). Bisect:
+
+- the commit before the CAC row filter (d85fc004): 4/5 cold runs, then **10/10** on the same build;
+- the fixed-list filter build (8d79fac8): **5/5** cold runs.
+
+The failed runs happened while a heavy x64zt dump/index job was reading the same disk. The
+mp_vlobby_room_path line is a streaming start, not a missing done marker. Conclusion: the
+frontend->lobby "stall" was **I/O starvation from the test jobs**, not the zone count (8 startup
+zones, 56 zone starts in the load log, unchanged) and not the row filter. Rule for tests: no dump,
+index or zone build while a client is starting/loading.
